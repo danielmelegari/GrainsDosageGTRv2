@@ -1,0 +1,13 @@
+GrainsDosage VST3 - Windows x64
+
+Salva il progetto e chiudi Cubase e le altre DAW prima di continuare.
+Save your project and close Cubase and other DAWs before continuing.
+
+Il plugin viene installato in / The plugin is installed in:
+C:\Program Files\Common Files\VST3\GrainsDosage.vst3
+
+Questo installer aggiorna la copia presente in questa posizione.
+This installer updates the existing copy in this location.
+
+I preset personali non vengono eliminati durante la disinstallazione.
+User presets are not removed when uninstalling.
