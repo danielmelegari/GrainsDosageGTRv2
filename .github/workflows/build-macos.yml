@@ -86,7 +86,6 @@ jobs:
 
       - name: Run regression suites
         shell: bash
-        shell: bash
         run: |
           set -euo pipefail
           ctest --test-dir "$PROJECT_DIR/build" -C Release --output-on-failure 2>&1 | tee "$GITHUB_WORKSPACE/regression-tests.log"
