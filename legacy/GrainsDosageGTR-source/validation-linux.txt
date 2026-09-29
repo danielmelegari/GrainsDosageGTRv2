@@ -1,0 +1,26 @@
+GrainsDosage 0.10.1 — verification 2026-09-28 UTC
+SDK 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96 / GCC / Linux x86_64
+Linux plugin build and Steinberg validator: 47 passed, 0 failed.
+CTest: engine, modulation, features, rhythm, random, master, upgrade, gater, declick: 9/9 passed.
+Additional gater test passed: closed gate preserves an excited reverb tail.
+Actual processor/controller state migration 0x51473130 through 0x51473140 passed.
+Gater checks: disabled transparency; Wet/Dry/Off; duty length; random range,
+within-cycle stability; new patterns per cycle/transport loop; Dry protection;
+Dry bypasses filter/pitch in all seven audio orders.
+Shared layout: all controls fit 1320x1100 without overlapping hit regions,
+checked for all six serial orders and both Reverb modes.
+Native Cocoa/Win32 GUI compilation/rendering and Cubase listening NOT run locally.
+Updated native smoke tests are included for GitHub Actions.
+No compiled Mac or Windows binaries are included in this source archive.
+
+De-click: 1/4/8/16-sample injected impulses reduced >99% in squared error on
+220 Hz test source at 44.1/48/96/192 kHz. Unaffected opposite channel unchanged.
+Disabled/global bypass copy exactly after 32 samples; sustained edge and synthetic
+kick preserved. These synthetic checks do not establish removal of all real clicks.
+Actual VST processor: reported latency 32, impulse removed from master dry,
+global bypass retains original 64-bit impulse after 32 samples.
+
+macOS source fix 2026-09-28: moved selectedGate/dryPaint initialization out
+of Objective-C instance-variable declarations into initWithFrame. Reviewed
+all .mm instance-variable declaration blocks. Native Xcode build still requires
+GitHub Actions; it cannot be executed in this Linux environment.

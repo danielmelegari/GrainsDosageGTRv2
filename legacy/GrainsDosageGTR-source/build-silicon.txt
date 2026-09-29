@@ -1,0 +1,147 @@
+name: Build VST3 - Silicon M1
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'assets/**'
+      - 'CMakeLists.txt'
+      - 'test_engine.cpp'
+      - 'test_modulation.cpp'
+      - 'test_features.cpp'
+      - 'test_rhythm.cpp'
+      - 'test_random.cpp'
+      - 'GrainsDosage/**'
+      - '.github/workflows/build-silicon.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '11.0'
+    steps:
+      - name: Download project
+        uses: actions/checkout@v4
+
+      - name: Locate project sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f GrainsDosage/test_engine.cpp && -f GrainsDosage/CMakeLists.txt && -d GrainsDosage/src && -d GrainsDosage/assets ]]; then
+            project_dir="$GITHUB_WORKSPACE/GrainsDosage"
+          elif [[ -f test_engine.cpp && -f CMakeLists.txt && -d src && -d assets ]]; then
+            project_dir="$GITHUB_WORKSPACE"
+          else
+            echo 'GrainsDosage sources not found. Upload the contents of GrainsDosage-source.zip (src/, assets/, CMakeLists.txt and test_*.cpp) to the repository.' >&2
+            echo 'The source files can be at the repository root or inside GrainsDosage/.' >&2
+            exit 1
+          fi
+          printf 'PROJECT_DIR=%s\n' "$project_dir" >> "$GITHUB_ENV"
+          echo "Project sources: $project_dir"
+
+      - name: Download tested Steinberg SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --no-checkout https://github.com/steinbergmedia/vst3sdk.git "$RUNNER_TEMP/vst3sdk"
+          git -C "$RUNNER_TEMP/vst3sdk" checkout 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
+          git -C "$RUNNER_TEMP/vst3sdk" submodule update --init --recursive --depth 1
+
+      - name: Test audio engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          clang++ -std=c++17 -O2 test_engine.cpp -o "$RUNNER_TEMP/qg-tests"
+          "$RUNNER_TEMP/qg-tests"
+          clang++ -std=c++17 -O2 test_modulation.cpp -o "$RUNNER_TEMP/qg-mod-tests"
+          "$RUNNER_TEMP/qg-mod-tests"
+          clang++ -std=c++17 -O2 test_features.cpp -o "$RUNNER_TEMP/qg-feature-tests"
+          "$RUNNER_TEMP/qg-feature-tests"
+          clang++ -std=c++17 -O2 test_rhythm.cpp -o "$RUNNER_TEMP/qg-rhythm-tests"
+          "$RUNNER_TEMP/qg-rhythm-tests"
+
+      - name: Configure ARM64 build for macOS 11.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          cmake -S . -B build -G Xcode \
+            -DVST3_SDK_ROOT="$RUNNER_TEMP/vst3sdk" \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
+            -DSMTG_CREATE_PLUGIN_LINK=OFF \
+            -DSMTG_BUILD_UNIVERSAL_BINARY=OFF \
+            -DGRAINS_BUILD_TESTS=ON
+
+      - name: Build and run Steinberg validator
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          cmake --build build --config Release --parallel 4 2>&1 | tee "$GITHUB_WORKSPACE/build-macos.log"
+
+      - name: Run regression suites
+        shell: bash
+        run: ctest --test-dir "$PROJECT_DIR/build" -C Release --output-on-failure
+
+      - name: Test native GUI and render screenshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          build/gui-test/Release/aztec_gui_smoke "$GITHUB_WORKSPACE/GrainsDosage-GUI.png"
+
+      - name: Verify architecture and minimum OS, sign and package
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          plugin="build/VST3/Release/GrainsDosage.vst3"
+          binary="$plugin/Contents/MacOS/GrainsDosage"
+          test -f "$binary"
+          lipo "$binary" -verify_arch arm64
+          otool -arch arm64 -l "$binary" > "$GITHUB_WORKSPACE/deployment-info.txt"
+          python3 - <<'PY'
+          import os
+          import re
+          text = open(os.path.join(os.environ['GITHUB_WORKSPACE'], 'deployment-info.txt')).read()
+          found = re.findall(r'\bminos\s+(\d+\.\d+(?:\.\d+)?)', text)
+          if not found:
+              found = re.findall(r'cmd LC_VERSION_MIN_MACOSX\s+cmdsize \d+\s+version (\d+\.\d+(?:\.\d+)?)', text)
+          assert found, 'No minimum macOS version found'
+          for version in found:
+              parts = tuple(map(int, version.split('.')))
+              assert (parts + (0, 0))[:3] <= (11, 0, 0), f'Unexpected minimum OS: {version}'
+          print('Minimum OS check passed:', found)
+          PY
+          codesign --force --sign - --timestamp=none "$plugin"
+          codesign --verify --strict "$plugin"
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          cp "$GITHUB_WORKSPACE"/GrainsDosage-GUI*.png "$GITHUB_WORKSPACE/dist/"
+          ditto -c -k --sequesterRsrc --keepParent "$plugin" "$GITHUB_WORKSPACE/dist/GrainsDosage-Silicon-M1.zip"
+
+      - name: Save ready-to-install plugin
+        uses: actions/upload-artifact@v4
+        with:
+          name: GrainsDosage-Silicon-M1
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Save build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-diagnostics
+          path: |
+            build-macos.log
+            deployment-info.txt
+          if-no-files-found: ignore
+          retention-days: 7

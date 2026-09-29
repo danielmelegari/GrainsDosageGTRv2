@@ -1,0 +1,56 @@
+[
+  {
+    "source": "voice fx.gdspreset",
+    "factory_number": 11,
+    "legacy_count": 429,
+    "sha256": "4a775f499e1d068727af46a8dfd8ea92ed632198cf3b3ce98588a373ae533983"
+  },
+  {
+    "source": "SbimSbam.gdspreset",
+    "factory_number": 12,
+    "legacy_count": 429,
+    "sha256": "273aa1642f1e26840dc4431d38bbc68b46659eecd4d67532b4134c89ac8b0dde"
+  },
+  {
+    "source": "OctaveDust3.gdspreset",
+    "factory_number": 13,
+    "legacy_count": 441,
+    "sha256": "c9f8f7550e8e3beb593326a0892f84c322b8a7c840dbaf3450fa95d63f81f4f4"
+  },
+  {
+    "source": "OctaveDust2.gdspreset",
+    "factory_number": 14,
+    "legacy_count": 441,
+    "sha256": "2b02b45b8410e27139d78dc9b5ad3d2e76ade547b5908c992b6477ea0122d13c"
+  },
+  {
+    "source": "GrainsDosageupanddown.gdspreset",
+    "factory_number": 15,
+    "legacy_count": 429,
+    "sha256": "93adbafe16350edae3bad54ddf8d951fd25f11909bfd649664f918e8f322a50b"
+  },
+  {
+    "source": "init.gdspreset",
+    "factory_number": 16,
+    "legacy_count": 429,
+    "sha256": "5db4162d433a8e3d89cde9c698a88ea5a321abf2277097ff7c39e69d9e304a5c"
+  },
+  {
+    "source": "GrainsDosageRNDVerbSlowMel.gdspreset",
+    "factory_number": 17,
+    "legacy_count": 441,
+    "sha256": "782b5e90eea437fe273ab1e39399d3d00b6056f6cb51d7b79195f965a229df92"
+  },
+  {
+    "source": "GrainsDosageRNDVerbRPT.gdspreset",
+    "factory_number": 18,
+    "legacy_count": 441,
+    "sha256": "02924ec0c892278c4590a332ae0705f8c2efee8f7634bc8f0ee3210fa2def771"
+  },
+  {
+    "source": "GrainsDosageRNDVerb.gdspreset",
+    "factory_number": 19,
+    "legacy_count": 441,
+    "sha256": "40470f388c65967d9777db6b81654bc5ac3bef2c064dc949037f34829e9f0c42"
+  }
+]

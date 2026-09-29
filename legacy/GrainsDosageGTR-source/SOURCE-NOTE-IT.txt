@@ -1,0 +1,4 @@
+SORGENTI GTR ALLEGATI
+
+Questa cartella conserva i sorgenti forniti in GrainsDosageGTR-main2.zip. Nel CMakeLists.txt allegato, il progetto e il target plugin si chiamano ancora GrainsDosage e la versione e 0.10.1: il workflow originale produce quindi GrainsDosage.vst3, non il bundle GrainsDosageGTR.vst3 ricevuto.
+Per non sovrascrivere il progetto aggiornato, questi sorgenti restano isolati in questa cartella. I workflow attivi alla radice compilano GrainsDosage/ v0.12.0 con il Gater.
