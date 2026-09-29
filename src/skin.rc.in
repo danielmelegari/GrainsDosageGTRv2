@@ -1,0 +1,6 @@
+201 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/assets/GrainsDosage-skin.png"
+202 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/assets/sprites/knob.png"
+203 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/assets/sprites/slider.png"
+204 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/assets/sprites/step.png"
+205 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/assets/sprites/header-left.png"
+206 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/assets/sprites/header-right.png"
