@@ -1,0 +1,159 @@
+name: Build VST3 - Mojave Intel
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'assets/**'
+      - 'CMakeLists.txt'
+      - 'test_*.cpp'
+      - 'Presets/**'
+      - 'GrainsDosage/**'
+      - '.github/workflows/build-macos.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15-intel
+    timeout-minutes: 30
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '10.14'
+    steps:
+      - name: Download project
+        uses: actions/checkout@v4
+
+      - name: Locate project sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f GrainsDosage/test_engine.cpp && -f GrainsDosage/CMakeLists.txt && -d GrainsDosage/src && -d GrainsDosage/assets ]]; then
+            project_dir="$GITHUB_WORKSPACE/GrainsDosage"
+          elif [[ -f test_engine.cpp && -f CMakeLists.txt && -d src && -d assets ]]; then
+            project_dir="$GITHUB_WORKSPACE"
+          else
+            echo 'GrainsDosage sources not found. Upload the contents of GrainsDosage-source.zip (src/, assets/, CMakeLists.txt and test_*.cpp) to the repository.' >&2
+            echo 'The source files can be at the repository root or inside GrainsDosage/.' >&2
+            exit 1
+          fi
+          printf 'PROJECT_DIR=%s\n' "$project_dir" >> "$GITHUB_ENV"
+          echo "Project sources: $project_dir"
+
+      - name: Download tested Steinberg SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --no-checkout https://github.com/steinbergmedia/vst3sdk.git "$RUNNER_TEMP/vst3sdk"
+          git -C "$RUNNER_TEMP/vst3sdk" checkout 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
+          git -C "$RUNNER_TEMP/vst3sdk" submodule update --init --recursive --depth 1
+
+      - name: Test audio engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          clang++ -std=c++17 -O2 test_engine.cpp -o "$RUNNER_TEMP/qg-tests"
+          "$RUNNER_TEMP/qg-tests"
+          clang++ -std=c++17 -O2 test_modulation.cpp -o "$RUNNER_TEMP/qg-mod-tests"
+          "$RUNNER_TEMP/qg-mod-tests"
+          clang++ -std=c++17 -O2 test_features.cpp -o "$RUNNER_TEMP/qg-feature-tests"
+          "$RUNNER_TEMP/qg-feature-tests"
+          clang++ -std=c++17 -O2 test_rhythm.cpp -o "$RUNNER_TEMP/qg-rhythm-tests"
+          "$RUNNER_TEMP/qg-rhythm-tests"
+
+      - name: Configure Intel build for macOS 10.14
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          cmake -S . -B build -G Xcode \
+            -DVST3_SDK_ROOT="$RUNNER_TEMP/vst3sdk" \
+            -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=10.14 \
+            -DSMTG_CREATE_PLUGIN_LINK=OFF \
+            -DSMTG_BUILD_UNIVERSAL_BINARY=OFF \
+            -DGRAINS_BUILD_TESTS=ON
+
+      - name: Build and run Steinberg validator
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          cmake --build build --config Release --parallel 4 2>&1 | tee "$GITHUB_WORKSPACE/build-macos.log"
+
+      - name: Run regression suites
+        shell: bash
+        shell: bash
+        run: |
+          set -euo pipefail
+          ctest --test-dir "$PROJECT_DIR/build" -C Release --output-on-failure 2>&1 | tee "$GITHUB_WORKSPACE/regression-tests.log"
+
+      - name: Test native GUI and render screenshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          build/gui-test/Release/aztec_gui_smoke "$GITHUB_WORKSPACE/GrainsDosage-GUI.png" 2>&1 | tee "$GITHUB_WORKSPACE/gui-test.log"
+          python3 - "$GITHUB_WORKSPACE/GrainsDosage-GUI.png" <<'PY'
+          import struct, sys
+          with open(sys.argv[1], 'rb') as f:
+              header=f.read(24)
+          assert header[:8] == b'\x89PNG\r\n\x1a\n', 'GUI screenshot is not a PNG'
+          width, height=struct.unpack('>II', header[16:24])
+          assert width >= 1500 and height >= 1400, f'Expected 2x GUI screenshot, got {width}x{height}'
+          print(f'GUI screenshot: {width}x{height} (2x)')
+          PY
+
+      - name: Verify architecture and minimum OS, sign and package
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          plugin="build/VST3/Release/GrainsDosage.vst3"
+          binary="$plugin/Contents/MacOS/GrainsDosage"
+          test -f "$binary"
+          lipo "$binary" -verify_arch x86_64
+          otool -arch x86_64 -l "$binary" > "$GITHUB_WORKSPACE/deployment-info.txt"
+          python3 - <<'PY'
+          import os
+          import re
+          text = open(os.path.join(os.environ['GITHUB_WORKSPACE'], 'deployment-info.txt')).read()
+          found = re.findall(r'\bminos\s+(\d+\.\d+(?:\.\d+)?)', text)
+          if not found:
+              found = re.findall(r'cmd LC_VERSION_MIN_MACOSX\s+cmdsize \d+\s+version (\d+\.\d+(?:\.\d+)?)', text)
+          assert found, 'No minimum macOS version found'
+          for version in found:
+              parts = tuple(map(int, version.split('.')))
+              assert (parts + (0, 0))[:3] <= (10, 14, 0), f'Unexpected minimum OS: {version}'
+          print('Minimum OS check passed:', found)
+          PY
+          codesign --force --sign - --timestamp=none "$plugin"
+          codesign --verify --strict "$plugin"
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          ditto -c -k --sequesterRsrc --keepParent "$plugin" "$GITHUB_WORKSPACE/dist/GrainsDosage-Mojave-Intel.zip"
+
+      - name: Save ready-to-install plugin
+        uses: actions/upload-artifact@v4
+        with:
+          name: GrainsDosage-Mojave-Intel-VST3
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Save build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-diagnostics
+          path: |
+            build-macos.log
+            deployment-info.txt
+            regression-tests.log
+            gui-test.log
+            GrainsDosage-GUI*.png
+            **/Testing/Temporary/LastTest.log
+          if-no-files-found: ignore
+          retention-days: 7
