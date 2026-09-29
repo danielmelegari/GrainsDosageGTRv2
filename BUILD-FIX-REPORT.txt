@@ -1,0 +1,27 @@
+Build correction - 2026-09-29
+
+Reported failure: grains_test_state could not link on macOS x86_64.
+Missing symbols: aztec::createEditor and CoreFoundation functions.
+
+CMakeLists.txt now links the actual native editor and platform libraries
+into the state regression test on macOS and Windows. CoreFoundation is
+explicitly linked for the Mac plugin, GUI smoke test and state test.
+No regression suites were disabled.
+
+Mac CI now retains test/GUI logs and screenshots in diagnostics.
+Mojave packaging uses ditto ZIP with keepParent to retain the .vst3 folder
+and executable permissions. The GitHub download contains an inner ZIP.
+Windows CI triggers support both flat and GrainsDosage/ source layouts.
+
+Verification in this environment:
+- Linux Release build completed.
+- 11 CTest suites passed, including state migration and processing.
+- Steinberg plugin validator: 47 passed, 0 failed.
+- Five workflows parsed; explicit Bash steps passed bash -n.
+- Local SDK: v3.8.0_build_66, commit 9fad9770f2ae8542ab1a548a68c1ad1ac690abe0.
+- CI retains its existing SDK pin 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96.
+
+Limits: this environment is Linux; native macOS/Windows linking, GUI,
+installers and Cubase loading require their GitHub runners and host tests.
+The uploaded diagnostics stop at the link failure, so later native stages
+have not yet been validated by the user's run.

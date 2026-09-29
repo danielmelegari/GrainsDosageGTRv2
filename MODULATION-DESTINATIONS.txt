@@ -1,0 +1,106 @@
+GrainsDosage 0.13.0 - 101 destinations
+
+1. Size
+2. Density
+3. Pitch
+4. Lookback
+5. Chaos
+6. Grain Mix
+7. Speed
+8. Transpose
+9. Filter Cutoff
+10. Filter Resonance
+11. Filter Drive
+12. Grain Pan
+13. Glitch Mix
+14. Glitch Chance
+15. Glitch Move
+16. Glitch Variation
+17. Repeat Mix
+18. Repeat Chance
+19. Repeat Duration
+20. Reverb Mix
+21. Reverb Length
+22. Reslice Mix
+23. Gater Chance
+24. Gater Min Length
+25. Master Dry/Wet
+26. Filter Seq Depth
+27. Filter Seq Glide
+28. Glitch Slice
+29. Repeat Length
+30. Glitch Trigger Rate
+31. Repeat Interval
+32. Reverb Step Rate
+33. Reverb Random Rate
+34. Gater Rate
+35. Reslice Window
+36. Reslice Random Rate
+37. Filter Sequence Rate
+38. Repeat Pitch 01
+39. Repeat Pitch 02
+40. Repeat Pitch 03
+41. Repeat Pitch 04
+42. Repeat Pitch 05
+43. Repeat Pitch 06
+44. Repeat Pitch 07
+45. Repeat Pitch 08
+46. Repeat Pitch 09
+47. Repeat Pitch 10
+48. Repeat Pitch 11
+49. Repeat Pitch 12
+50. Repeat Pitch 13
+51. Repeat Pitch 14
+52. Repeat Pitch 15
+53. Repeat Pitch 16
+54. Gater Length 01
+55. Gater Length 02
+56. Gater Length 03
+57. Gater Length 04
+58. Gater Length 05
+59. Gater Length 06
+60. Gater Length 07
+61. Gater Length 08
+62. Gater Length 09
+63. Gater Length 10
+64. Gater Length 11
+65. Gater Length 12
+66. Gater Length 13
+67. Gater Length 14
+68. Gater Length 15
+69. Gater Length 16
+70. Gater Sustain 01
+71. Gater Sustain 02
+72. Gater Sustain 03
+73. Gater Sustain 04
+74. Gater Sustain 05
+75. Gater Sustain 06
+76. Gater Sustain 07
+77. Gater Sustain 08
+78. Gater Sustain 09
+79. Gater Sustain 10
+80. Gater Sustain 11
+81. Gater Sustain 12
+82. Gater Sustain 13
+83. Gater Sustain 14
+84. Gater Sustain 15
+85. Gater Sustain 16
+86. Reslice Source 01
+87. Reslice Source 02
+88. Reslice Source 03
+89. Reslice Source 04
+90. Reslice Source 05
+91. Reslice Source 06
+92. Reslice Source 07
+93. Reslice Source 08
+94. Reslice Source 09
+95. Reslice Source 10
+96. Reslice Source 11
+97. Reslice Source 12
+98. Reslice Source 13
+99. Reslice Source 14
+100. Reslice Source 15
+101. Reslice Source 16
+
+Effect amounts, timing, per-step pitch/length/sustain/source are routable.
+Global bypass, limiter safety ceiling, preset selection and modulation-source controls are not destinations.

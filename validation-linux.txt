@@ -1,0 +1,1082 @@
+GrainsDosage 0.13.0 — Linux Release validation
+Local VST3 SDK: 3.8.0_build_66
+Native Mac/Windows GUI and Cubase not tested here.
+
+Test project /tmp/grains013-build
+      Start  1: engine
+ 1/13 Test  #1: engine ...........................   Passed    2.53 sec
+      Start  2: modulation
+ 2/13 Test  #2: modulation .......................   Passed    1.91 sec
+      Start  3: features
+ 3/13 Test  #3: features .........................   Passed    1.50 sec
+      Start  4: rhythm
+ 4/13 Test  #4: rhythm ...........................   Passed    1.02 sec
+      Start  5: random
+ 5/13 Test  #5: random ...........................   Passed    0.00 sec
+      Start  6: master
+ 6/13 Test  #6: master ...........................   Passed    0.16 sec
+      Start  7: upgrade
+ 7/13 Test  #7: upgrade ..........................   Passed    0.96 sec
+      Start  8: gater
+ 8/13 Test  #8: gater ............................   Passed    0.09 sec
+      Start  9: declick
+ 9/13 Test  #9: declick ..........................   Passed    0.01 sec
+      Start 10: expansion
+10/13 Test #10: expansion ........................   Passed    0.95 sec
+      Start 11: state
+11/13 Test #11: state ............................   Passed    0.19 sec
+      Start 12: glitch_trigger
+12/13 Test #12: glitch_trigger ...................   Passed    1.02 sec
+      Start 13: musical
+13/13 Test #13: musical ..........................   Passed    0.95 sec
+
+100% tests passed out of 13
+
+Total Test time (real) =  11.33 sec
+
+Steinberg validator:
+* Loading module...
+
+	/tmp/grains013-build/VST3/Release/GrainsDosage.vst3
+
+* Check valid bundle structure...
+
+* Scanning classes...
+
+  Factory Info:
+	vendor = Daniel Melegari
+	url = 
+	email = 
+
+  Class Info 0:
+	name = GrainsDosage
+	category = Audio Module Class
+	subCategories = Fx|Granular
+	version = 0.13.0
+	sdkVersion = VST 3.8.0
+	cid = B318D832C27E4F25BD8E13A531470211
+
+  Class Info 1:
+	name = GrainsDosage Controller
+	category = Component Controller Class
+	subCategories = 
+	version = 0.13.0
+	sdkVersion = VST 3.8.0
+	cid = D8FDFEB3A52848AB8B8706A4DA21E077
+
+* Checking snapshots...
+
+Info: No snapshots in Bundle.
+
+* Creating tests...
+
+* Running tests...
+
+-------------------------------------------------------------
+TestSuite : GrainsDosage
+-------------------------------------------------------------
+
+-------------------------------------------------------------
+TestSuite : General Tests
+-------------------------------------------------------------
+
+[Scan Editor Classes]
+Info:  ===Scan Editor Classes ====================================
+Info:  This component has an edit controller class
+Info:     Controller CID: {D8FDFEB3-A528-48AB-8B87-06A4DA21E077}
+[Succeeded]
+
+[Scan Buses]
+Info:  ===Scan Buses ====================================
+Info:  => Audio Buses: [1 In(s) => 1 Out(s)]
+Info:       In [0]: "Stereo In" (Main-Default Active) 
+Info:       Out[0]: "Stereo Out" (Main-Default Active) 
+Info:  => Event Buses: [0 In(s) => 0 Out(s)]
+[Succeeded]
+
+[Scan Parameters]
+Info:  ===Scan Parameters ====================================
+Info:  This component exports 616 parameter(s)
+Info:  Note: it could be better to use UnitInfo in order to sort Parameters (>20).
+Info:     Parameter 000 (id=0): [title="Gate Grid"] [unit=""] [type = Discrete, default = 0.250000, unit = 0]
+Info:  =>Parameter 000 (id=0) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 001 (id=1): [title="Grain Size"] [unit="ms"] [type = Float, default = 0.250000, unit = 0]
+Info:     Parameter 002 (id=2): [title="Density"] [unit="per step"] [type = Float, default = 0.096774, unit = 0]
+Info:     Parameter 003 (id=3): [title="Pitch"] [unit="st"] [type = Discrete, default = 0.500000, unit = 0]
+Info:     Parameter 004 (id=4): [title="Lookback"] [unit="ms"] [type = Float, default = 0.050000, unit = 0]
+Info:     Parameter 005 (id=5): [title="Chaos"] [unit="%"] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 006 (id=6): [title="Dry Wet"] [unit="%"] [type = Float, default = 1.000000, unit = 0]
+Info:     Parameter 007 (id=7): [title="Gate Attack"] [unit="ms"] [type = Float, default = 0.100000, unit = 0]
+Info:  =>Parameter 007 (id=7) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 008 (id=8): [title="Gate Release"] [unit="ms"] [type = Float, default = 0.150000, unit = 0]
+Info:  =>Parameter 008 (id=8) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 009 (id=9): [title="Feedback"] [unit="%"] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 009 (id=9) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 010 (id=10): [title="Step 01"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 010 (id=10) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 011 (id=11): [title="Step 02"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 011 (id=11) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 012 (id=12): [title="Step 03"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 012 (id=12) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 013 (id=13): [title="Step 04"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 013 (id=13) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 014 (id=14): [title="Step 05"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 014 (id=14) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 015 (id=15): [title="Step 06"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 015 (id=15) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 016 (id=16): [title="Step 07"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 016 (id=16) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 017 (id=17): [title="Step 08"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 017 (id=17) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 018 (id=18): [title="Step 09"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 018 (id=18) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 019 (id=19): [title="Step 10"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 019 (id=19) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 020 (id=20): [title="Step 11"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 020 (id=20) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 021 (id=21): [title="Step 12"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 021 (id=21) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 022 (id=22): [title="Step 13"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 022 (id=22) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 023 (id=23): [title="Step 14"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 023 (id=23) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 024 (id=24): [title="Step 15"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 024 (id=24) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 025 (id=25): [title="Step 16"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 025 (id=25) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 026 (id=26): [title="Granular Mix"] [unit="%"] [type = Float, default = 1.000000, unit = 0]
+Info:     Parameter 027 (id=27): [title="Glitch Mix"] [unit="%"] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 028 (id=28): [title="Glitch Slice"] [unit=""] [type = Discrete, default = 0.333333, unit = 0]
+Info:     Parameter 029 (id=29): [title="Glitch Probability"] [unit="%"] [type = Float, default = 1.000000, unit = 0]
+Info:     Parameter 030 (id=30): [title="Glitch Reverse"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 031 (id=31): [title="Repeat Hold"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 032 (id=32): [title="Repeat Mix"] [unit="%"] [type = Float, default = 1.000000, unit = 0]
+Info:     Parameter 033 (id=33): [title="Repeat Length"] [unit=""] [type = Discrete, default = 0.266667, unit = 0]
+Info:     Parameter 034 (id=34): [title="Bypass"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 035 (id=35): [title="Mod 1 Enable"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 036 (id=36): [title="Mod 1 Wave"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 037 (id=37): [title="Mod 1 Tempo Sync"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 038 (id=38): [title="Mod 1 Free Rate"] [unit="Hz"] [type = Float, default = 0.024756, unit = 0]
+Info:     Parameter 039 (id=39): [title="Mod 1 Sync Rate"] [unit=""] [type = Discrete, default = 0.150000, unit = 0]
+Info:     Parameter 040 (id=40): [title="Mod 1 Depth"] [unit="%"] [type = Float, default = 1.000000, unit = 0]
+Info:     Parameter 041 (id=41): [title="Mod 1 Phase"] [unit="deg"] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 042 (id=42): [title="Mod 1 Beat Retrigger"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 043 (id=43): [title="Mod 1 Glide"] [unit="% cycle"] [type = Float, default = 1.000000, unit = 0]
+Info:     Parameter 044 (id=44): [title="Mod 1 To Size"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 044 (id=44) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 045 (id=45): [title="Mod 1 To Density"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 045 (id=45) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 046 (id=46): [title="Mod 1 To Pitch"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 046 (id=46) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 047 (id=47): [title="Mod 1 To Lookback"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 047 (id=47) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 048 (id=48): [title="Mod 1 To Chaos"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 048 (id=48) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 049 (id=49): [title="Mod 1 To Granular Mix"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 049 (id=49) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 050 (id=50): [title="Mod 2 Enable"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 051 (id=51): [title="Mod 2 Wave"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 052 (id=52): [title="Mod 2 Tempo Sync"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 053 (id=53): [title="Mod 2 Free Rate"] [unit="Hz"] [type = Float, default = 0.024756, unit = 0]
+Info:     Parameter 054 (id=54): [title="Mod 2 Sync Rate"] [unit=""] [type = Discrete, default = 0.150000, unit = 0]
+Info:     Parameter 055 (id=55): [title="Mod 2 Depth"] [unit="%"] [type = Float, default = 1.000000, unit = 0]
+Info:     Parameter 056 (id=56): [title="Mod 2 Phase"] [unit="deg"] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 057 (id=57): [title="Mod 2 Beat Retrigger"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 058 (id=58): [title="Mod 2 Glide"] [unit="% cycle"] [type = Float, default = 1.000000, unit = 0]
+Info:     Parameter 059 (id=59): [title="Mod 2 To Size"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 059 (id=59) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 060 (id=60): [title="Mod 2 To Density"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 060 (id=60) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 061 (id=61): [title="Mod 2 To Pitch"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 061 (id=61) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 062 (id=62): [title="Mod 2 To Lookback"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 062 (id=62) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 063 (id=63): [title="Mod 2 To Chaos"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 063 (id=63) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 064 (id=64): [title="Mod 2 To Granular Mix"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 064 (id=64) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 065 (id=65): [title="Mod 3 Enable"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 066 (id=66): [title="Mod 3 Wave"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 067 (id=67): [title="Mod 3 Tempo Sync"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 068 (id=68): [title="Mod 3 Free Rate"] [unit="Hz"] [type = Float, default = 0.024756, unit = 0]
+Info:     Parameter 069 (id=69): [title="Mod 3 Sync Rate"] [unit=""] [type = Discrete, default = 0.150000, unit = 0]
+Info:     Parameter 070 (id=70): [title="Mod 3 Depth"] [unit="%"] [type = Float, default = 1.000000, unit = 0]
+Info:     Parameter 071 (id=71): [title="Mod 3 Phase"] [unit="deg"] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 072 (id=72): [title="Mod 3 Beat Retrigger"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 073 (id=73): [title="Mod 3 Glide"] [unit="% cycle"] [type = Float, default = 1.000000, unit = 0]
+Info:     Parameter 074 (id=74): [title="Mod 3 To Size"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 074 (id=74) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 075 (id=75): [title="Mod 3 To Density"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 075 (id=75) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 076 (id=76): [title="Mod 3 To Pitch"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 076 (id=76) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 077 (id=77): [title="Mod 3 To Lookback"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 077 (id=77) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 078 (id=78): [title="Mod 3 To Chaos"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 078 (id=78) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 079 (id=79): [title="Mod 3 To Granular Mix"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 079 (id=79) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 080 (id=80): [title="Mod 4 Enable"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 081 (id=81): [title="Mod 4 Wave"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 082 (id=82): [title="Mod 4 Tempo Sync"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 083 (id=83): [title="Mod 4 Free Rate"] [unit="Hz"] [type = Float, default = 0.024756, unit = 0]
+Info:     Parameter 084 (id=84): [title="Mod 4 Sync Rate"] [unit=""] [type = Discrete, default = 0.150000, unit = 0]
+Info:     Parameter 085 (id=85): [title="Mod 4 Depth"] [unit="%"] [type = Float, default = 1.000000, unit = 0]
+Info:     Parameter 086 (id=86): [title="Mod 4 Phase"] [unit="deg"] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 087 (id=87): [title="Mod 4 Beat Retrigger"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 088 (id=88): [title="Mod 4 Glide"] [unit="% cycle"] [type = Float, default = 1.000000, unit = 0]
+Info:     Parameter 089 (id=89): [title="Mod 4 To Size"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 089 (id=89) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 090 (id=90): [title="Mod 4 To Density"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 090 (id=90) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 091 (id=91): [title="Mod 4 To Pitch"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 091 (id=91) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 092 (id=92): [title="Mod 4 To Lookback"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 092 (id=92) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 093 (id=93): [title="Mod 4 To Chaos"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 093 (id=93) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 094 (id=94): [title="Mod 4 To Granular Mix"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 094 (id=94) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 095 (id=95): [title="Glitch Sequence"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 095 (id=95) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 096 (id=96): [title="Repeat Sequence"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 097 (id=97): [title="Glitch Step 01"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 097 (id=97) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 098 (id=98): [title="Glitch Step 02"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 098 (id=98) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 099 (id=99): [title="Glitch Step 03"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 099 (id=99) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 100 (id=100): [title="Glitch Step 04"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 100 (id=100) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 101 (id=101): [title="Glitch Step 05"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 101 (id=101) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 102 (id=102): [title="Glitch Step 06"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 102 (id=102) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 103 (id=103): [title="Glitch Step 07"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 103 (id=103) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 104 (id=104): [title="Glitch Step 08"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 104 (id=104) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 105 (id=105): [title="Glitch Step 09"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 105 (id=105) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 106 (id=106): [title="Glitch Step 10"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 106 (id=106) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 107 (id=107): [title="Glitch Step 11"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 107 (id=107) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 108 (id=108): [title="Glitch Step 12"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 108 (id=108) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 109 (id=109): [title="Glitch Step 13"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 109 (id=109) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 110 (id=110): [title="Glitch Step 14"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 110 (id=110) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 111 (id=111): [title="Glitch Step 15"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 111 (id=111) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 112 (id=112): [title="Glitch Step 16"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:  =>Parameter 112 (id=112) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 113 (id=113): [title="Repeat Step 01"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 114 (id=114): [title="Repeat Step 02"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 115 (id=115): [title="Repeat Step 03"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 116 (id=116): [title="Repeat Step 04"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 117 (id=117): [title="Repeat Step 05"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 118 (id=118): [title="Repeat Step 06"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 119 (id=119): [title="Repeat Step 07"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 120 (id=120): [title="Repeat Step 08"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 121 (id=121): [title="Repeat Step 09"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 122 (id=122): [title="Repeat Step 10"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 123 (id=123): [title="Repeat Step 11"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 124 (id=124): [title="Repeat Step 12"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 125 (id=125): [title="Repeat Step 13"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 126 (id=126): [title="Repeat Step 14"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 127 (id=127): [title="Repeat Step 15"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 128 (id=128): [title="Repeat Step 16"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 129 (id=129): [title="Repeat Division 01"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 130 (id=130): [title="Repeat Division 02"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 131 (id=131): [title="Repeat Division 03"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 132 (id=132): [title="Repeat Division 04"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 133 (id=133): [title="Repeat Division 05"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 134 (id=134): [title="Repeat Division 06"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 135 (id=135): [title="Repeat Division 07"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 136 (id=136): [title="Repeat Division 08"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 137 (id=137): [title="Repeat Division 09"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 138 (id=138): [title="Repeat Division 10"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 139 (id=139): [title="Repeat Division 11"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 140 (id=140): [title="Repeat Division 12"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 141 (id=141): [title="Repeat Division 13"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 142 (id=142): [title="Repeat Division 14"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 143 (id=143): [title="Repeat Division 15"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 144 (id=144): [title="Repeat Division 16"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 145 (id=145): [title="Repeat Pitch 01"] [unit="st"] [type = Discrete, default = 0.500000, unit = 0]
+Info:     Parameter 146 (id=146): [title="Repeat Pitch 02"] [unit="st"] [type = Discrete, default = 0.500000, unit = 0]
+Info:     Parameter 147 (id=147): [title="Repeat Pitch 03"] [unit="st"] [type = Discrete, default = 0.500000, unit = 0]
+Info:     Parameter 148 (id=148): [title="Repeat Pitch 04"] [unit="st"] [type = Discrete, default = 0.500000, unit = 0]
+Info:     Parameter 149 (id=149): [title="Repeat Pitch 05"] [unit="st"] [type = Discrete, default = 0.500000, unit = 0]
+Info:     Parameter 150 (id=150): [title="Repeat Pitch 06"] [unit="st"] [type = Discrete, default = 0.500000, unit = 0]
+Info:     Parameter 151 (id=151): [title="Repeat Pitch 07"] [unit="st"] [type = Discrete, default = 0.500000, unit = 0]
+Info:     Parameter 152 (id=152): [title="Repeat Pitch 08"] [unit="st"] [type = Discrete, default = 0.500000, unit = 0]
+Info:     Parameter 153 (id=153): [title="Repeat Pitch 09"] [unit="st"] [type = Discrete, default = 0.500000, unit = 0]
+Info:     Parameter 154 (id=154): [title="Repeat Pitch 10"] [unit="st"] [type = Discrete, default = 0.500000, unit = 0]
+Info:     Parameter 155 (id=155): [title="Repeat Pitch 11"] [unit="st"] [type = Discrete, default = 0.500000, unit = 0]
+Info:     Parameter 156 (id=156): [title="Repeat Pitch 12"] [unit="st"] [type = Discrete, default = 0.500000, unit = 0]
+Info:     Parameter 157 (id=157): [title="Repeat Pitch 13"] [unit="st"] [type = Discrete, default = 0.500000, unit = 0]
+Info:     Parameter 158 (id=158): [title="Repeat Pitch 14"] [unit="st"] [type = Discrete, default = 0.500000, unit = 0]
+Info:     Parameter 159 (id=159): [title="Repeat Pitch 15"] [unit="st"] [type = Discrete, default = 0.500000, unit = 0]
+Info:     Parameter 160 (id=160): [title="Repeat Pitch 16"] [unit="st"] [type = Discrete, default = 0.500000, unit = 0]
+Info:     Parameter 161 (id=161): [title="Free Stretch"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 162 (id=162): [title="Stretch Speed"] [unit="%"] [type = Float, default = 0.200000, unit = 0]
+Info:     Parameter 163 (id=163): [title="Mod Random Points 01"] [unit="points"] [type = Discrete, default = 0.238095, unit = 0]
+Info:     Parameter 164 (id=164): [title="Mod Random Points 02"] [unit="points"] [type = Discrete, default = 0.238095, unit = 0]
+Info:     Parameter 165 (id=165): [title="Mod Random Points 03"] [unit="points"] [type = Discrete, default = 0.238095, unit = 0]
+Info:     Parameter 166 (id=166): [title="Mod Random Points 04"] [unit="points"] [type = Discrete, default = 0.238095, unit = 0]
+Info:     Parameter 167 (id=167): [title="Density Flow"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 168 (id=168): [title="Final Transpose"] [unit="st"] [type = Discrete, default = 0.500000, unit = 0]
+Info:     Parameter 169 (id=169): [title="XY X"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:     Parameter 170 (id=170): [title="XY Y"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:     Parameter 171 (id=171): [title="XY Enable"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 172 (id=172): [title="X Destination"] [unit=""] [type = Discrete, default = 0.011834, unit = 0]
+Info:     Parameter 173 (id=173): [title="Y Destination"] [unit=""] [type = Discrete, default = 0.023669, unit = 0]
+Info:     Parameter 174 (id=174): [title="X Amount"] [unit="%"] [type = Float, default = 0.750000, unit = 0]
+Info:     Parameter 175 (id=175): [title="Y Amount"] [unit="%"] [type = Float, default = 0.750000, unit = 0]
+Info:     Parameter 176 (id=176): [title="Module Order"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 177 (id=177): [title="Mod 1 To Speed"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 177 (id=177) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 178 (id=178): [title="Mod 1 To Transpose"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 178 (id=178) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 179 (id=179): [title="Mod 2 To Speed"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 179 (id=179) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 180 (id=180): [title="Mod 2 To Transpose"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 180 (id=180) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 181 (id=181): [title="Mod 3 To Speed"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 181 (id=181) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 182 (id=182): [title="Mod 3 To Transpose"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 182 (id=182) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 183 (id=183): [title="Mod 4 To Speed"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 183 (id=183) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 184 (id=184): [title="Mod 4 To Transpose"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 184 (id=184) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 185 (id=185): [title="Glitch Move"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:     Parameter 186 (id=186): [title="Glitch Variation"] [unit="%"] [type = Float, default = 0.300000, unit = 0]
+Info:     Parameter 187 (id=187): [title="Glitch Refresh"] [unit=""] [type = Discrete, default = 0.285714, unit = 0]
+Info:  =>Parameter 187 (id=187) is kIsHidden and NOT kIsReadOnly!
+Info:     Parameter 188 (id=188): [title="Repeat Auto"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 189 (id=189): [title="Repeat Interval"] [unit=""] [type = Discrete, default = 0.571429, unit = 0]
+Info:     Parameter 190 (id=190): [title="Repeat Duration"] [unit="16ths"] [type = Discrete, default = 0.096774, unit = 0]
+Info:     Parameter 191 (id=191): [title="Repeat Chance"] [unit="%"] [type = Float, default = 1.000000, unit = 0]
+Info:     Parameter 192 (id=192): [title="Step Monitor"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 193 (id=193): [title="Glitch Monitor"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 194 (id=194): [title="Repeat Monitor"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 195 (id=195): [title="Output Monitor"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 196 (id=196): [title="Master Filter"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 197 (id=197): [title="Master Filter Type"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 198 (id=198): [title="Master Cutoff"] [unit="Hz"] [type = Float, default = 0.566323, unit = 0]
+Info:     Parameter 199 (id=199): [title="Master Resonance"] [unit="%"] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 200 (id=200): [title="Master Limiter"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 201 (id=201): [title="Normalize Wet"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 202 (id=202): [title="Filter Slope"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 203 (id=203): [title="Filter Drive"] [unit="dB"] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 204 (id=204): [title="Grain Enabled"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 205 (id=205): [title="Glitch Enabled"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 206 (id=206): [title="Repeater Enabled"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 207 (id=207): [title="Grain Pan"] [unit="L/R"] [type = Float, default = 0.500000, unit = 0]
+Info:     Parameter 208 (id=208): [title="Grain Pan Mode"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 209 (id=209): [title="Reverb On"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 210 (id=210): [title="Reverb Type"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 211 (id=211): [title="Reverb Grid"] [unit=""] [type = Discrete, default = 0.666667, unit = 0]
+Info:     Parameter 212 (id=212): [title="Reverb Amount"] [unit="%"] [type = Float, default = 0.250000, unit = 0]
+Info:     Parameter 213 (id=213): [title="Reverb Step 01"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 214 (id=214): [title="Reverb Step 02"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 215 (id=215): [title="Reverb Step 03"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 216 (id=216): [title="Reverb Step 04"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 217 (id=217): [title="Reverb Step 05"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 218 (id=218): [title="Reverb Step 06"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 219 (id=219): [title="Reverb Step 07"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 220 (id=220): [title="Reverb Step 08"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 221 (id=221): [title="Reverb Step 09"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 222 (id=222): [title="Reverb Step 10"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 223 (id=223): [title="Reverb Step 11"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 224 (id=224): [title="Reverb Step 12"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 225 (id=225): [title="Reverb Step 13"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 226 (id=226): [title="Reverb Step 14"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 227 (id=227): [title="Reverb Step 15"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 228 (id=228): [title="Reverb Step 16"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 229 (id=229): [title="Reverb Step Monitor"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 230 (id=230): [title="Reverb Length"] [unit="s"] [type = Float, default = 0.131313, unit = 0]
+Info:     Parameter 231 (id=231): [title="Grain Display 0"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 232 (id=232): [title="Grain Display 1"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 233 (id=233): [title="Grain Display 2"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 234 (id=234): [title="Grain Display 3"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 235 (id=235): [title="Grain Display 4"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 236 (id=236): [title="Grain Display 5"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 237 (id=237): [title="Grain Display 6"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 238 (id=238): [title="Grain Display 7"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 239 (id=239): [title="Grain Display 8"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 240 (id=240): [title="Grain Display 9"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 241 (id=241): [title="Grain Display 10"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 242 (id=242): [title="Grain Display 11"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 243 (id=243): [title="Grain Display 12"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 244 (id=244): [title="Grain Display 13"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 245 (id=245): [title="Grain Display 14"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 246 (id=246): [title="Grain Display 15"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 247 (id=247): [title="Grain Display 16"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 248 (id=248): [title="Grain Display 17"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 249 (id=249): [title="Grain Display 18"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 250 (id=250): [title="Grain Display 19"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 251 (id=251): [title="Grain Display 20"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 252 (id=252): [title="Grain Display 21"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 253 (id=253): [title="Grain Display 22"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 254 (id=254): [title="Grain Display 23"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 255 (id=255): [title="Grain Display 24"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 256 (id=256): [title="Grain Display 25"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 257 (id=257): [title="Grain Display 26"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 258 (id=258): [title="Grain Display 27"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 259 (id=259): [title="Grain Display 28"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 260 (id=260): [title="Grain Display 29"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 261 (id=261): [title="Grain Display 30"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 262 (id=262): [title="Grain Display 31"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 263 (id=263): [title="Grain Display 32"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 264 (id=264): [title="Grain Display 33"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 265 (id=265): [title="Grain Display 34"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 266 (id=266): [title="Grain Display 35"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 267 (id=267): [title="Grain Display 36"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 268 (id=268): [title="Grain Display 37"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 269 (id=269): [title="Grain Display 38"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 270 (id=270): [title="Grain Display 39"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 271 (id=271): [title="Grain Display 40"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 272 (id=272): [title="Grain Display 41"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 273 (id=273): [title="Grain Display 42"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 274 (id=274): [title="Grain Display 43"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 275 (id=275): [title="Grain Display 44"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 276 (id=276): [title="Grain Display 45"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 277 (id=277): [title="Grain Display 46"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 278 (id=278): [title="Grain Display 47"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 279 (id=279): [title="Grain Display 48"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 280 (id=280): [title="Grain Display 49"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 281 (id=281): [title="Grain Display 50"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 282 (id=282): [title="Grain Display 51"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 283 (id=283): [title="Grain Display 52"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 284 (id=284): [title="Grain Display 53"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 285 (id=285): [title="Grain Display 54"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 286 (id=286): [title="Grain Display 55"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 287 (id=287): [title="Grain Display 56"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 288 (id=288): [title="Grain Display 57"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 289 (id=289): [title="Grain Display 58"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 290 (id=290): [title="Grain Display 59"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 291 (id=291): [title="Grain Display 60"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 292 (id=292): [title="Grain Display 61"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 293 (id=293): [title="Grain Display 62"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 294 (id=294): [title="Grain Display 63"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 295 (id=295): [title="Grain Display 64"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 296 (id=296): [title="Grain Display 65"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 297 (id=297): [title="Grain Display 66"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 298 (id=298): [title="Grain Display 67"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 299 (id=299): [title="Grain Display 68"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 300 (id=300): [title="Grain Display 69"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 301 (id=301): [title="Grain Display 70"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 302 (id=302): [title="Grain Display 71"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 303 (id=303): [title="Grain Display 72"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 304 (id=304): [title="Grain Display 73"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 305 (id=305): [title="Grain Display 74"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 306 (id=306): [title="Grain Display 75"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 307 (id=307): [title="Grain Display 76"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 308 (id=308): [title="Grain Display 77"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 309 (id=309): [title="Grain Display 78"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 310 (id=310): [title="Grain Display 79"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 311 (id=311): [title="Grain Display 80"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 312 (id=312): [title="Grain Display 81"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 313 (id=313): [title="Grain Display 82"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 314 (id=314): [title="Grain Display 83"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 315 (id=315): [title="Grain Display 84"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 316 (id=316): [title="Grain Display 85"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 317 (id=317): [title="Grain Display 86"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 318 (id=318): [title="Grain Display 87"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 319 (id=319): [title="Grain Display 88"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 320 (id=320): [title="Grain Display 89"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 321 (id=321): [title="Grain Display 90"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 322 (id=322): [title="Grain Display 91"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 323 (id=323): [title="Grain Display 92"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 324 (id=324): [title="Grain Display 93"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 325 (id=325): [title="Grain Display 94"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 326 (id=326): [title="Grain Display 95"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 327 (id=327): [title="Grain Display 96"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 328 (id=328): [title="Grain Display 97"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 329 (id=329): [title="Grain Display 98"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 330 (id=330): [title="Grain Display 99"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 331 (id=331): [title="Grain Display 100"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 332 (id=332): [title="Grain Display 101"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 333 (id=333): [title="Grain Display 102"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 334 (id=334): [title="Grain Display 103"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 335 (id=335): [title="Grain Display 104"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 336 (id=336): [title="Grain Display 105"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 337 (id=337): [title="Grain Display 106"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 338 (id=338): [title="Grain Display 107"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 339 (id=339): [title="Grain Display 108"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 340 (id=340): [title="Grain Display 109"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 341 (id=341): [title="Grain Display 110"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 342 (id=342): [title="Grain Display 111"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 343 (id=343): [title="Grain Display 112"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 344 (id=344): [title="Grain Display 113"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 345 (id=345): [title="Grain Display 114"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 346 (id=346): [title="Grain Display 115"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 347 (id=347): [title="Grain Display 116"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 348 (id=348): [title="Grain Display 117"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 349 (id=349): [title="Grain Display 118"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 350 (id=350): [title="Grain Display 119"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 351 (id=351): [title="Grain Display 120"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 352 (id=352): [title="Grain Display 121"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 353 (id=353): [title="Grain Display 122"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 354 (id=354): [title="Grain Display 123"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 355 (id=355): [title="Grain Display 124"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 356 (id=356): [title="Grain Display 125"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 357 (id=357): [title="Grain Display 126"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 358 (id=358): [title="Grain Display 127"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 359 (id=359): [title="Grain Display 128"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 360 (id=360): [title="Grain Display 129"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 361 (id=361): [title="Grain Display 130"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 362 (id=362): [title="Grain Display 131"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 363 (id=363): [title="Grain Display 132"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 364 (id=364): [title="Mod 1 Destination 1"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 365 (id=365): [title="Mod 1 Amount 1"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:     Parameter 366 (id=366): [title="Mod 1 Destination 2"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 367 (id=367): [title="Mod 1 Amount 2"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:     Parameter 368 (id=368): [title="Mod 1 Destination 3"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 369 (id=369): [title="Mod 1 Amount 3"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:     Parameter 370 (id=370): [title="Mod 1 Destination 4"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 371 (id=371): [title="Mod 1 Amount 4"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:     Parameter 372 (id=372): [title="Mod 1 Destination 5"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 373 (id=373): [title="Mod 1 Amount 5"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:     Parameter 374 (id=374): [title="Mod 1 Destination 6"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 375 (id=375): [title="Mod 1 Amount 6"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:     Parameter 376 (id=376): [title="Mod 2 Destination 1"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 377 (id=377): [title="Mod 2 Amount 1"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:     Parameter 378 (id=378): [title="Mod 2 Destination 2"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 379 (id=379): [title="Mod 2 Amount 2"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:     Parameter 380 (id=380): [title="Mod 2 Destination 3"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 381 (id=381): [title="Mod 2 Amount 3"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:     Parameter 382 (id=382): [title="Mod 2 Destination 4"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 383 (id=383): [title="Mod 2 Amount 4"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:     Parameter 384 (id=384): [title="Mod 2 Destination 5"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 385 (id=385): [title="Mod 2 Amount 5"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:     Parameter 386 (id=386): [title="Mod 2 Destination 6"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 387 (id=387): [title="Mod 2 Amount 6"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:     Parameter 388 (id=388): [title="Mod 3 Destination 1"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 389 (id=389): [title="Mod 3 Amount 1"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:     Parameter 390 (id=390): [title="Mod 3 Destination 2"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 391 (id=391): [title="Mod 3 Amount 2"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:     Parameter 392 (id=392): [title="Mod 3 Destination 3"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 393 (id=393): [title="Mod 3 Amount 3"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:     Parameter 394 (id=394): [title="Mod 3 Destination 4"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 395 (id=395): [title="Mod 3 Amount 4"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:     Parameter 396 (id=396): [title="Mod 3 Destination 5"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 397 (id=397): [title="Mod 3 Amount 5"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:     Parameter 398 (id=398): [title="Mod 3 Destination 6"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 399 (id=399): [title="Mod 3 Amount 6"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:     Parameter 400 (id=400): [title="Mod 4 Destination 1"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 401 (id=401): [title="Mod 4 Amount 1"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:     Parameter 402 (id=402): [title="Mod 4 Destination 2"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 403 (id=403): [title="Mod 4 Amount 2"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:     Parameter 404 (id=404): [title="Mod 4 Destination 3"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 405 (id=405): [title="Mod 4 Amount 3"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:     Parameter 406 (id=406): [title="Mod 4 Destination 4"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 407 (id=407): [title="Mod 4 Amount 4"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:     Parameter 408 (id=408): [title="Mod 4 Destination 5"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 409 (id=409): [title="Mod 4 Amount 5"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:     Parameter 410 (id=410): [title="Mod 4 Destination 6"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 411 (id=411): [title="Mod 4 Amount 6"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:     Parameter 412 (id=412): [title="Mod 1 Speed"] [unit=""] [type = Discrete, default = 0.666667, unit = 0]
+Info:     Parameter 413 (id=413): [title="Mod 2 Speed"] [unit=""] [type = Discrete, default = 0.666667, unit = 0]
+Info:     Parameter 414 (id=414): [title="Mod 3 Speed"] [unit=""] [type = Discrete, default = 0.666667, unit = 0]
+Info:     Parameter 415 (id=415): [title="Mod 4 Speed"] [unit=""] [type = Discrete, default = 0.666667, unit = 0]
+Info:     Parameter 416 (id=416): [title="Reverb Kill Dry"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 417 (id=417): [title="Mod Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 418 (id=418): [title="Mod Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 418 (id=418): [title="Mod Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 419 (id=419): [title="Mod Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 419 (id=419): [title="Mod Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 420 (id=420): [title="Mod Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 420 (id=420): [title="Mod Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 421 (id=421): [title="Mod Display"] [unit=""] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 421 (id=421): [title="Mod Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 422 (id=422): [title="Mod Display"] [unit=""] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 422 (id=422): [title="Mod Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 423 (id=423): [title="Mod Display"] [unit=""] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 423 (id=423): [title="Mod Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 424 (id=424): [title="Mod Display"] [unit=""] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 424 (id=424): [title="Mod Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 425 (id=425): [title="Mod Display"] [unit=""] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 425 (id=425): [title="Mod Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 426 (id=426): [title="Mod Display"] [unit=""] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 426 (id=426): [title="Mod Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 427 (id=427): [title="Mod Display"] [unit=""] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 427 (id=427): [title="Mod Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 428 (id=428): [title="Mod Display"] [unit=""] [type = Float, default = 0.500000, unit = 0]
+Info:  =>Parameter 428 (id=428): [title="Mod Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 429 (id=429): [title="Mod 1 Wave RND"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 430 (id=430): [title="Mod 2 Wave RND"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 431 (id=431): [title="Mod 3 Wave RND"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 432 (id=432): [title="Mod 4 Wave RND"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 433 (id=433): [title="Mod Active Wave"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 434 (id=434): [title="Mod Active Wave"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 434 (id=434): [title="Mod Active Wave"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 435 (id=435): [title="Mod Active Wave"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 435 (id=435): [title="Mod Active Wave"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 436 (id=436): [title="Mod Active Wave"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 436 (id=436): [title="Mod Active Wave"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 437 (id=437): [title="Reverb Trigger Source"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 438 (id=438): [title="Reverb Random Rate"] [unit=""] [type = Discrete, default = 1.000000, unit = 0]
+Info:     Parameter 439 (id=439): [title="Reverb Send Monitor"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 440 (id=440): [title="Limiter Ceiling"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 441 (id=441): [title="Gater On"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 442 (id=442): [title="Gater Rate"] [unit=""] [type = Discrete, default = 0.666667, unit = 0]
+Info:     Parameter 443 (id=443): [title="Gater Length RND"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 444 (id=444): [title="Gater Step RND"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 445 (id=445): [title="Gater Chance"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:     Parameter 446 (id=446): [title="Gater Step 01"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 447 (id=447): [title="Gater Step 02"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 448 (id=448): [title="Gater Step 03"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 449 (id=449): [title="Gater Step 04"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 450 (id=450): [title="Gater Step 05"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 451 (id=451): [title="Gater Step 06"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 452 (id=452): [title="Gater Step 07"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 453 (id=453): [title="Gater Step 08"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 454 (id=454): [title="Gater Step 09"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 455 (id=455): [title="Gater Step 10"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 456 (id=456): [title="Gater Step 11"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 457 (id=457): [title="Gater Step 12"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 458 (id=458): [title="Gater Step 13"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 459 (id=459): [title="Gater Step 14"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 460 (id=460): [title="Gater Step 15"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 461 (id=461): [title="Gater Step 16"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 462 (id=462): [title="Gater Length 01"] [unit="%"] [type = Float, default = 0.736842, unit = 0]
+Info:     Parameter 463 (id=463): [title="Gater Length 02"] [unit="%"] [type = Float, default = 0.736842, unit = 0]
+Info:     Parameter 464 (id=464): [title="Gater Length 03"] [unit="%"] [type = Float, default = 0.736842, unit = 0]
+Info:     Parameter 465 (id=465): [title="Gater Length 04"] [unit="%"] [type = Float, default = 0.736842, unit = 0]
+Info:     Parameter 466 (id=466): [title="Gater Length 05"] [unit="%"] [type = Float, default = 0.736842, unit = 0]
+Info:     Parameter 467 (id=467): [title="Gater Length 06"] [unit="%"] [type = Float, default = 0.736842, unit = 0]
+Info:     Parameter 468 (id=468): [title="Gater Length 07"] [unit="%"] [type = Float, default = 0.736842, unit = 0]
+Info:     Parameter 469 (id=469): [title="Gater Length 08"] [unit="%"] [type = Float, default = 0.736842, unit = 0]
+Info:     Parameter 470 (id=470): [title="Gater Length 09"] [unit="%"] [type = Float, default = 0.736842, unit = 0]
+Info:     Parameter 471 (id=471): [title="Gater Length 10"] [unit="%"] [type = Float, default = 0.736842, unit = 0]
+Info:     Parameter 472 (id=472): [title="Gater Length 11"] [unit="%"] [type = Float, default = 0.736842, unit = 0]
+Info:     Parameter 473 (id=473): [title="Gater Length 12"] [unit="%"] [type = Float, default = 0.736842, unit = 0]
+Info:     Parameter 474 (id=474): [title="Gater Length 13"] [unit="%"] [type = Float, default = 0.736842, unit = 0]
+Info:     Parameter 475 (id=475): [title="Gater Length 14"] [unit="%"] [type = Float, default = 0.736842, unit = 0]
+Info:     Parameter 476 (id=476): [title="Gater Length 15"] [unit="%"] [type = Float, default = 0.736842, unit = 0]
+Info:     Parameter 477 (id=477): [title="Gater Length 16"] [unit="%"] [type = Float, default = 0.736842, unit = 0]
+Info:     Parameter 478 (id=478): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 479 (id=479): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 479 (id=479): [title="Gater Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 480 (id=480): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 480 (id=480): [title="Gater Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 481 (id=481): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 481 (id=481): [title="Gater Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 482 (id=482): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 482 (id=482): [title="Gater Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 483 (id=483): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 483 (id=483): [title="Gater Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 484 (id=484): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 484 (id=484): [title="Gater Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 485 (id=485): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 485 (id=485): [title="Gater Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 486 (id=486): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 486 (id=486): [title="Gater Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 487 (id=487): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 487 (id=487): [title="Gater Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 488 (id=488): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 488 (id=488): [title="Gater Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 489 (id=489): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 489 (id=489): [title="Gater Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 490 (id=490): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 490 (id=490): [title="Gater Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 491 (id=491): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 491 (id=491): [title="Gater Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 492 (id=492): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 492 (id=492): [title="Gater Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 493 (id=493): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 493 (id=493): [title="Gater Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 494 (id=494): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 494 (id=494): [title="Gater Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 495 (id=495): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 495 (id=495): [title="Gater Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 496 (id=496): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 496 (id=496): [title="Gater Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 497 (id=497): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 497 (id=497): [title="Gater Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 498 (id=498): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 498 (id=498): [title="Gater Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 499 (id=499): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 499 (id=499): [title="Gater Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 500 (id=500): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 500 (id=500): [title="Gater Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 501 (id=501): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 501 (id=501): [title="Gater Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 502 (id=502): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 502 (id=502): [title="Gater Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 503 (id=503): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 503 (id=503): [title="Gater Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 504 (id=504): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 504 (id=504): [title="Gater Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 505 (id=505): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 505 (id=505): [title="Gater Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 506 (id=506): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 506 (id=506): [title="Gater Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 507 (id=507): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 507 (id=507): [title="Gater Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 508 (id=508): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 508 (id=508): [title="Gater Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 509 (id=509): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 509 (id=509): [title="Gater Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 510 (id=510): [title="Gater Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 510 (id=510): [title="Gater Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 511 (id=511): [title="Input De-click"] [unit=""] [type = Toggle, default = 1.000000, unit = 0]
+Info:     Parameter 512 (id=512): [title="De-click Sensitivity"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:     Parameter 513 (id=513): [title="Filter Model"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 514 (id=514): [title="Reslice On"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 515 (id=515): [title="Reslice Window"] [unit=""] [type = Discrete, default = 0.666667, unit = 0]
+Info:     Parameter 516 (id=516): [title="Reslice Mix"] [unit="%"] [type = Float, default = 1.000000, unit = 0]
+Info:     Parameter 517 (id=517): [title="Reslice Step 01"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 518 (id=518): [title="Reslice Step 02"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 519 (id=519): [title="Reslice Step 03"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 520 (id=520): [title="Reslice Step 04"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 521 (id=521): [title="Reslice Step 05"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 522 (id=522): [title="Reslice Step 06"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 523 (id=523): [title="Reslice Step 07"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 524 (id=524): [title="Reslice Step 08"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 525 (id=525): [title="Reslice Step 09"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 526 (id=526): [title="Reslice Step 10"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 527 (id=527): [title="Reslice Step 11"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 528 (id=528): [title="Reslice Step 12"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 529 (id=529): [title="Reslice Step 13"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 530 (id=530): [title="Reslice Step 14"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 531 (id=531): [title="Reslice Step 15"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 532 (id=532): [title="Reslice Step 16"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 533 (id=533): [title="Reslice Source 01"] [unit="slice"] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 534 (id=534): [title="Reslice Source 02"] [unit="slice"] [type = Discrete, default = 0.066667, unit = 0]
+Info:     Parameter 535 (id=535): [title="Reslice Source 03"] [unit="slice"] [type = Discrete, default = 0.133333, unit = 0]
+Info:     Parameter 536 (id=536): [title="Reslice Source 04"] [unit="slice"] [type = Discrete, default = 0.200000, unit = 0]
+Info:     Parameter 537 (id=537): [title="Reslice Source 05"] [unit="slice"] [type = Discrete, default = 0.266667, unit = 0]
+Info:     Parameter 538 (id=538): [title="Reslice Source 06"] [unit="slice"] [type = Discrete, default = 0.333333, unit = 0]
+Info:     Parameter 539 (id=539): [title="Reslice Source 07"] [unit="slice"] [type = Discrete, default = 0.400000, unit = 0]
+Info:     Parameter 540 (id=540): [title="Reslice Source 08"] [unit="slice"] [type = Discrete, default = 0.466667, unit = 0]
+Info:     Parameter 541 (id=541): [title="Reslice Source 09"] [unit="slice"] [type = Discrete, default = 0.533333, unit = 0]
+Info:     Parameter 542 (id=542): [title="Reslice Source 10"] [unit="slice"] [type = Discrete, default = 0.600000, unit = 0]
+Info:     Parameter 543 (id=543): [title="Reslice Source 11"] [unit="slice"] [type = Discrete, default = 0.666667, unit = 0]
+Info:     Parameter 544 (id=544): [title="Reslice Source 12"] [unit="slice"] [type = Discrete, default = 0.733333, unit = 0]
+Info:     Parameter 545 (id=545): [title="Reslice Source 13"] [unit="slice"] [type = Discrete, default = 0.800000, unit = 0]
+Info:     Parameter 546 (id=546): [title="Reslice Source 14"] [unit="slice"] [type = Discrete, default = 0.866667, unit = 0]
+Info:     Parameter 547 (id=547): [title="Reslice Source 15"] [unit="slice"] [type = Discrete, default = 0.933333, unit = 0]
+Info:     Parameter 548 (id=548): [title="Reslice Source 16"] [unit="slice"] [type = Discrete, default = 1.000000, unit = 0]
+Info:     Parameter 549 (id=549): [title="Gater Latch"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 550 (id=550): [title="Gater Release 01"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 551 (id=551): [title="Gater Release 02"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 552 (id=552): [title="Gater Release 03"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 553 (id=553): [title="Gater Release 04"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 554 (id=554): [title="Gater Release 05"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 555 (id=555): [title="Gater Release 06"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 556 (id=556): [title="Gater Release 07"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 557 (id=557): [title="Gater Release 08"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 558 (id=558): [title="Gater Release 09"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 559 (id=559): [title="Gater Release 10"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 560 (id=560): [title="Gater Release 11"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 561 (id=561): [title="Gater Release 12"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 562 (id=562): [title="Gater Release 13"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 563 (id=563): [title="Gater Release 14"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 564 (id=564): [title="Gater Release 15"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 565 (id=565): [title="Gater Release 16"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 566 (id=566): [title="Reslice Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 567 (id=567): [title="Reslice Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 567 (id=567): [title="Reslice Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 568 (id=568): [title="Reverb Model"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 569 (id=569): [title="Gater Minimum Length"] [unit="%"] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 570 (id=570): [title="Gater Tie"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 571 (id=571): [title="Gater Sustain 01"] [unit="ms"] [type = Float, default = 0.100000, unit = 0]
+Info:     Parameter 572 (id=572): [title="Gater Sustain 02"] [unit="ms"] [type = Float, default = 0.100000, unit = 0]
+Info:     Parameter 573 (id=573): [title="Gater Sustain 03"] [unit="ms"] [type = Float, default = 0.100000, unit = 0]
+Info:     Parameter 574 (id=574): [title="Gater Sustain 04"] [unit="ms"] [type = Float, default = 0.100000, unit = 0]
+Info:     Parameter 575 (id=575): [title="Gater Sustain 05"] [unit="ms"] [type = Float, default = 0.100000, unit = 0]
+Info:     Parameter 576 (id=576): [title="Gater Sustain 06"] [unit="ms"] [type = Float, default = 0.100000, unit = 0]
+Info:     Parameter 577 (id=577): [title="Gater Sustain 07"] [unit="ms"] [type = Float, default = 0.100000, unit = 0]
+Info:     Parameter 578 (id=578): [title="Gater Sustain 08"] [unit="ms"] [type = Float, default = 0.100000, unit = 0]
+Info:     Parameter 579 (id=579): [title="Gater Sustain 09"] [unit="ms"] [type = Float, default = 0.100000, unit = 0]
+Info:     Parameter 580 (id=580): [title="Gater Sustain 10"] [unit="ms"] [type = Float, default = 0.100000, unit = 0]
+Info:     Parameter 581 (id=581): [title="Gater Sustain 11"] [unit="ms"] [type = Float, default = 0.100000, unit = 0]
+Info:     Parameter 582 (id=582): [title="Gater Sustain 12"] [unit="ms"] [type = Float, default = 0.100000, unit = 0]
+Info:     Parameter 583 (id=583): [title="Gater Sustain 13"] [unit="ms"] [type = Float, default = 0.100000, unit = 0]
+Info:     Parameter 584 (id=584): [title="Gater Sustain 14"] [unit="ms"] [type = Float, default = 0.100000, unit = 0]
+Info:     Parameter 585 (id=585): [title="Gater Sustain 15"] [unit="ms"] [type = Float, default = 0.100000, unit = 0]
+Info:     Parameter 586 (id=586): [title="Gater Sustain 16"] [unit="ms"] [type = Float, default = 0.100000, unit = 0]
+Info:     Parameter 587 (id=587): [title="Glitch Random Interval"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 588 (id=588): [title="Reslice Step Random"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 589 (id=589): [title="Reslice Random Rate"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 590 (id=590): [title="Filter Sequencer"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 591 (id=591): [title="Filter Sequencer Mode"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 592 (id=592): [title="Filter Pattern"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 593 (id=593): [title="Filter Sequence Rate"] [unit=""] [type = Discrete, default = 0.400000, unit = 0]
+Info:     Parameter 594 (id=594): [title="Filter Sequence Depth"] [unit="%"] [type = Float, default = 0.500000, unit = 0]
+Info:     Parameter 595 (id=595): [title="Filter Sequence Glide"] [unit="%"] [type = Float, default = 0.200000, unit = 0]
+Info:     Parameter 596 (id=596): [title="Comb Root"] [unit=""] [type = Discrete, default = 0.000000, unit = 0]
+Info:     Parameter 597 (id=597): [title="Comb Octave"] [unit=""] [type = Discrete, default = 0.333333, unit = 0]
+Info:     Parameter 598 (id=598): [title="Comb Notes"] [unit=""] [type = Toggle, default = 0.000000, unit = 0]
+Info:     Parameter 599 (id=599): [title="Sequencer Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:     Parameter 600 (id=600): [title="Sequencer Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 600 (id=600): [title="Sequencer Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 601 (id=601): [title="Sequencer Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 601 (id=601): [title="Sequencer Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 602 (id=602): [title="Sequencer Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 602 (id=602): [title="Sequencer Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 603 (id=603): [title="Sequencer Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 603 (id=603): [title="Sequencer Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 604 (id=604): [title="Sequencer Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 604 (id=604): [title="Sequencer Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 605 (id=605): [title="Sequencer Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 605 (id=605): [title="Sequencer Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 606 (id=606): [title="Sequencer Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 606 (id=606): [title="Sequencer Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 607 (id=607): [title="Sequencer Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 607 (id=607): [title="Sequencer Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 608 (id=608): [title="Sequencer Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 608 (id=608): [title="Sequencer Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 609 (id=609): [title="Sequencer Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 609 (id=609): [title="Sequencer Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 610 (id=610): [title="Sequencer Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 610 (id=610): [title="Sequencer Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 611 (id=611): [title="Sequencer Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 611 (id=611): [title="Sequencer Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 612 (id=612): [title="Sequencer Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 612 (id=612): [title="Sequencer Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 613 (id=613): [title="Sequencer Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 613 (id=613): [title="Sequencer Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 614 (id=614): [title="Sequencer Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 614 (id=614): [title="Sequencer Display"] has the same title as another parameter in this unit = 0!
+Info:     Parameter 615 (id=615): [title="Sequencer Display"] [unit=""] [type = Float, default = 0.000000, unit = 0]
+Info:  =>Parameter 615 (id=615): [title="Sequencer Display"] has the same title as another parameter in this unit = 0!
+Info:  Note: This Unit (idx=-1, id=0, name="Root") has 616 parameters: it could be better to split it in sub-units!.
+[Succeeded]
+
+[MIDI Mapping]
+Info:  ===MIDI Mapping ====================================
+Info:  No MIDI Mapping interface supplied!
+[Succeeded]
+
+[MIDI Learn]
+Info:  ===MIDI Learn ====================================
+Info:  No MIDI Learn interface supplied!
+[Succeeded]
+
+[Scan Units]
+Info:  ===Scan Units ====================================
+Info:  This component has no units.
+[Succeeded]
+
+[Scan Programs]
+Info:  ===Scan Programs ====================================
+Info:  This component does not export any programs.
+[Succeeded]
+
+[Terminate/Initialize]
+Info:  ===Terminate/Initialize ====================================
+[Succeeded]
+
+[Check Unit Structure]
+Info:  ===Check Unit Structure ====================================
+Info:  This component does not support IUnitInfo!
+[Succeeded]
+
+[Valid State Transition 32bits]
+Info:  ===Valid State Transition 32bits ====================================
+[Succeeded]
+
+[Valid State Transition 64bits]
+Info:  ===Valid State Transition 64bits ====================================
+[Succeeded]
+
+[Bus Consistency]
+Info:  ===Bus Consistency ====================================
+[Succeeded]
+
+[Bus Activation]
+Info:  ===Bus Activation ====================================
+Info:     Bus Activation: Input Audio Bus (0) (kMain)
+Info:     Bus Activation: Output Audio Bus (0) (kMain)
+[Succeeded]
+
+[Check Audio Bus Arrangement]
+Info:  ===Check Audio Bus Arrangement ====================================
+Info:     Check Input Audio Bus Arrangement (0)
+Info:     Check Output Audio Bus Arrangement (0)
+[Succeeded]
+
+[SideChain Arrangement]
+Info:  ===SideChain Arrangement ====================================
+[Succeeded]
+
+[Suspend/Resume]
+Info:  ===Suspend/Resume ====================================
+[Succeeded]
+
+[Note Expression]
+Info:  ===Note Expression ====================================
+Info:  No Note Expression interface supplied!
+[Succeeded]
+
+[Keyswitch]
+Info:  ===Keyswitch ====================================
+Info:  No Keyswitch interface supplied!
+[Succeeded]
+
+[ProcessContext Requirements]
+Info:  ===ProcessContext Requirements ====================================
+Info:  ProcessContextRequirements:
+Info:   - ProjectTimeMusic
+Info:   - Tempo
+Info:   - TransportState
+[Succeeded]
+
+-------------------------------------------------------------
+TestSuite : Single Precision (32 bit) Tests
+-------------------------------------------------------------
+
+[Process Test]
+[Succeeded]
+
+[Process function running in another thread]
+Info:  ===Process function running in another thread ====================================
+[Succeeded]
+
+[Silence Flags]
+Info:  ===Silence Flags ====================================
+[Succeeded]
+
+[Silence Processing]
+Info:  ===Silence Processing ====================================
+[Succeeded]
+
+[Parameters Flush (no Buffer)]
+Info:  ===Parameters Flush (no Buffer) ====================================
+[Succeeded]
+
+[Parameters Flush 2 (only numChannel==0)]
+Info:  ===Parameters Flush 2 (only numChannel==0) ====================================
+[Succeeded]
+
+[Parameters Flush 2 (no Buffer, no parameter change)]
+Info:  ===Parameters Flush 2 (no Buffer, no parameter change) ====================================
+[Succeeded]
+
+[Variable Block Size]
+Info:  ===Variable Block Size ====================================
+[Succeeded]
+
+[Process Format]
+Info:  ===Process Format ====================================
+Info:  ***Tested Sample Rates***
+Info:        22050 Hz - processed successfully!
+Info:        32000 Hz - processed successfully!
+Info:        44100 Hz - processed successfully!
+Info:        48000 Hz - processed successfully!
+Info:        88200 Hz - processed successfully!
+Info:        96000 Hz - processed successfully!
+Info:       192000 Hz - processed successfully!
+Info:       384000 Hz - processed successfully!
+Info:    1234.5678 Hz - processed successfully!
+Info:    12345.678 Hz - processed successfully!
+Info:    123456.78 Hz - processed successfully!
+Info:    1234567.8 Hz - processed successfully!
+[Succeeded]
+
+[Parameter Bypass persistence]
+Info:  ===Parameter Bypass persistence ====================================
+[Succeeded]
+
+[In: Stereo: 2 Channels, Out: Stereo: 2 Channels]
+Info:  ===In: Stereo: 2 Channels, Out: Stereo: 2 Channels ====================================
+[Succeeded]
+
+[In: Mono: 1 Channels, Out: Mono: 1 Channels]
+Info:  ===In: Mono: 1 Channels, Out: Mono: 1 Channels ====================================
+Info:      Mono Input-SpeakerArrangement is not supported. Plug-in suggests: Stereo.
+Info:      Mono Output-SpeakerArrangement is not supported. Plug-in suggests: Stereo.
+[Succeeded]
+
+[Accuracy: Block, 1 Parameters, Change every100 Samples]
+Info:  ===Accuracy: Block, 1 Parameters, Change every100 Samples ====================================
+[Succeeded]
+
+[Accuracy: Sample, 1 Parameters, Change every100 Samples]
+Info:  ===Accuracy: Sample, 1 Parameters, Change every100 Samples ====================================
+[Succeeded]
+
+-------------------------------------------------------------
+TestSuite : Double Precision (64 bit) Tests
+-------------------------------------------------------------
+
+[Process Test]
+[Succeeded]
+
+[Process function running in another thread]
+Info:  ===Process function running in another thread ====================================
+[Succeeded]
+
+[Silence Flags]
+Info:  ===Silence Flags ====================================
+[Succeeded]
+
+[Silence Processing]
+Info:  ===Silence Processing ====================================
+[Succeeded]
+
+[Parameters Flush (no Buffer)]
+Info:  ===Parameters Flush (no Buffer) ====================================
+[Succeeded]
+
+[Parameters Flush 2 (only numChannel==0)]
+Info:  ===Parameters Flush 2 (only numChannel==0) ====================================
+[Succeeded]
+
+[Parameters Flush 2 (no Buffer, no parameter change)]
+Info:  ===Parameters Flush 2 (no Buffer, no parameter change) ====================================
+[Succeeded]
+
+[Variable Block Size]
+Info:  ===Variable Block Size ====================================
+[Succeeded]
+
+[Process Format]
+Info:  ===Process Format ====================================
+Info:  ***Tested Sample Rates***
+Info:        22050 Hz - processed successfully!
+Info:        32000 Hz - processed successfully!
+Info:        44100 Hz - processed successfully!
+Info:        48000 Hz - processed successfully!
+Info:        88200 Hz - processed successfully!
+Info:        96000 Hz - processed successfully!
+Info:       192000 Hz - processed successfully!
+Info:       384000 Hz - processed successfully!
+Info:    1234.5678 Hz - processed successfully!
+Info:    12345.678 Hz - processed successfully!
+Info:    123456.78 Hz - processed successfully!
+Info:    1234567.8 Hz - processed successfully!
+[Succeeded]
+
+[Parameter Bypass persistence]
+Info:  ===Parameter Bypass persistence ====================================
+[Succeeded]
+
+[In: Stereo: 2 Channels, Out: Stereo: 2 Channels]
+Info:  ===In: Stereo: 2 Channels, Out: Stereo: 2 Channels ====================================
+[Succeeded]
+
+[In: Mono: 1 Channels, Out: Mono: 1 Channels]
+Info:  ===In: Mono: 1 Channels, Out: Mono: 1 Channels ====================================
+Info:      Mono Input-SpeakerArrangement is not supported. Plug-in suggests: Stereo.
+Info:      Mono Output-SpeakerArrangement is not supported. Plug-in suggests: Stereo.
+[Succeeded]
+
+[Accuracy: Block, 1 Parameters, Change every100 Samples]
+Info:  ===Accuracy: Block, 1 Parameters, Change every100 Samples ====================================
+[Succeeded]
+
+[Accuracy: Sample, 1 Parameters, Change every100 Samples]
+Info:  ===Accuracy: Sample, 1 Parameters, Change every100 Samples ====================================
+[Succeeded]
+
+-------------------------------------------------------------
+Result: 47 tests passed, 0 tests failed
+-------------------------------------------------------------

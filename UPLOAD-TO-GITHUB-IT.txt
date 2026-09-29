@@ -1,0 +1,27 @@
+GRAINSDOSAGE - PACCHETTO COMPLETO CON CORREZIONE BUILD (29 settembre 2026)
+
+1. Estrai questo archivio. Carica il CONTENUTO nella radice della repo:
+   CMakeLists.txt, src/, assets/, Presets/, test_*.cpp, installer/ e .github/.
+   Sovrascrivi i file con lo stesso nome. Non caricare lo ZIP come singolo file.
+2. Se nella tua repo il progetto si trova gia dentro GrainsDosage/, sostituisci
+   li i sorgenti e CMakeLists.txt; i workflow restano in .github/workflows
+   alla radice della repo. Evita due copie attive del progetto: i workflow
+   danno precedenza alla cartella GrainsDosage/ quando presente.
+3. Per Mojave: Actions -> Build VST3 - Mojave Intel -> Run workflow.
+4. Quando la run e verde scarica GrainsDosage-Mojave-Intel-VST3.
+   Estrai lo ZIP di GitHub, poi GrainsDosage-Mojave-Intel.zip al suo interno.
+   Contiene GrainsDosage.vst3 completo con i permessi del programma.
+5. Chiudi Cubase e copia GrainsDosage.vst3 in:
+   ~/Library/Audio/Plug-Ins/VST3/
+
+CORREZIONE:
+Il target grains_test_state include plugin.cpp e quindi deve collegare
+anche createEditor e le librerie della piattaforma.
+Su Mac sono collegati editor_mac.mm, Cocoa e CoreFoundation;
+su Windows editor_win.cpp, risorse e librerie Win32.
+I test rimangono attivi. I workflow Mac raccolgono anche i log dei test e GUI.
+
+Il progetto attivo e GrainsDosage 0.13.0 con Reslice, Gater, filtro e riverbero.
+I sorgenti GTR originali sono conservati in legacy/GrainsDosageGTR-source/.
+Quella cartella e un archivio separato e non viene compilata dai workflow.
+La compilazione nativa Mac/Windows deve essere confermata da GitHub Actions.

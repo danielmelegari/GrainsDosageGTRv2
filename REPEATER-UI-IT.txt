@@ -1,0 +1,11 @@
+GrainsDosage 0.12.2 - Beat Repeater UI
+
+Etichette Global/divisione ridotte da 14 a 9 punti del canvas solo nei
+16 pulsanti del Repeater. Numeri step a 11 punti.
+Pulsanti con base scura, faccia in rilievo, luce superiore e bordo inferiore.
+Lo step selezionato ha bordo chiaro e faccia abbassata di un punto;
+lo step in riproduzione conserva il LED verde.
+Modifica applicata agli editor macOS e Windows.
+
+Ricompilare dopo avere caricato i sorgenti aggiornati nella repo.
+La resa grafica nativa va verificata dopo la build Mac/Windows.

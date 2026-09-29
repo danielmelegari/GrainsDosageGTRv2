@@ -1,0 +1,18 @@
+GRAINSDOSAGE 0.12.1 - GLITCH RANDOM TRIGGER
+
+Nel modulo Glitch Buffer lo step sequencer e stato sostituito dal menu
+TRIGGER EVERY con 1/4, 1/2, 1/1 e 2/1, sincronizzato al tempo di Cubase.
+In 4/4: ogni quarto, mezza battuta, una battuta o due battute.
+CHANCE decide la probabilita di una glitchata per intervallo:
+100% = sempre, 50% = circa una volta su due, 0% = mai.
+SLICE regola la lunghezza del taglio; ogni burst ripete fino a due tagli
+ed e limitato a meta intervallo per lasciare uno spazio tra gli eventi.
+MOVE/VARIATION/REVERSE/MIX restano disponibili; Random include il nuovo rate.
+
+I preset precedenti restano caricabili. La loro vecchia griglia Glitch
+non viene piu usata e il nuovo intervallo parte da 1/4.
+
+Carica tutti i sorgenti aggiornati e CMakeLists.txt nella repo, mantieni
+.github/workflows alla radice e ricompila per la tua piattaforma.
+Questo archivio contiene sorgenti; il VST3 precedente non contiene questa
+modifica. La skin esistente e inclusa.
