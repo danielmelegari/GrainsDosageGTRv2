@@ -1,0 +1,98 @@
+name: Build Apple Silicon macOS installer package
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  build-macos-pkg:
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Locate project sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f GrainsDosage/CMakeLists.txt && -d GrainsDosage/src ]]; then
+            project_dir="$GITHUB_WORKSPACE/GrainsDosage"
+          elif [[ -f CMakeLists.txt && -d src ]]; then
+            project_dir="$GITHUB_WORKSPACE"
+          else
+            echo 'GrainsDosage sources not found.' >&2; exit 1
+          fi
+          echo "PROJECT_DIR=$project_dir" >> "$GITHUB_ENV"
+
+      - name: Create package structure
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p package-root/Library/Audio/Plug-Ins/VST3
+
+      - name: Download Steinberg VST3 SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --no-checkout https://github.com/steinbergmedia/vst3sdk.git "$RUNNER_TEMP/vst3sdk"
+          git -C "$RUNNER_TEMP/vst3sdk" checkout 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
+          git -C "$RUNNER_TEMP/vst3sdk" submodule update --init --recursive --depth 1
+
+      - name: Configure VST3 build
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          cmake -S . -B build -G Xcode \
+            -DVST3_SDK_ROOT="$RUNNER_TEMP/vst3sdk" \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
+            -DSMTG_CREATE_PLUGIN_LINK=OFF \
+            -DSMTG_BUILD_UNIVERSAL_BINARY=OFF \
+            -DGRAINS_BUILD_TESTS=ON
+
+      - name: Build VST3 plugin
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          cmake --build build --config Release --parallel 4
+          ctest --test-dir "$PROJECT_DIR/build" -C Release --output-on-failure
+
+      - name: Copy built artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          plugin="$PROJECT_DIR/build/VST3/Release/GrainsDosage.vst3"
+          test -d "$plugin"
+          cp -R "$plugin" package-root/Library/Audio/Plug-Ins/VST3/
+
+      - name: Create postinstall script
+        run: |
+          mkdir -p package-scripts
+          cat > package-scripts/postinstall <<'EOF'
+          #!/bin/bash
+          echo "GrainsDosage installation complete"
+          EOF
+          chmod +x package-scripts/postinstall
+
+      - name: Create package
+        run: |
+          version="$(sed -nE 's/^project\(GrainsDosage VERSION ([0-9.]+).*/\1/p' "$PROJECT_DIR/CMakeLists.txt" | head -1)"
+          test -n "$version"
+          pkgbuild \
+            --root package-root \
+            --scripts package-scripts \
+            --identifier com.danielmelegari.GrainsDosage \
+            --version "$version" \
+            --install-location / \
+            "GrainsDosage-$version-macOS-arm64.pkg"
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GrainsDosage-macOS-arm64-pkg
+          path: GrainsDosage-*-macOS-arm64.pkg
