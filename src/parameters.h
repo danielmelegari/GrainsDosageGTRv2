@@ -27,7 +27,7 @@ namespace aztec { constexpr int presetCount=kCount; constexpr bool isMonitor(int
 namespace aztec {
 constexpr int slotTarget(int l,int slot){return kLfoSlots0+l*12+slot*2;}
 constexpr int slotAmount(int l,int slot){return slotTarget(l,slot)+1;}
-constexpr auto& modNames=qg::modulationNames;
+inline constexpr auto& modNames=qg::modulationNames;
 inline void migrateRoutes(std::array<double,kCount>& p){for(int l=0;l<4;++l){int slot=0;for(int t=0;t<8;++t){int old=routeID(l,t);if(std::abs(p[old]-.5)>1e-12&&slot<6){p[slotTarget(l,slot)]=(t+1)/double(qg::modTargetCount);p[slotAmount(l,slot)]=p[old];p[old]=.5;++slot;}}}}
 }
 
