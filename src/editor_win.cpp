@@ -10,6 +10,7 @@
 #include <objidl.h>
 #include "editor.h"
 #include "parameters.h"
+#include "filter_sequencer.h"
 #include "randomize.h"
 #include "public.sdk/source/common/pluginview.h"
 #include <algorithm>

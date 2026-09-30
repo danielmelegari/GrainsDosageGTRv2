@@ -1,6 +1,7 @@
 #import <Cocoa/Cocoa.h>
 #include "editor.h"
 #include "parameters.h"
+#include "filter_sequencer.h"
 #include "randomize.h"
 #include "preset_io.h"
 #include "factory_presets.h"
