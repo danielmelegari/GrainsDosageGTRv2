@@ -45,10 +45,10 @@ public:
 };
 }
 static NSColor* rgb(double r,double g,double b,double a=1.) {return [NSColor colorWithSRGBRed:r green:g blue:b alpha:a];}
-static NSColor* green() {return rgb(.40,.91,.68);}
-static NSColor* cream() {return rgb(.88,.87,.75);}
-static NSColor* muted() {return rgb(.78,.73,.84);}
-static NSColor* dark() {return rgb(.035,.029,.061);}
+static NSColor* green() {return rgb(.61,1.,.35);}
+static NSColor* cream() {return rgb(.91,.94,.98);}
+static NSColor* muted() {return rgb(.72,.68,.81);}
+static NSColor* dark() {return rgb(.025,.024,.044);}
 static void box(NSRect r,NSColor* fill,NSColor* stroke,double radius=8.) {
   NSBezierPath* p=[NSBezierPath bezierPathWithRoundedRect:r xRadius:radius yRadius:radius];
   [fill setFill];[p fill];
@@ -164,7 +164,7 @@ static constexpr double slotX[3]={16.,452.,888.};
 }
 - (BOOL)controlsFit {
   [self layoutControls];NSRect all=NSMakeRect(0,0,aztec::canvasW,aztec::canvasH);
-  for(const auto& c:controls)if(!NSContainsRect(all,c.rect))return NO;return YES;
+  for(const auto& c:controls)if(!NSContainsRect(all,c.rect)){NSLog(@"Control outside canvas: id=%u label=%s rect=%@ canvas=%@",unsigned(c.id),c.label.c_str(),NSStringFromRect(c.rect),NSStringFromRect(all));return NO;}return YES;
 }
 - (void)art:(NSRect)source in:(NSRect)dest opacity:(double)opacity {
   NSString* key=[NSString stringWithFormat:@"%.0f,%.0f,%.0f,%.0f",source.origin.x,source.origin.y,source.size.width,source.size.height];NSImage* sprite=sprites[key];
@@ -173,13 +173,18 @@ static constexpr double slotX[3]={16.,452.,888.};
   [artwork drawInRect:dest fromRect:source operation:NSCompositingOperationSourceOver fraction:opacity respectFlipped:YES hints:nil];
 }
 - (void)panel:(NSRect)r {
-  box(r,rgb(.075,.065,.105),rgb(.23,.19,.29),12.);
-  [NSGraphicsContext saveGraphicsState];
-  [[NSBezierPath bezierPathWithRoundedRect:NSInsetRect(r,2,2) xRadius:11 yRadius:11] addClip];
-  // A text-free patch from the supplied design provides the stone surface.
-  // Flat high-contrast panel under live vector labels.
-  [NSGraphicsContext restoreGraphicsState];
-  box(NSInsetRect(r,1,1),[NSColor clearColor],rgb(.22,.18,.28),11.);
+  box(r,rgb(.055,.042,.080),rgb(.39,.27,.45),12.);
+  box(NSInsetRect(r,3,3),[NSColor clearColor],rgb(.17,.12,.22),10.);
+  // Vector edge filigree stays in the border, clear of labels and hit areas.
+  for(int side=0;side<2;++side){double x=side?NSMaxX(r)-5:r.origin.x+5;
+    NSBezierPath* vine=[NSBezierPath bezierPath];
+    [vine moveToPoint:NSMakePoint(x,r.origin.y+14)];
+    [vine curveToPoint:NSMakePoint(x,NSMaxY(r)-14)
+      controlPoint1:NSMakePoint(x+(side?-3:3),r.origin.y+r.size.height*.33)
+      controlPoint2:NSMakePoint(x+(side?3:-3),r.origin.y+r.size.height*.66)];
+    [rgb(.31,.20,.38) setStroke];vine.lineWidth=1.5;[vine stroke];
+  }
+  box(NSMakeRect(r.origin.x+15,r.origin.y+5,r.size.width-30,1),rgb(.43,.30,.49),nil,0);
 }
 - (void)drawControl:(const aztec::Control&)c {
   using namespace aztec;NSRect r=c.rect;double v=std::clamp(owner->value(c.id),0.,1.);
@@ -189,13 +194,11 @@ static constexpr double slotX[3]={16.,452.,888.};
   if(c.kind==Knob){
     label(title,NSMakeRect(r.origin.x,r.origin.y,r.size.width,16),11,cream(),true);
     const double cx=NSMidX(r),cy=r.origin.y+43.,radius=24.;
-    box(NSMakeRect(cx-radius,cy-radius,radius*2,radius*2),rgb(.16,.10,.23),rgb(.35,.23,.44),radius);
-    // Artwork is only the knob cap. The ring, pointer and number are rendered live.
-    [NSGraphicsContext saveGraphicsState];NSAffineTransform* spin=[NSAffineTransform transform];
-    [spin translateXBy:cx yBy:cy];[spin rotateByDegrees:270.*(v-.5)];[spin concat];
-    NSBezierPath* clip=[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(-20,-20,40,40)];[clip addClip];
-    [self art:NSMakeRect(385,260,76,76) in:NSMakeRect(-19,-20,38,40) opacity:1.];
-    [NSGraphicsContext restoreGraphicsState];
+    box(NSMakeRect(cx-radius-2,cy-radius+2,radius*2+4,radius*2+4),rgb(.01,.01,.02),nil,radius+2);
+    NSBezierPath* cap=[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(cx-radius,cy-radius,radius*2,radius*2)];
+    NSGradient* metal=[[NSGradient alloc] initWithStartingColor:rgb(.24,.21,.28) endingColor:rgb(.045,.04,.065)];
+    [metal drawInBezierPath:cap angle:90.];[rgb(.40,.31,.47) setStroke];cap.lineWidth=1.;[cap stroke];
+    arc(cx,cy,radius-3,155,335,rgb(.31,.27,.36),1.);
     arc(cx,cy,radius+4,135,405,rgb(.20,.16,.26),3.);
     for(int j=0;j<21;++j){double a=(135.+270.*j/20.)*qg::tau/360.;box(NSMakeRect(cx+33*std::cos(a)-1.5,cy+33*std::sin(a)-1.5,3,3),j/20.<=v?green():rgb(.16,.14,.22),nil,1.5);}
     double zero=bipolar(c.id)?270.:135.;double angle=135.+270.*v;
@@ -205,7 +208,8 @@ static constexpr double slotX[3]={16.,452.,888.};
     [pointer lineToPoint:NSMakePoint(cx+22*std::cos(a),cy+22*std::sin(a))];
     [cream() setStroke];pointer.lineWidth=3.;pointer.lineCapStyle=NSRoundLineCapStyle;[pointer stroke];
     box(NSMakeRect(cx+28*std::cos(a)-2.5,cy+28*std::sin(a)-2.5,5,5),cream(),nil,2.5);
-    label(owner->display(c.id,v),NSMakeRect(r.origin.x,r.origin.y+76,r.size.width,16),12,cream(),true);
+    box(NSMakeRect(r.origin.x+4,r.origin.y+74,r.size.width-8,19),dark(),rgb(.22,.20,.30),4);
+    label(owner->display(c.id,v),NSMakeRect(r.origin.x+5,r.origin.y+76,r.size.width-10,16),12,rgb(.68,.91,.95),true);
   }else if(c.kind==Slider){
     label(title,NSMakeRect(r.origin.x,r.origin.y,r.size.width,13),9,muted());
     double yy=r.origin.y+20.,xx=r.origin.x+4.,width=r.size.width-8.;
@@ -224,7 +228,8 @@ static constexpr double slotX[3]={16.,452.,888.};
     label(value,NSMakeRect(r.origin.x+8,r.origin.y+(stacked?18:9),r.size.width-29,18),11,cream());
     label(@"▾",NSMakeRect(NSMaxX(r)-21,r.origin.y+(stacked?17:8),16,18),12,green());
   }else if(c.kind==Toggle){
-    bool on=v>=.5;if(c.id>=kGrainEnabled&&c.id<=kRepeatEnabled)title=on?@"ON":@"OFF";box(r,on?rgb(.26,.13,.37):rgb(.15,.09,.22),on?rgb(.48,.29,.59):rgb(.29,.19,.38),6);
+    bool on=v>=.5;if(c.id>=kGrainEnabled&&c.id<=kRepeatEnabled)title=on?@"ON":@"OFF";box(r,on?rgb(.075,.20,.085):rgb(.075,.055,.11),on?green():rgb(.29,.19,.38),6);
+    if(on)box(NSMakeRect(r.origin.x+6,NSMidY(r)-6,12,12),rgb(.24,.48,.12),nil,6);
     box(NSMakeRect(r.origin.x+9,NSMidY(r)-3,6,6),on?green():muted(),nil,3);
     label(title,NSMakeRect(r.origin.x+20,r.origin.y+(r.size.height-14)/2.,r.size.width-25,16),10,on?cream():muted(),true);
   }else{
@@ -242,8 +247,8 @@ static constexpr double slotX[3]={16.,452.,888.};
   [self panel:NSMakeRect(8,8,1304,73)];
   label(@"GRAINS",NSMakeRect(29,23,165,44),31,rgb(.61,.38,.73));label(@"DOSAGE",NSMakeRect(196,23,194,44),31,green());
   box(NSMakeRect(420,22,462,30),dark(),green(),5);label(presetName,NSMakeRect(432,30,438,18),12,cream());
-  box(NSMakeRect(900,22,96,28),rgb(.26,.13,.37),rgb(.48,.29,.59),5);label(@"SAVE PRESET",NSMakeRect(900,30,96,16),10,cream(),true);
-  box(NSMakeRect(1004,22,96,28),rgb(.26,.13,.37),rgb(.48,.29,.59),5);label(@"LOAD PRESET",NSMakeRect(1004,30,96,16),10,cream(),true);
+  box(NSMakeRect(900,22,96,28),rgb(.26,.13,.37),rgb(.48,.29,.59),5);label(@"SAVE",NSMakeRect(900,30,96,16),10,cream(),true);
+  box(NSMakeRect(1004,22,96,28),rgb(.26,.13,.37),rgb(.48,.29,.59),5);label(@"LOAD",NSMakeRect(1004,30,96,16),10,cream(),true);
   label(@".gdspreset",NSMakeRect(900,56,200,16),10,muted(),true);
   [self art:NSMakeRect(1850,12,136,104) in:NSMakeRect(1118,10,78,60) opacity:1.];
   [self art:NSMakeRect(1726,15,95,104) in:NSMakeRect(1220,10,55,60) opacity:.85];
@@ -253,7 +258,7 @@ static constexpr double slotX[3]={16.,452.,888.};
     
     label([NSString stringWithFormat:@"↔  %d   %s",slot+1,names[stage]],NSMakeRect(x+15,110,210,25),14,muted());
     box(NSMakeRect(x+316,106,87,28),rgb(.26,.13,.37),rgb(.48,.29,.59),6);
-    label(@"⚄ RANDOM",NSMakeRect(x+319,114,81,18),10,cream(),true);
+    label(@"RANDOM",NSMakeRect(x+319,114,81,18),10,cream(),true);
     bool active=stage==0?(owner->value(aztec::kGrainEnabled)>.5&&owner->value(aztec::kGrainMix)>.001):owner->value(stage==1?aztec::kUiGlitch:aztec::kUiRepeat)>.5;
     for(int j=0;j<12;++j)box(NSMakeRect(x+19+j*32,486,23,4),active?green():rgb(.12,.19,.16),nil,2);
     if(stage==0){

@@ -55,18 +55,28 @@ class WinEditor final:public CPluginView{
     StretchBlt(dc,int(x),int(y),int(w),int(h),skinDC,sx,sy,sw,sh,SRCCOPY);
     SetBrushOrgEx(dc,origin.x,origin.y,nullptr);SetStretchBltMode(dc,old);
   }
+  void disc(double cx,double cy,double radius,COLORREF fill,COLORREF edge){
+    HBRUSH brush=CreateSolidBrush(fill);HPEN pen=CreatePen(PS_SOLID,1,edge);
+    auto oldBrush=SelectObject(dc,brush),oldPen=SelectObject(dc,pen);
+    Ellipse(dc,int(cx-radius),int(cy-radius),int(cx+radius),int(cy+radius));
+    SelectObject(dc,oldBrush);SelectObject(dc,oldPen);DeleteObject(brush);DeleteObject(pen);
+  }
   void knobCap(double cx,double cy,double value){
-    if(!skinDC)return;int saved=SaveDC(dc);BeginPath(dc);Ellipse(dc,int(cx-20),int(cy-20),int(cx+20),int(cy+20));EndPath(dc);SelectClipPath(dc,RGN_AND);
-    double a=270.*(value-.5)*qg::tau/360.,co=std::cos(a),si=std::sin(a);
-    POINT points[3];const double xx[]={-20,20,-20},yy[]={-20,-20,20};
-    for(int i=0;i<3;++i)points[i]={LONG(std::round(cx+xx[i]*co-yy[i]*si)),LONG(std::round(cy+xx[i]*si+yy[i]*co))};
-    if(spriteDC[0])PlgBlt(dc,points,spriteDC[0],0,0,76,76,nullptr,0,0);else PlgBlt(dc,points,skinDC,385,260,76,76,nullptr,0,0);RestoreDC(dc,saved);
+    (void)value;
+    disc(cx,cy+2,25,RGB(3,3,5),RGB(3,3,5));
+    disc(cx,cy,23,RGB(30,25,39),RGB(102,79,120));
+    disc(cx,cy-1,20,RGB(39,34,49),RGB(62,54,73));
+    disc(cx,cy-2,17,RGB(44,39,53),RGB(44,39,53));
   }
   void panel(double x,double y,double w,double h){
-    box(x,y,w,h,RGB(19,17,27),RGB(59,48,74));
-    int saved=SaveDC(dc);BeginPath(dc);RoundRect(dc,int(x+2),int(y+2),int(x+w-2),int(y+h-2),16,16);EndPath(dc);SelectClipPath(dc,RGN_AND);
-    // Flat panel keeps text legible.
-    RestoreDC(dc,saved);
+    box(x,y,w,h,RGB(14,11,20),RGB(99,69,115));
+    box(x+3,y+3,w-6,h-6,RGB(14,11,20),RGB(43,31,56));
+    line(x+15,y+5,x+w-15,y+5,RGB(110,77,125));
+    for(int side=0;side<2;++side){double xx=side?x+w-5:x+5;
+      line(xx,y+14,xx+(side?-2:2),y+h*.33,RGB(79,51,97));
+      line(xx+(side?-2:2),y+h*.33,xx+(side?2:-2),y+h*.66,RGB(79,51,97));
+      line(xx+(side?2:-2),y+h*.66,xx,y+h-14,RGB(79,51,97));
+    }
   }
   double value(ParamID id)const{return controller->getParamNormalized(id);}
   ParameterInfo info(ParamID id)const{auto* p=controller->getParameterObject(id);return p?p->getInfo():ParameterInfo{};}
@@ -134,12 +144,12 @@ class WinEditor final:public CPluginView{
   }
   static bool inside(double x,double y,double a,double b,double w,double h){return x>=a&&x<a+w&&y>=b&&y<b+h;}
   void point(LPARAM lp,double& x,double& y){RECT r;GetClientRect(window,&r);x=GET_X_LPARAM(lp)*1320./std::max(1L,r.right);y=GET_Y_LPARAM(lp)*1360./std::max(1L,r.bottom);}
-  static COLORREF green(){return RGB(102,232,173);}static COLORREF cream(){return RGB(224,222,191);}static COLORREF dark(){return RGB(9,7,16);}
+  static COLORREF green(){return RGB(156,255,89);}static COLORREF cream(){return RGB(232,240,250);}static COLORREF dark(){return RGB(6,6,11);}
   void box(double x,double y,double w,double h,COLORREF fill,COLORREF stroke){HBRUSH b=CreateSolidBrush(fill);HPEN p=CreatePen(PS_SOLID,1,stroke);auto ob=SelectObject(dc,b),op=SelectObject(dc,p);RoundRect(dc,int(x),int(y),int(x+w),int(y+h),8,8);SelectObject(dc,ob);SelectObject(dc,op);DeleteObject(b);DeleteObject(p);}
   void text(std::wstring s,double x,double y,double w,double h,int size,COLORREF color,bool center=false,int minimumSize=14){HFONT f=CreateFontW(-std::max(minimumSize,size),0,0,0,FW_SEMIBOLD,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,ANTIALIASED_QUALITY,DEFAULT_PITCH,L"Segoe UI");auto old=SelectObject(dc,f);SetTextColor(dc,color);SetBkMode(dc,TRANSPARENT);int extra=std::max(0,minimumSize-size);RECT r{int(x),int(y)-extra/2,int(x+w),int(y+h)+extra/2};DrawTextW(dc,s.c_str(),-1,&r,DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS|(center?DT_CENTER:DT_LEFT));SelectObject(dc,old);DeleteObject(f);}
   void line(double x,double y,double xx,double yy,COLORREF color,int width=1){auto p=CreatePen(PS_SOLID,width,color);auto old=SelectObject(dc,p);MoveToEx(dc,int(x),int(y),nullptr);LineTo(dc,int(xx),int(yy));SelectObject(dc,old);DeleteObject(p);}
   void draw(){layout();box(0,0,1320,1360,dark(),dark());panel(8,8,1304,73);text(L"GRAINS",28,20,165,45,31,RGB(156,97,186));text(L"DOSAGE",196,20,194,45,31,green());art(1850,12,136,104,1118,10,78,60);art(1726,15,95,104,1220,10,55,60);box(420,22,462,30,dark(),green());text(presetName,432,22,438,30,12,cream());
-    box(900,22,96,28,RGB(66,33,94),RGB(122,74,150));text(L"SAVE PRESET",900,22,96,28,10,cream(),true);box(1004,22,96,28,RGB(66,33,94),RGB(122,74,150));text(L"LOAD PRESET",1004,22,96,28,10,cream(),true);text(L".gdspreset",900,55,200,17,10,cream(),true);
+    box(900,22,96,28,RGB(66,33,94),RGB(122,74,150));text(L"SAVE",900,22,96,28,10,cream(),true);box(1004,22,96,28,RGB(66,33,94),RGB(122,74,150));text(L"LOAD",1004,22,96,28,10,cream(),true);text(L".gdspreset",900,55,200,17,10,cream(),true);
     const wchar_t* names[]={L"GRANULIZER",L"GLITCH BUFFER",L"BEAT REPEATER"};int play=int(std::round(value(kUiStep)*15));
     for(int i=0;i<3;++i){double x=slotX[i];int st=stage(i);panel(x,98,416,404);if(dropSlot==i){line(x+10,100,x+406,100,green(),2);}text(std::wstring(L"↔  ")+names[st],x+15,105,210,29,15,cream());box(x+316,106,87,28,RGB(66,33,94),RGB(122,74,150));text(L"RANDOM",x+319,109,81,23,11,cream(),true);
       bool active=st==0?(value(kGrainEnabled)>.5&&value(kGrainMix)>.001):value(st==1?kUiGlitch:kUiRepeat)>.5;for(int j=0;j<12;++j)box(x+19+j*32,486,23,4,active?green():RGB(25,43,34),dark());
@@ -188,10 +198,10 @@ class WinEditor final:public CPluginView{
     for(const auto& c:controls){double v=value(c.id);std::wstring title(c.label,c.label+std::strlen(c.label));
       if(c.kind==PanMode){const wchar_t* modes[]={L"MANUAL",L"ALTERNATE",L"RANDOM"};int mode=int(std::round(v*2));for(int i=0;i<3;++i){double x=c.x+i*c.w/3;box(x,c.y,c.w/3-3,c.h,mode==i?RGB(66,33,94):dark(),mode==i?green():cream());text(modes[i],x,c.y,c.w/3-3,c.h,9,cream(),true);}}
       else if(c.kind==Pan){text(L"L",c.x,c.y,16,16,10,cream());text(L"C",c.x+c.w/2-8,c.y,16,16,10,cream(),true);text(L"R",c.x+c.w-16,c.y,16,16,10,cream());box(c.x+4,c.y+23,c.w-8,3,RGB(80,100,80),dark());box(c.x+v*(c.w-8),c.y+18,8,13,green(),green());}
-      else if(c.kind==Knob){text(title,c.x,c.y,c.w,17,11,cream(),true);double cx=c.x+c.w/2,cy=c.y+43;box(cx-22,cy-22,44,44,RGB(41,26,59),RGB(89,59,112));for(int j=0;j<21;++j){double a=(135+j*13.5)*qg::tau/360.;box(cx+30*std::cos(a)-2,cy+30*std::sin(a)-2,4,4,j/20.<=v?green():RGB(41,36,56),dark());}knobCap(cx,cy,v);double a=(135+270*v)*qg::tau/360.;line(cx+6*std::cos(a),cy+6*std::sin(a),cx+22*std::cos(a),cy+22*std::sin(a),cream(),3);text(display(c.id,v),c.x,c.y+75,c.w,18,12,cream(),true);}
+      else if(c.kind==Knob){text(title,c.x,c.y,c.w,17,11,cream(),true);double cx=c.x+c.w/2,cy=c.y+43;box(cx-22,cy-22,44,44,RGB(41,26,59),RGB(89,59,112));for(int j=0;j<21;++j){double a=(135+j*13.5)*qg::tau/360.;box(cx+30*std::cos(a)-2,cy+30*std::sin(a)-2,4,4,j/20.<=v?green():RGB(41,36,56),dark());}knobCap(cx,cy,v);double a=(135+270*v)*qg::tau/360.;line(cx+6*std::cos(a),cy+6*std::sin(a),cx+22*std::cos(a),cy+22*std::sin(a),cream(),3);box(c.x+4,c.y+74,c.w-8,19,dark(),RGB(56,51,77));text(display(c.id,v),c.x+5,c.y+75,c.w-10,18,12,RGB(173,232,242),true);}
       else if(c.kind==Slider){text(title,c.x,c.y,c.w,14,9,cream());box(c.x+4,c.y+20,c.w-8,4,RGB(71,61,89),dark());box(c.x+4,c.y+20,(c.w-8)*v,4,green(),green());art(453,636,24,32,c.x+v*(c.w-8)-2,c.y+13,12,16);if(c.h>=33)text(display(c.id,v),c.x,c.y+28,c.w,13,10,cream(),true);else text(display(c.id,v),c.x+100,c.y,c.w-100,13,9,cream(),true);}
       else if(c.kind==Select){box(c.x,c.y,c.w,c.h,dark(),RGB(59,46,77));if(c.h>=38)text(title,c.x+7,c.y+3,c.w-20,12,8,cream());text(display(c.id,c.id==lfoID(selectedLfo,lWave)&&value(kModWaveRnd0+selectedLfo)>0.?value(kUiModWave0+selectedLfo):v)+L" ▾",c.x+7,c.y+(c.h>=38?17:5),c.w-14,21,11,cream());}
-      else{bool on=v>=.5;if(c.id>=kGrainEnabled&&c.id<=kRepeatEnabled)title=on?L"ON":L"OFF";box(c.x,c.y,c.w,c.h,on?RGB(66,33,94):RGB(38,23,56),on?RGB(122,74,150):RGB(74,48,97));if(c.kind==Pad){int step=int(c.id-(c.id>=kReverbStep0?kReverbStep0:kGlitchStep0));art(734,456,54,48,c.x+c.w/2-10,c.y+1,20,18);text(std::to_wstring(step+1),c.x,c.y+c.h-15,c.w,14,10,cream(),true);if(step==(c.id>=kReverbStep0?int(std::round(value(kUiReverb)*15)):play))line(c.x+4,c.y+c.h-3,c.x+c.w-4,c.y+c.h-3,cream(),2);}else{text(title,c.x+18,c.y,c.w-21,c.h,10,cream(),true);box(c.x+7,c.y+c.h/2-3,6,6,on?green():RGB(75,82,67),dark());}}
+      else{bool on=v>=.5;if(c.id>=kGrainEnabled&&c.id<=kRepeatEnabled)title=on?L"ON":L"OFF";box(c.x,c.y,c.w,c.h,on?RGB(19,51,22):RGB(19,14,28),on?green():RGB(74,48,97));if(c.kind==Pad){int step=int(c.id-(c.id>=kReverbStep0?kReverbStep0:kGlitchStep0));art(734,456,54,48,c.x+c.w/2-10,c.y+1,20,18);text(std::to_wstring(step+1),c.x,c.y+c.h-15,c.w,14,10,cream(),true);if(step==(c.id>=kReverbStep0?int(std::round(value(kUiReverb)*15)):play))line(c.x+4,c.y+c.h-3,c.x+c.w-4,c.y+c.h-3,cream(),2);}else{text(title,c.x+18,c.y,c.w-21,c.h,10,cream(),true);if(on)disc(c.x+10,c.y+c.h/2,6,RGB(61,122,31),RGB(61,122,31));disc(c.x+10,c.y+c.h/2,3,on?green():RGB(75,82,67),on?green():dark());}}
     }
     box(1140,1312,144,26,dark(),green());text(L"UI SIZE ▾",1140,1312,144,26,11,cream(),true);
   }

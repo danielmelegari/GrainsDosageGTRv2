@@ -34,7 +34,7 @@
   ADD(kLfoSpeed0+selectedLfo,32,690,104,40,Select,"SPEED");
   ADD(kModWaveRnd0+selectedLfo,144,690,108,40,Select,"MOD WAVE RND");
   for(int i=0;i<6;++i){ADD(slotTarget(selectedLfo,i),268+(i%3)*190,662+(i/3)*44,112,40,Select,"DESTINATION");ADD(slotAmount(selectedLfo,i),384+(i%3)*190,662+(i/3)*44,60,40,Slider,"AMT");}
-  ADD(kXYEnable,1325,529,101,27,Toggle,"ENABLE");
+  ADD(kXYEnable,1185,529,101,27,Toggle,"ENABLE");
   ADD(kXTarget,1062,565,224,38,Select,"X DESTINATION");ADD(kXAmount,1062,608,224,40,Slider,"X AMOUNT");
   ADD(kYTarget,1062,653,224,38,Select,"Y DESTINATION");ADD(kYAmount,1062,697,224,40,Slider,"Y AMOUNT");
   ADD(kMasterFilter,142,1016,110,24,Toggle,"FILTER ON");
