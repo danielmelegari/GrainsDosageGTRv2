@@ -50,9 +50,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git clone --no-checkout https://github.com/steinbergmedia/vst3sdk.git "$RUNNER_TEMP/vst3sdk"
-          git -C "$RUNNER_TEMP/vst3sdk" checkout 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
-          git -C "$RUNNER_TEMP/vst3sdk" submodule update --init --recursive --depth 1
+          # The project's CMakeLists.txt auto-fetches the Apple AudioUnitSDK into
+          # <sdk>/../AudioUnitSDK at configure time when -DSMTG_ENABLE_AUV2_PLUGIN=ON
+          # is passed; keep this exact folder layout.
+          git clone --no-checkout https://github.com/steinbergmedia/vst3sdk.git "$RUNNER_TEMP/AudioUnitBuild/vst3sdk"
+          git -C "$RUNNER_TEMP/AudioUnitBuild/vst3sdk" checkout 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
+          git -C "$RUNNER_TEMP/AudioUnitBuild/vst3sdk" submodule update --init --recursive --depth 1
+
 
       - name: Configure AudioUnit build (Intel)
         shell: bash
@@ -60,7 +64,8 @@ jobs:
           set -euo pipefail
           cd "$PROJECT_DIR"
           cmake -S . -B build-au -G Xcode \
-            -DVST3_SDK_ROOT="$RUNNER_TEMP/vst3sdk" \
+            -DVST3_SDK_ROOT="$RUNNER_TEMP/AudioUnitBuild/vst3sdk" \
+            -DSMTG_AUDIOUNIT_SDK_PATH="$RUNNER_TEMP/AudioUnitBuild/AudioUnitSDK" \
             -DCMAKE_OSX_ARCHITECTURES=x86_64 \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=10.14 \
             -DSMTG_CREATE_PLUGIN_LINK=OFF \
@@ -74,7 +79,7 @@ jobs:
         run: |
           set -euo pipefail
           cd "$PROJECT_DIR"
-          cmake --build build-au --config Release --parallel 4 \
+          cmake --build build-au --config Release --target GrainsDosageAU --parallel 4 \
             2>&1 | tee "$GITHUB_WORKSPACE/build-au-macos-intel.log"
 
       - name: Locate, sign and package the .component bundle
@@ -82,7 +87,7 @@ jobs:
         run: |
           set -euo pipefail
           cd "$PROJECT_DIR"
-          comp="$(find build-au -type d -name 'GrainsDosage.component' -path '*Release*' | head -n 1)"
+          comp="$(find build-au -type d -name 'GrainsDosage.component' | head -n 1)"
           if [[ -z "$comp" ]]; then
             echo 'GrainsDosage.component not found after build.' >&2
             find build-au -maxdepth 6 -type d | sed -n 1,80p >&2
@@ -92,6 +97,12 @@ jobs:
           binary="$comp/Contents/MacOS/GrainsDosage"
           test -f "$binary"
           lipo "$binary" -verify_arch x86_64
+          # The wrapper embeds the VST3 bundle; a broken link here means Logic would not find the plug-in.
+          vst3link="$comp/Contents/Resources/plugin.vst3"
+          test -e "$vst3link" || { echo "plugin.vst3 missing from component" >&2; exit 1; }
+          ditto "$vst3link" "$GITHUB_WORKSPACE/dist-vst3-check.vst3" 2>/dev/null || cp -R "$vst3link" "$GITHUB_WORKSPACE/dist-vst3-check.vst3"
+          find "$GITHUB_WORKSPACE/dist-vst3-check.vst3" -name 'GrainsDosage' -type f | head -n1 | xargs -I{} lipo {} -verify_arch x86_64
+          rm -rf "$GITHUB_WORKSPACE/dist-vst3-check.vst3"
           codesign --force --sign - --timestamp=none "$comp"
           codesign --verify --strict "$comp"
           mkdir -p "$GITHUB_WORKSPACE/dist"
@@ -132,9 +143,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git clone --no-checkout https://github.com/steinbergmedia/vst3sdk.git "$RUNNER_TEMP/vst3sdk"
-          git -C "$RUNNER_TEMP/vst3sdk" checkout 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
-          git -C "$RUNNER_TEMP/vst3sdk" submodule update --init --recursive --depth 1
+          # The project's CMakeLists.txt auto-fetches the Apple AudioUnitSDK into
+          # <sdk>/../AudioUnitSDK at configure time when -DSMTG_ENABLE_AUV2_PLUGIN=ON
+          # is passed; keep this exact folder layout.
+          git clone --no-checkout https://github.com/steinbergmedia/vst3sdk.git "$RUNNER_TEMP/AudioUnitBuild/vst3sdk"
+          git -C "$RUNNER_TEMP/AudioUnitBuild/vst3sdk" checkout 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
+          git -C "$RUNNER_TEMP/AudioUnitBuild/vst3sdk" submodule update --init --recursive --depth 1
+
 
       - name: Configure AudioUnit build (Apple Silicon)
         shell: bash
@@ -142,7 +157,8 @@ jobs:
           set -euo pipefail
           cd "$PROJECT_DIR"
           cmake -S . -B build-au -G Xcode \
-            -DVST3_SDK_ROOT="$RUNNER_TEMP/vst3sdk" \
+            -DVST3_SDK_ROOT="$RUNNER_TEMP/AudioUnitBuild/vst3sdk" \
+            -DSMTG_AUDIOUNIT_SDK_PATH="$RUNNER_TEMP/AudioUnitBuild/AudioUnitSDK" \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
             -DSMTG_CREATE_PLUGIN_LINK=OFF \
@@ -156,7 +172,7 @@ jobs:
         run: |
           set -euo pipefail
           cd "$PROJECT_DIR"
-          cmake --build build-au --config Release --parallel 4 \
+          cmake --build build-au --config Release --target GrainsDosageAU --parallel 4 \
             2>&1 | tee "$GITHUB_WORKSPACE/build-au-macos-arm64.log"
 
       - name: Locate, sign and package the .component bundle
@@ -164,13 +180,21 @@ jobs:
         run: |
           set -euo pipefail
           cd "$PROJECT_DIR"
-          comp="$(find build-au -type d -name 'GrainsDosage.component' -path '*Release*' | head -n 1)"
+          comp="$(find build-au -type d -name 'GrainsDosage.component' | head -n 1)"
           if [[ -z "$comp" ]]; then
             echo 'GrainsDosage.component not found after build.' >&2
             find build-au -maxdepth 6 -type d | sed -n 1,80p >&2
             exit 1
           fi
           echo "Component: $comp"
+          binary="$comp/Contents/MacOS/GrainsDosage"
+          test -f "$binary"
+          lipo "$binary" -verify_arch arm64
+          vst3link="$comp/Contents/Resources/plugin.vst3"
+          test -e "$vst3link" || { echo "plugin.vst3 missing from component" >&2; exit 1; }
+          ditto "$vst3link" "$GITHUB_WORKSPACE/dist-vst3-check.vst3" 2>/dev/null || cp -R "$vst3link" "$GITHUB_WORKSPACE/dist-vst3-check.vst3"
+          find "$GITHUB_WORKSPACE/dist-vst3-check.vst3" -name 'GrainsDosage' -type f | head -n1 | xargs -I{} lipo {} -verify_arch arm64
+          rm -rf "$GITHUB_WORKSPACE/dist-vst3-check.vst3"
           codesign --force --sign - --timestamp=none "$comp"
           codesign --verify --strict "$comp"
           mkdir -p "$GITHUB_WORKSPACE/dist"

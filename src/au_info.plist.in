@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>English</string>
+	<key>CFBundleExecutable</key>
+	<string>GrainsDosage</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.danielmelegari.aztecgrains.au</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>GrainsDosage</string>
+	<key>CFBundlePackageType</key>
+	<string>AUwr</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.13.0</string>
+	<key>CFBundleVersion</key>
+	<string>0.13.0</string>
+	<key>CSResourcesFileMapped</key>
+	<true/>
+	<key>AUVersion</key>
+	<string>0.13.0</string>
+	<key>AudioComponents</key>
+	<array>
+		<dict>
+			<key>name</key>
+			<string>Daniel Melegari: GrainsDosage</string>
+			<key>description</key>
+			<string>GrainsDosage (AudioUnit wrapper for the VST3 plug-in)</string>
+			<key>factory</key>
+			<string>com.danielmelegari.aztecgrains.au</string>
+			<key>singular</key>
+			<string>com.danielmelegari.aztecgrains.au.instance</string>
+			<key>type</key>
+			<string>aufx</string>
+			<key>subtype</key>
+			<string>Gdsg</string>
+			<key>version</key>
+			<integer>851968</integer>
+			<key>category</key>
+			<string>Effect</string>
+			<key>tags</key>
+			<array>
+				<string>Grain</string>
+				<string>Time-Stretch</string>
+				<string>Loop</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>
