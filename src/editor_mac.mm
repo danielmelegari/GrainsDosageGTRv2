@@ -339,9 +339,9 @@ static constexpr double slotX[3]={16.,452.,888.};
   NSImage* nebula=sprites[@"nebula"];if(nebula)[nebula drawInRect:pad fromRect:NSMakeRect(0,0,nebula.size.width,nebula.size.height) operation:NSCompositingOperationSourceOver fraction:1. respectFlipped:YES hints:nil];
   NSBezierPath* geometry=[NSBezierPath bezierPath];
   for(int i=0;i<8;++i){double a=i*qg::tau/8.;NSPoint pt=NSMakePoint(NSMidX(pad)+72*std::cos(a),NSMidY(pad)+71*std::sin(a));for(int j=i+1;j<8;++j){double b=j*qg::tau/8.;[geometry moveToPoint:pt];[geometry lineToPoint:NSMakePoint(NSMidX(pad)+72*std::cos(b),NSMidY(pad)+71*std::sin(b))];}}
-  [[AZSKIN(kViolet) colorWithAlphaComponent:.48] setStroke];;geometry.lineWidth=.6;[geometry stroke];
+  [[AZSKIN(kViolet) colorWithAlphaComponent:.48] setStroke];geometry.lineWidth=.6;[geometry stroke];
   double px=pad.origin.x+owner->value(aztec::kXYX)*pad.size.width,py=NSMaxY(pad)-owner->value(aztec::kXYY)*pad.size.height;
-  NSBezierPath* cross=[NSBezierPath bezierPath];[cross moveToPoint:NSMakePoint(px,pad.origin.y)];[cross lineToPoint:NSMakePoint(px,NSMaxY(pad))];[cross moveToPoint:NSMakePoint(pad.origin.x,py)];[cross lineToPoint:NSMakePoint(NSMaxX(pad),py)];[[AZSKIN(kAccent) colorWithAlphaComponent:.25] setStroke];;cross.lineWidth=1.;[cross stroke];
+  NSBezierPath* cross=[NSBezierPath bezierPath];[cross moveToPoint:NSMakePoint(px,pad.origin.y)];[cross lineToPoint:NSMakePoint(px,NSMaxY(pad))];[cross moveToPoint:NSMakePoint(pad.origin.x,py)];[cross lineToPoint:NSMakePoint(NSMaxX(pad),py)];[[AZSKIN(kAccent) colorWithAlphaComponent:.25] setStroke];cross.lineWidth=1.;[cross stroke];
   box(NSMakeRect(px-5,py-5,10,10),green(),cream(),5);
   [self panel:NSMakeRect(16,766,1288,108)];label(@"RESLICE",NSMakeRect(32,781,108,24),14,muted());
   box(NSMakeRect(1052,778,216,28),AZSKIN(kAccentGlow),green(),5);label(@"RANDOM ONCE",NSMakeRect(1052,782,216,20),12,cream(),true);
