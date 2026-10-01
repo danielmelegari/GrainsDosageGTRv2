@@ -47,7 +47,7 @@ Upload the extracted archive contents to the root of a GitHub repository, or pla
 |---|---|
 | `build-macos.yml` | Intel x86_64 VST3 targeting macOS 10.14 (Mojave) |
 | `build-silicon.yml` | Apple Silicon arm64 VST3 |
-| `build-windows.yml` | Windows 10/11 x64 VST3 and installer |
+| `build-windows.yml` | Windows 10/11 x64 installer and VST3 bundle ZIP |
 
 Each workflow builds against its pinned Steinberg VST3 SDK, runs the regression tests and platform GUI smoke test, and publishes installable artifacts. The Mac builds and Windows build must run on their respective GitHub-hosted runners; a Linux test run is not a substitute for installing in Cubase on each target system.
 

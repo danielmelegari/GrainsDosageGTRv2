@@ -1,7 +1,7 @@
-GrainsDosage 0.11.0 - Windows 10/11 x64
+GrainsDosage 0.13.0 - Windows 10/11 x64
 
 1. Salva il progetto e chiudi Cubase o la tua DAW.
-2. Avvia GrainsDosage-0.11.0-Windows10-x64-Setup.exe.
+2. Avvia GrainsDosage-0.13.0-Windows10-x64-Setup.exe.
 3. Il plugin completo viene installato in:
    C:\Program Files\Common Files\VST3\GrainsDosage.vst3
 4. Riapri la DAW e avvia la scansione dei plugin VST3.
