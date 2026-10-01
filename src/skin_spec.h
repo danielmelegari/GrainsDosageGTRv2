@@ -239,9 +239,16 @@ inline int themeIndex(const std::string& name){
 // Resolve a colour-role name ("accent", "accent_track") to its key.
 inline int keyForName(const std::string& n){for(int i=0;i<kColorCount;++i)if(n==colorName(i))return i;return -1;}
 
+// ── Default theme at start-up ────────────────────────────────────────────────
+// Aurora Lime is the shipped default since 0.14 (sampled from the user's
+// NEWGUI mockup). The SKIN menu can switch to any other theme at run time,
+// and a persisted skin file overrides this when present. Set to 0 for the
+// original Astral Green look.
+constexpr int kDefaultTheme = 4; // aurora
+
 // ── Active skin (renderer state) ─────────────────────────────────────────────
-inline Palette& active(){static Palette p=astral();return p;}
-inline int& activeTheme(){static int i=0;return i;}
+inline Palette& active(){static Palette p=themePalette(kDefaultTheme);return p;}
+inline int& activeTheme(){static int i=kDefaultTheme;return i;}
 inline bool& activeCustomized(){static bool c=false;return c;}
 inline Rgb C(ColorKey k){return active().at(int(k));}
 

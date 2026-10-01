@@ -44,8 +44,8 @@ inline int findTheme(const std::string& name) {
   return -1;
 }
 
-inline skin::Palette& current() {static skin::Palette p=skin::astral();return p;}
-inline int& currentTheme() {static int i=0;return i;}
+inline skin::Palette& current() {static skin::Palette p=skin::themePalette(skin::kDefaultTheme);return p;}
+inline int& currentTheme() {static int i=skin::kDefaultTheme;return i;}
 inline bool& customized() {static bool c=false;return c;}
 
 inline std::string skinLabel() {
@@ -129,12 +129,13 @@ inline bool parseSkinText(const std::string& text) {
   return ok;
 }
 
-// Load and apply a skin file. Missing file => defaults to Astral Green.
+// Load and apply a skin file. Missing file => the shipped default theme
+// (skin::kDefaultTheme, currently Aurora Lime).
 inline void loadSkinFile(const std::string& path) {
   std::ifstream f(path,std::ios::binary);
-  if(!f.is_open()){applySkin(0,{});return;}
+  if(!f.is_open()){applySkin(skin::kDefaultTheme,{});return;}
   std::ostringstream buf;buf<<f.rdbuf();
-  if(!parseSkinText(buf.str()))applySkin(0,{});
+  if(!parseSkinText(buf.str()))applySkin(skin::kDefaultTheme,{});
 }
 
 // Persist the live palette so the choice survives relaunches. Every colour
