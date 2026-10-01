@@ -19,7 +19,7 @@
   ADD(kRepeatRate0+selectedRepeat,x+126,350,127,44,Select,"STEP DIVISION");
   ADD(kRepeatPitch0+selectedRepeat,x+268,353,130,42,Slider,"STEP PITCH");
   x=slotX[slot(1)];
-  ADD(kGlitchMove,x+18,415,116,40,Slider,"MOVE");ADD(kGlitchVariation,x+150,415,116,40,Slider,"VARIATION");
+  ADD(kGlitchVariation,x+18,415,116,40,Slider,"VARIATION");
   // Random trigger interval replaces the previous refresh/grid controls.
   x=slotX[slot(2)];
   ADD(kRepeatAuto,x+282,199,115,28,Toggle,"AUTO");
@@ -59,8 +59,8 @@
   ADD(kGaterMinLength,758,893,166,40,Slider,"MIN LENGTH");
   ADD(kGaterLength0+selectedGate,932,893,96,40,Slider,"STEP LENGTH");
   ADD(kGaterSustain0+selectedGate,1034,893,122,40,Slider,"SUSTAIN");
-  ADD(kGaterTie,1166,898,62,27,Toggle,"TIE");
-  ADD(kGaterLatch,1234,898,70,27,Toggle,"LATCH");
+  // TIE removed from the Gater (LATCH kept); LATCH moved into the freed slot.
+  ADD(kGaterLatch,1166,898,70,27,Toggle,"LATCH");
 
   ADD(kInputDeclick,420,55,166,24,Toggle,"INPUT DE-CLICK");
   ADD(kDeclickSensitivity,600,53,282,28,Slider,"SENSITIVITY");

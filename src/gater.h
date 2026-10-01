@@ -50,8 +50,8 @@ public:
    else {if(!latchPlaying_){resetLatch();latchPlaying_=true;}if(tick!=latchTick_){if(settings_.release&(uint16_t(1)<<step_))latched_=0;else if(state!=0)latched_=1;latchTick_=tick;}}
    targetOpen=!settings_.enabled||latched_!=0;
   }else{
-   bool tied=settings_.tie&&state==1&&states_[(step_+1)&15]==1;
-   targetOpen=!settings_.enabled||(state==1&&(phase<length||tied));
+   // TIE removed: adjacent wet steps no longer merge into one continuous note.
+   targetOpen=!settings_.enabled||(state==1&&phase<length);
   }
 
   if(targetOpen){

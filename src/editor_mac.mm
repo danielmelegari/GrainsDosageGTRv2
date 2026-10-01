@@ -90,7 +90,7 @@ static bool bipolar(aztec::ParamID id) {
     (id>=kRepeatPitch0&&id<kStretchOn)||
     (id>=kLfo0&&id<kLegacyCount&&int(id-kLfo0)%lStride>=lRoute0);
 }
-static const char* names[3]={"GRANULIZER","GLITCH BUFFER","BEAT REPEATER"};
+static const char* names[3]={"GRANULIZER","PRESLICER","BEAT REPEATER"};
 static constexpr double slotX[3]={16.,452.,888.};
 
 @interface GrainsSurface:NSView {
@@ -354,10 +354,10 @@ static constexpr double slotX[3]={16.,452.,888.};
     label([NSString stringWithFormat:@"%02d  %@",i+1,release?@"REL":state?@"WET":owner->value(aztec::kGaterLatch)>.5?@"HOLD":@"OFF"],NSMakeRect(x+2,944,66,17),10,color,true);
     box(NSMakeRect(x+5,965,60,4),AZSKIN(kBorderDark),nil,1);box(NSMakeRect(x+5,965,60*length,4),color,nil,1);
     box(NSMakeRect(x+5,973,60,4),AZSKIN(kBorderDark),nil,1);box(NSMakeRect(x+5,973,60*sustain,4),AZSKIN(kViolet),nil,1);
-    if(owner->value(aztec::kGaterTie)>.5&&state&&!release){int next=(i+1)&15;bool nextOn=owner->value(aztec::kGaterState0+next)>=.25&&! (owner->value(aztec::kGaterRelease0+next)>=.5);if(nextOn)box(NSMakeRect(x+71,960,7,3),AZSKIN(kViolet),nil,1);}
+    // Tie badge removed from the Gater UI.
     if(owner->value(aztec::kGaterEnabled)>.5&&i==int(std::round(owner->value(aztec::kUiGaterStep)*15.)))box(NSMakeRect(x+5,981,60,2),cream(),nil,1);
   }
-  if(owner->value(aztec::kGaterTie)>.5&&owner->value(aztec::kGaterState0+15)>=.25&&owner->value(aztec::kGaterState0)>=.25)box(NSMakeRect(1274,960,22,3),AZSKIN(kViolet),nil,1);
+  // Tie wrap-around badge removed (Tie feature dropped).
   [self panel:NSMakeRect(16,1006,540,136)];
   label(@"FILTER",NSMakeRect(32,1017,100,22),13,cream());
   [self panel:NSMakeRect(568,1006,736,136)];

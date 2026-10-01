@@ -16,6 +16,7 @@
 #include "pluginterfaces/vst/ivstprocesscontext.h"
 #include <array>
 #include <cmath>
+#include <string>
 
 using namespace Steinberg;
 using namespace Steinberg::Vst;
@@ -50,7 +51,7 @@ qg::Settings settings(const std::array<double, kCount>& saved, double tempo, dou
   const double filterRates[]={1.,.5,.25,.125,2.,4.};s.filterSequence.rate=filterRates[int(std::round(value(p,kFilterSeqRate)*5.))];s.filterSequence.depth=value(p,kFilterSeqDepth);s.filterSequence.glide=value(p,kFilterSeqGlide);
   s.filterSequence.root=int(std::round(value(p,kCombRoot)*11.));s.filterSequence.octave=int(std::round(value(p,kCombOctave)*6.));s.filterSequence.scale=int(std::round(value(p,kCombScale)));
   s.filterOn=value(p,kMasterFilter)>=.5;s.filterType=int(std::round(value(p,kFilterType)*2.));s.filterSlope=value(p,kFilterSlope)>=.5?1:0;s.filterCutoff=value(p,kFilterCutoff);s.filterResonance=value(p,kFilterResonance);s.filterDrive=value(p,kFilterDrive);
-  s.reverbModel=int(std::round(value(p,kReverbModel)*4.));s.filterModel=int(std::round(value(p,kFilterModel)*(qg::filterModelCount-1)));s.reslice.enabled=value(p,kResliceEnabled)>=.5;const double resliceLengths[]={16.,8.,4.,2.};s.reslice.beats=resliceLengths[int(std::round(value(p,kResliceLength)*3.))];s.reslice.mix=value(p,kResliceMix);s.reslice.random=value(p,kResliceRndOn)>=.5;s.reslice.randomBeats=2.*std::pow(2.,std::round(value(p,kResliceRndRate)*2.));s.gater.latch=value(p,kGaterLatch)>=.5;s.gater.tie=value(p,kGaterTie)>=.5;s.gater.minimumLength=.05+.90*value(p,kGaterMinLength);for(int i=0;i<16;++i){s.reslice.on[i]=value(p,kResliceStep0+i)>=.5;s.reslice.slice[i]=int(std::round(value(p,kResliceIndex0+i)*15.));if(value(p,kGaterRelease0+i)>=.5)s.gater.release|=uint16_t(1)<<i;}
+  s.reverbModel=int(std::round(value(p,kReverbModel)*4.));s.filterModel=int(std::round(value(p,kFilterModel)*(qg::filterModelCount-1)));s.reslice.enabled=value(p,kResliceEnabled)>=.5;const double resliceLengths[]={16.,8.,4.,2.};s.reslice.beats=resliceLengths[int(std::round(value(p,kResliceLength)*3.))];s.reslice.mix=value(p,kResliceMix);s.reslice.random=value(p,kResliceRndOn)>=.5;s.reslice.randomBeats=2.*std::pow(2.,std::round(value(p,kResliceRndRate)*2.));s.gater.latch=value(p,kGaterLatch)>=.5;s.gater.tie=false; /* Tie removed from the module (LATCH kept). */ s.gater.minimumLength=.05+.90*value(p,kGaterMinLength);for(int i=0;i<16;++i){s.reslice.on[i]=value(p,kResliceStep0+i)>=.5;s.reslice.slice[i]=int(std::round(value(p,kResliceIndex0+i)*15.));if(value(p,kGaterRelease0+i)>=.5)s.gater.release|=uint16_t(1)<<i;}
   s.gater.enabled=value(p,kGaterEnabled)>=.5;s.gater.grid=std::pow(.5,int(std::round(value(p,kGaterGrid)*3.)));s.gater.lengthRandom=value(p,kGaterLengthRnd)>=.5;s.gater.stepRandom=value(p,kGaterStepRnd)>=.5;s.gater.chance=value(p,kGaterChance);for(int i=0;i<16;++i){s.gater.state[i]=value(p,kGaterState0+i)>=.25?1:0;s.gater.length[i]=.05+.95*value(p,kGaterLength0+i);s.gater.sustain[i]=.5*value(p,kGaterSustain0+i);}
   s.reverbKill=value(p,kReverbKill)>=.5;s.reverbRandom=value(p,kReverbSource)>=.5;s.reverbRandomGrid=std::pow(.5,int(std::round(value(p,kReverbRandomRate)*2.)));
   s.reverbOn=value(p,kReverbOn)>=.5;s.reverbType=int(std::round(value(p,kReverbType)*4.));
@@ -68,11 +69,12 @@ qg::Settings settings(const std::array<double, kCount>& saved, double tempo, dou
   for(int i=0;i<16;++i) {
     if(value(p,kGlitchStep0+i)>=.5) s.glitchPattern|=uint16_t(1u<<i);
     if(value(p,kRepeatStep0+i)>=.5) s.repeatPattern|=uint16_t(1u<<i);
-    const int rate=int(std::round(value(p,kRepeatRate0+i)*16.));
-    s.repeatRates[i]=rate==0 ? 0. : effectDivisions[rate-1];
+    const int rate=int(std::round(value(p,kRepeatRate0+i)*15.)); // "Global" removed; 16-entry table now.
+    s.repeatRates[i]=effectDivisions[std::clamp(rate,0,15)];
     s.repeatPitches[i]=std::round(value(p,kRepeatPitch0+i)*96.-48.);
   }
-  s.glitchMove=value(p,kGlitchMove);s.glitchVariation=value(p,kGlitchVariation);
+  // PRESLICER: the MOVE slider was removed from the GUI; keep a fixed centred offset for old presets.
+  s.glitchMove=.5;s.glitchVariation=value(p,kGlitchVariation);
   s.glitchRefresh=captureIntervals[int(std::round(value(p,kGlitchRefresh)*7.))];
   s.repeatAuto=value(p,kRepeatAuto)>=.5;s.repeatInterval=captureIntervals[int(std::round(value(p,kRepeatInterval)*7.))];
   s.repeatDuration=.25+value(p,kRepeatDuration)*7.75;s.repeatChance=value(p,kRepeatChance);
@@ -139,6 +141,9 @@ class Processor final : public AudioEffect {
   std::array<double, kCount> p_{};
   int waveCountdown_=0;
   double rate_ = 44100., tempo_ = 120., fallbackBeat_ = 0.;
+  // The parameter array covers every legacy + monitor ID; the VST parameter list stops before the new UI controls.
+  static constexpr int kParamEnd = int(kUiFilterSeqStep) + 1;
+  bool freezePending_ = false; // FREEZE is a momentary button: consumed by the next process() call
 public:
   Processor() {
     setControllerClass(controllerID);
@@ -162,8 +167,12 @@ public:
   }
   tresult PLUGIN_API getState(IBStream* stream) override {
     IBStreamer out(stream,kLittleEndian);
-    if(!out.writeInt32(0x51473144)) return kResultFalse;
-    for(auto v:p_) if(!out.writeDouble(v)) return kResultFalse;
+    if(!out.writeInt32(0x51473145)) return kResultFalse;
+    for(int i=0;i<kParamEnd;++i) if(!out.writeDouble(p_[i])) return kResultFalse;
+    // v0.14 additions: buffer size, freeze state, then RANDOM/PRESET ids kept for array alignment.
+    if(!out.writeDouble(value(p_,kGrainBuffer))) return kResultFalse;
+    if(!out.writeDouble(engine_.isFrozen()?1.:0.)) return kResultFalse;
+    for(int i=kGrainBuffer+2;i<int(kCount);++i) if(!out.writeDouble(p_[i])) return kResultFalse;
     return kResultOk;
   }
   tresult PLUGIN_API canProcessSampleSize(int32 size) override {
@@ -350,7 +359,8 @@ public:
     };
     for(int i=0;i<16;++i) { String128 n{}; stepTitle("Glitch Step",i,n); toggle(n,kGlitchStep0+i,1.); }
     for(int i=0;i<16;++i) { String128 n{}; stepTitle("Repeat Step",i,n); toggle(n,kRepeatStep0+i,1.); }
-    for(int i=0;i<16;++i) { String128 n{}; stepTitle("Repeat Division",i,n); effectGrid(n,kRepeatRate0+i,0.,true); }
+    // Beat Repeater steps no longer offer "Global"; old presets remap 0->1 (1/1) in syncState and loadState.
+    for(int i=0;i<16;++i) { String128 n{}; stepTitle("Repeat Division",i,n); effectGrid(n,kRepeatRate0+i,1./15.); }
     for(int i=0;i<16;++i) { String128 n{}; stepTitle("Repeat Pitch",i,n); range(n,kRepeatPitch0+i,STR16("st"),-48,48,0,96); }
     toggle(STR16("Free Stretch"),kStretchOn,0.);
     range(STR16("Stretch Speed"),kStretchSpeed,STR16("%"),25,400,100);
@@ -432,14 +442,16 @@ public:
     toggle(STR16("Reslice On"),kResliceEnabled,0.);
     auto* length=new StringListParameter(STR16("Reslice Window"),kResliceLength);for(auto label:{STR16("4/1"),STR16("2/1"),STR16("1/1"),STR16("1/2")})length->appendString(label);length->getInfo().defaultNormalizedValue=2./3.;length->setNormalized(2./3.);parameters.addParameter(length);
     range(STR16("Reslice Mix"),kResliceMix,STR16("%"),0,100,100);
-    for(int i=0;i<16;++i){String128 name{};stepTitle("Reslice Step",i,name);toggle(name,kResliceStep0+i,0.);}
+    // Reslice steps default to ON; the module itself stays OFF (kResliceEnabled default 0).
+    for(int i=0;i<16;++i){String128 name{};stepTitle("Reslice Step",i,name);toggle(name,kResliceStep0+i,1.);}
     for(int i=0;i<16;++i){String128 name{};stepTitle("Reslice Source",i,name);range(name,kResliceIndex0+i,STR16("slice"),1,16,i+1,15);}
     toggle(STR16("Gater Latch"),kGaterLatch,0.);
     for(int i=0;i<16;++i){String128 name{};stepTitle("Gater Release",i,name);toggle(name,kGaterRelease0+i,0.);}
     for(int i=kUiResliceStep;i<kReverbModel;++i){auto* monitor=new RangeParameter(STR16("Reslice Display"),i,nullptr,0,1,0);monitor->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(monitor);}
     auto* reverbModel=new StringListParameter(STR16("Reverb Model"),kReverbModel);for(auto label:{STR16("Classic (legacy)"),STR16("Plate"),STR16("Cosmic Space"),STR16("Dark Space"),STR16("Bloom Space")})reverbModel->appendString(label);parameters.addParameter(reverbModel);
     range(STR16("Gater Minimum Length"),kGaterMinLength,STR16("%"),5,95,5);
-    toggle(STR16("Gater Tie"),kGaterTie,0.);
+    // Gater "Tie" removed from the UI; parameter kept (hidden) for old-state compatibility, forced off.
+    {auto* tie=new StringListParameter(STR16("Gater Tie"),kGaterTie,nullptr,ParameterInfo::kIsHidden);tie->appendString(STR16("Off"));tie->appendString(STR16("On"));tie->getInfo().defaultNormalizedValue=0.;tie->setNormalized(0.);parameters.addParameter(tie);}
     for(int i=0;i<16;++i){String128 name{};stepTitle("Gater Sustain",i,name);range(name,kGaterSustain0+i,STR16("ms"),0,500,50);}
 
     auto* glitchRate=new StringListParameter(STR16("Glitch Random Interval"),kGlitchTriggerRate);

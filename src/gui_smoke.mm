@@ -134,7 +134,7 @@ int main(int argc,char** argv){
       checkGui(surface!=nil&&surface.superview==window.contentView,"Reopened surface belongs to host");
       checkGui([(id<GrainsGuiInspection>)surface controlsFit],"Reopened controls fit");
       send(NSEventTypeLeftMouseDown,182,912);send(NSEventTypeLeftMouseUp,182,912);checkGui(controller->getParamNormalized(aztec::kGaterEnabled)==1.,"gater on");
-      send(NSEventTypeLeftMouseDown,1197,912);send(NSEventTypeLeftMouseUp,1197,912);checkGui(controller->getParamNormalized(aztec::kGaterTie)==1.,"gater tie");
+      send(NSEventTypeLeftMouseDown,1200,912);send(NSEventTypeLeftMouseUp,1200,912);checkGui(controller->getParamNormalized(aztec::kGaterLatch)==1.,"gater latch");
       send(NSEventTypeLeftMouseDown,67,963);send(NSEventTypeLeftMouseUp,67,963);checkGui(controller->getParamNormalized(aztec::kGaterState0)==0.,"Wet/Off step toggle");
       send(NSEventTypeLeftMouseDown,500,67);send(NSEventTypeLeftMouseUp,500,67);checkGui(controller->getParamNormalized(aztec::kInputDeclick)==0.,"input de-click toggle");
       view->removed();view->release();controller->terminate();controller->release();[window close];

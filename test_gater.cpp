@@ -21,15 +21,14 @@ int main(){
  for(int cycle=0;cycle<12;++cycle){l=r=1;gate.process(l,r,cycle*4.+.01,120);for(int i=0;i<16;++i){assert(gate.state(i)==0||gate.state(i)==1);assert(gate.length(i)>=.4&&gate.length(i)<=.75);wet+=gate.state(i)==1;off+=gate.state(i)==0;}if(previous!=gate.length(0))++changing;previous=gate.length(0);gate.process(l,r,cycle*4.+.03,120);assert(gate.length(0)==previous);}
  assert(wet>0&&off>0&&changing>8);
 
- // Tie links adjacent Wet steps, including step 16 back to step 1. With a
- // fully enabled pattern, the gate remains one continuous note across loops.
- s.stepRandom=false;s.lengthRandom=false;s.minimumLength=.05;s.length.fill(.1);s.sustain.fill(0.);s.state.fill(1);s.tie=true;
- gate.prepare(8000);gate.set(s);for(int i=0;i<34000;++i){l=r=1;gate.process(l,r,i/4000.,120);if(i>500)assert(gate.envelope()>.999);}
+ // TIE removed: adjacent Wet steps now re-trigger per step (length .1 => short gated notes).
+ s.stepRandom=false;s.lengthRandom=false;s.minimumLength=.05;s.length.fill(.1);s.sustain.fill(0.);s.state.fill(1);s.tie=true; // tie flag ignored
+ gate.prepare(8000);gate.set(s);{int openSamples=0;for(int i=0;i<34000;++i){l=r=1;gate.process(l,r,i/4000.,120);if(i>500&&gate.envelope()>.999)++openSamples;}assert(openSamples<34000);} // no longer one continuous note
  s.tie=false;gate.prepare(8000);gate.set(s);l=r=1;gate.process(l,r,.02,120);for(int i=1;i<300;++i){l=r=1;gate.process(l,r,.02+i/4000.,120);}assert(gate.envelope()<.01);
 
- // Latch remains distinct from Tie: empty steps hold until an explicit release;
+ // Latch works independently of the removed Tie: empty steps hold until an explicit release;
  // transport stop closes it cleanly.
- s.tie=true;s.latch=true;s.state.fill(0);s.state[0]=1;s.release=1u<<6;gate.prepare(8000);gate.set(s);
+ s.tie=false;s.latch=true;s.state.fill(0);s.state[0]=1;s.release=1u<<6;gate.prepare(8000);gate.set(s);
  for(int i=0;i<8000;++i){l=r=1;gate.process(l,r,i/4000.,120);int step=i/1000;if(step<6&&i%1000>80)assert(l>.99);if(step>=7&&i%1000>100)assert(l<.01);}
  for(int i=0;i<100;++i){l=r=1;gate.process(l,r,2.1,120,false);}assert(gate.envelope()<.01);
 
