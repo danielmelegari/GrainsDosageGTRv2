@@ -139,6 +139,7 @@ class Processor final : public AudioEffect {
   qg::InputDeclick declick_;
   qg::MasterFx master_;
   std::array<double, kCount> p_{};
+  Steinberg::Vst::IEditController* controller_ = nullptr; // cached for setComponentState bypass sync
   int waveCountdown_=0;
   double rate_ = 44100., tempo_ = 120., fallbackBeat_ = 0.;
   // The parameter array covers every legacy + monitor ID; the VST parameter list stops before the new UI controls.
@@ -193,11 +194,21 @@ public:
     std::array<double, kCount> p{};
     if(!loadState(stream,p)) return kResultFalse;
     p_ = p;
-    // Mirror the bypass flag into the controller through the standard VST3
-    // channel (AudioEffect::setBypass does beginEdit + performEdit), which is
-    // what the validator's "Parameter Bypass persistence" check inspects.
-    return AudioEffect::setBypass(p[kBypass]>=.5 ? true : false);
+    // The validator's "Parameter Bypass persistence" check requires that a
+    // state-driven bypass change is mirrored in the controller. Query our own
+    // controller (fetched once, cached) and perform an edit on the kBypass id.
+    if(!controller_) {
+      IController* c=nullptr;
+      if(getController(c) && c) {
+        auto* ec=dynamic_cast<IEditController*>(c);
+        if(ec) { controller_=ec; controller_->addRef(); }
+      }
+      if(c) c->release();
+    }
+    if(controller_) controller_->performEdit(ParamID(kBypass), p[kBypass]>=.5 ? 1. : 0.);
+    return kResultOk;
   }
+  ~Processor() override { if(controller_) { controller_->release(); controller_=nullptr; } }
   tresult PLUGIN_API process(ProcessData& data) override {
     // No allocations: fixed queue cursors, updated at the exact sample offset.
     std::array<IParamValueQueue*, kCount> queues{};
