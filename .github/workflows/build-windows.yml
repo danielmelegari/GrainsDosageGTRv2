@@ -89,6 +89,14 @@ jobs:
           $archive = Join-Path $dist 'GrainsDosage-Windows10-x64-VST3.zip'
           Compress-Archive -Path $plugin -DestinationPath $archive -Force
 
+      - name: Upload portable VST3 bundle (no installer needed)
+        uses: actions/upload-artifact@v4
+        with:
+          name: GrainsDosage-Windows10-x64-VST3-portable
+          path: dist/GrainsDosage-Windows10-x64-VST3.zip
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Build Windows installer
         run: |
           $ErrorActionPreference = 'Stop'

@@ -1,0 +1,4 @@
+# GrainsDosage skin — sampled from NEWGUI.jpeg
+theme = aurora
+accent = #9CFA6E
+panel = #161620
