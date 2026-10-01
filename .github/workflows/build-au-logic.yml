@@ -57,6 +57,16 @@ jobs:
           git -C "$RUNNER_TEMP/AudioUnitBuild/vst3sdk" checkout 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
           git -C "$RUNNER_TEMP/AudioUnitBuild/vst3sdk" submodule update --init --recursive --depth 1
 
+      - name: Download Apple AudioUnitSDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Explicitly fetch the official Apple AudioUnitSDK next to the vst3sdk
+          # so SMTG_AUDIOUNIT_SDK_PATH always points at an existing checkout.
+          git clone --depth 1 https://github.com/Apple/AudioUnitSDK.git \
+            "$RUNNER_TEMP/AudioUnitBuild/AudioUnitSDK"
+          test -f "$RUNNER_TEMP/AudioUnitBuild/AudioUnitSDK/AudioUnitSDK.xcodeproj/project.pbxproj"
+
 
       - name: Configure AudioUnit build (Intel)
         shell: bash
@@ -149,6 +159,16 @@ jobs:
           git clone --no-checkout https://github.com/steinbergmedia/vst3sdk.git "$RUNNER_TEMP/AudioUnitBuild/vst3sdk"
           git -C "$RUNNER_TEMP/AudioUnitBuild/vst3sdk" checkout 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
           git -C "$RUNNER_TEMP/AudioUnitBuild/vst3sdk" submodule update --init --recursive --depth 1
+
+      - name: Download Apple AudioUnitSDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Explicitly fetch the official Apple AudioUnitSDK next to the vst3sdk
+          # so SMTG_AUDIOUNIT_SDK_PATH always points at an existing checkout.
+          git clone --depth 1 https://github.com/Apple/AudioUnitSDK.git \
+            "$RUNNER_TEMP/AudioUnitBuild/AudioUnitSDK"
+          test -f "$RUNNER_TEMP/AudioUnitBuild/AudioUnitSDK/AudioUnitSDK.xcodeproj/project.pbxproj"
 
 
       - name: Configure AudioUnit build (Apple Silicon)

@@ -24,20 +24,28 @@ set(SMTG_RUN_VST_VALIDATOR ON CACHE BOOL "" FORCE)
 # AudioUnitSDK.xcodeproj). If not provided and not already sitting next to the
 # sdk, fetch it once from Apple's official repo.
 if(APPLE AND SMTG_ENABLE_AUV2_PLUGIN)
-  if("${SMTG_AUDIOUNIT_SDK_PATH}" STREQUAL "")
-    get_filename_component(_gd_au_parent "${VST3_SDK_ROOT}" DIRECTORY)
-    set(_gd_au_sdk "${_gd_au_parent}/AudioUnitSDK")
-    if(NOT EXISTS "${_gd_au_sdk}/AudioUnitSDK.xcodeproj")
-      find_package(Git REQUIRED)
-      execute_process(COMMAND "${GIT_EXECUTABLE}" clone --depth 1
-        https://github.com/Apple/AudioUnitSDK.git "${_gd_au_sdk}"
-        RESULT_VARIABLE _gd_au_clone OUTPUT_VARIABLE _gd_au_clone_msg)
-      if(NOT _gd_au_clone EQUAL 0)
-        message(FATAL_ERROR "[GrainsDosage] could not clone Apple AudioUnitSDK: ${_gd_au_clone_msg}")
-      endif()
-    endif()
-    set(SMTG_AUDIOUNIT_SDK_PATH "${_gd_au_sdk}" CACHE PATH "Path to the AudioUnit SDK" FORCE)
+  # Always validate/resolve here (a caller-provided path may point at a folder
+  # that does not exist yet — CI passes it before the SDK auto-fetch runs).
+  get_filename_component(_gd_au_parent "${VST3_SDK_ROOT}" DIRECTORY)
+  set(_gd_au_fallback "${_gd_au_parent}/AudioUnitSDK")
+  set(_gd_au_sdk "${SMTG_AUDIOUNIT_SDK_PATH}")
+  if(_gd_au_sdk STREQUAL "" OR NOT EXISTS "${_gd_au_sdk}/AudioUnitSDK.xcodeproj")
+    set(_gd_au_sdk "${_gd_au_fallback}")
   endif()
+  if(NOT EXISTS "${_gd_au_sdk}/AudioUnitSDK.xcodeproj")
+    find_package(Git REQUIRED)
+    execute_process(COMMAND "${GIT_EXECUTABLE}" clone --depth 1
+      https://github.com/Apple/AudioUnitSDK.git "${_gd_au_sdk}"
+      RESULT_VARIABLE _gd_au_clone OUTPUT_VARIABLE _gd_au_clone_msg ERROR_VARIABLE _gd_au_clone_err)
+    if(NOT _gd_au_clone EQUAL 0)
+      message(FATAL_ERROR "[GrainsDosage] could not clone Apple AudioUnitSDK into ${_gd_au_sdk}: ${_gd_au_clone_msg}${_gd_au_clone_err}")
+    endif()
+  endif()
+  if(NOT EXISTS "${_gd_au_sdk}/AudioUnitSDK.xcodeproj")
+    message(FATAL_ERROR "[GrainsDosage] AudioUnitSDK present at ${_gd_au_sdk} but AudioUnitSDK.xcodeproj is missing")
+  endif()
+  message(STATUS "[GrainsDosage] using Apple AudioUnitSDK at ${_gd_au_sdk}")
+  set(SMTG_AUDIOUNIT_SDK_PATH "${_gd_au_sdk}" CACHE PATH "Path to the AudioUnit SDK" FORCE)
   # The SDK builds the hosting library only with hosting examples enabled;
   # the AU wrapper needs sdk_hosting, so force it ON just for AU builds.
   set(SMTG_ENABLE_VST3_HOSTING_EXAMPLES ON CACHE BOOL "" FORCE)
