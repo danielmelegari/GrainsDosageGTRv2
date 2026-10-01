@@ -52,6 +52,7 @@ static NSColor* C(aztec::skin::Rgb k,double a=1.) {return rgb(k.r/255.,k.g/255.,
 // Resolve a colour ROLE against the live (theme-aware) palette.
 static NSColor* C(int role,double a=1.) {return C(aztec::skin::active().at(role),a);}
 #define AZSKIN(k) C(aztec::skin::k)  // theme-aware reference to a skin colour
+#define AZCOL(k) aztec::skin::active().at(aztec::skin::k)  // raw Rgb of a role
 static NSColor* green() {return AZSKIN(kAccent);}
 static NSColor* cream() {return AZSKIN(kCream);}
 static NSColor* muted() {return AZSKIN(kMuted);}
@@ -205,10 +206,16 @@ static constexpr double slotX[3]={16.,452.,888.};
     const double cx=NSMidX(r),cy=r.origin.y+43.,radius=24.;
     box(NSMakeRect(cx-radius-2,cy-radius+2,radius*2+4,radius*2+4),AZSKIN(kWell),nil,radius+2);
     NSBezierPath* cap=[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(cx-radius,cy-radius,radius*2,radius*2)];
-    NSGradient* metal=[[NSGradient alloc] initWithStartingColor:rgb(.24,.21,.28) endingColor:rgb(.045,.04,.065)];
+    // Knob metal + ring groove resolve against the live palette so every
+    // theme (and the persisted one) recolours the caps too.
+    skin::Rgb capTopS=skin::scale(AZCOL(kPanelRaised),1.15),capBotS=AZCOL(kWell);
+    NSColor* capTop=rgb(capTopS.r/255.,capTopS.g/255.,capTopS.b/255.);
+    NSColor* capBot=rgb(capBotS.r/255.,capBotS.g/255.,capBotS.b/255.);
+    NSGradient* metal=[[NSGradient alloc] initWithStartingColor:capTop endingColor:capBot];
     [metal drawInBezierPath:cap angle:90.];[AZSKIN(kFiligreeDim) setStroke];cap.lineWidth=1.;[cap stroke];
     arc(cx,cy,radius-3,155,335,AZSKIN(kBorderDark),1.);
-    arc(cx,cy,radius+4,135,405,rgb(.20,.16,.26),3.);
+    skin::Rgb grooveS=skin::mix(AZCOL(kBorderDark),AZCOL(kViolet),.5);
+    arc(cx,cy,radius+4,135,405,rgb(grooveS.r/255.,grooveS.g/255.,grooveS.b/255.),3.);
     for(int j=0;j<21;++j){double a=(135.+270.*j/20.)*qg::tau/360.;box(NSMakeRect(cx+33*std::cos(a)-1.5,cy+33*std::sin(a)-1.5,3,3),j/20.<=v?green():AZSKIN(kAccentTrack),nil,1.5);}
     double zero=bipolar(c.id)?270.:135.;double angle=135.+270.*v;
     arc(cx,cy,radius+4,std::min(zero,angle),std::max(zero,angle),green(),3.5);
@@ -369,6 +376,10 @@ static constexpr double slotX[3]={16.,452.,888.};
 }
 - (void)chooseSkin:(NSMenuItem*)item {
   if(item.tag==-2){aztec::theme::loadSkinFile(aztec::theme::defaultPath());}
+  else if(item.tag==-1){ // Original GUI: Astral Green, drop any persisted skin.
+    aztec::theme::applySkin(0,{});
+    std::remove(aztec::theme::defaultPath().c_str());
+  }
   else{aztec::theme::applySkin(int(item.tag),{});aztec::theme::saveSkinFile(aztec::theme::defaultPath());}
   [self setNeedsDisplay:YES];
 }
@@ -376,6 +387,7 @@ static constexpr double slotX[3]={16.,452.,888.};
   NSMenu* menu=[[NSMenu alloc] initWithTitle:@"Skin"];
   for(int i=0;i<int(aztec::theme::themes().size());++i){NSString* title=[NSString stringWithUTF8String:aztec::theme::themes()[size_t(i)].title];NSMenuItem* item=[[NSMenuItem alloc] initWithTitle:title action:@selector(chooseSkin:) keyEquivalent:@""];item.target=self;item.tag=i;if(i==aztec::theme::currentTheme())item.state=NSControlStateValueOn;[menu addItem:item];}
   [menu addItem:[NSMenuItem separatorItem]];
+  NSMenuItem* orig=[[NSMenuItem alloc] initWithTitle:@"ORIGINAL (ASTRAL)" action:@selector(chooseSkin:) keyEquivalent:@""];orig.target=self;orig.tag=-1;if(aztec::theme::currentTheme()==0&&!aztec::theme::customized())orig.state=NSControlStateValueOn;[menu addItem:orig];
   NSMenuItem* reset=[[NSMenuItem alloc] initWithTitle:@"Reload skin.txt" action:@selector(chooseSkin:) keyEquivalent:@""];reset.target=self;reset.tag=-2;[menu addItem:reset];
   [NSMenu popUpContextMenu:menu withEvent:event forView:self];
 }

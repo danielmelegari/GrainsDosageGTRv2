@@ -98,10 +98,17 @@ class WinEditor final:public CPluginView{
   void saveSkin(){aztec::theme::saveSkinFile(aztec::theme::defaultPath());}
   void skinMenu(){
     HMENU m=CreatePopupMenu();int n=1;for(size_t i=0;i<aztec::theme::themes().size();++i){auto& t=aztec::theme::themes()[i];std::wstring title;for(const char* c=t.title;*c;++c)title+=wchar_t(*c);AppendMenuW(m,MF_STRING,n++,title.c_str());}
-    AppendMenuW(m,MF_SEPARATOR,0,nullptr);AppendMenuW(m,MF_STRING,n,L"Reload skin.txt");
+    AppendMenuW(m,MF_SEPARATOR,0,nullptr);
+    int origId=n++;AppendMenuW(m,MF_STRING,origId,L"Original (Astral)");
+    int reloadId=n++;AppendMenuW(m,MF_STRING,reloadId,L"Reload skin.txt");
+    // Check-mark the live theme so the current GUI is obvious at a glance.
+    MenuCheckMenuItem(m,UINT(aztec::theme::currentTheme())+1,MF_BYCOMMAND|(aztec::theme::customized()?MF_UNCHECKED:MF_CHECKED));
+    if(aztec::theme::currentTheme()==0&&!aztec::theme::customized())MenuCheckMenuItem(m,origId,MF_BYCOMMAND|MF_CHECKED);
     POINT p;GetCursorPos(&p);int pick=TrackPopupMenu(m,TPM_RETURNCMD,p.x,p.y,0,window,nullptr);DestroyMenu(m);
     if(!pick)return;
-    if(pick==n){loadSkin();}else{aztec::theme::applySkin(pick-1,{});saveSkin();}
+    if(pick==reloadId){loadSkin();}
+    else if(pick==origId){aztec::theme::applySkin(0,{});DeleteFileW(L"grainsdosage-skin.txt");}
+    else{aztec::theme::applySkin(pick-1,{});saveSkin();}
     InvalidateRect(window,nullptr,FALSE);
   }
   std::wstring presetFolder(){
