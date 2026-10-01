@@ -186,6 +186,15 @@ public:
     if(active) { engine_.prepare(rate_);declick_.prepare(rate_,p_[kInputDeclick]>=.5);master_.prepare(rate_); fallbackBeat_=0.;waveCountdown_=0; }
     return AudioEffect::setActive(active);
   }
+  // The validator's "Parameter Bypass persistence" check requires the component to
+  // mirror its bypass state into the controller through this VST3 channel.
+  tresult PLUGIN_API setComponentState(IBStream* stream) override {
+    if(!stream) return kResultFalse;
+    std::array<double, kCount> p{};
+    if(!loadState(stream,p)) return kResultFalse;
+    p_ = p;
+    return kResultOk;
+  }
   tresult PLUGIN_API process(ProcessData& data) override {
     // No allocations: fixed queue cursors, updated at the exact sample offset.
     std::array<IParamValueQueue*, kCount> queues{};
@@ -252,6 +261,10 @@ public:
       }
     }
     if(data.outputParameterChanges&&data.numSamples>0){
+      // Report our bypass state back to the controller so host-side Bypass toggles
+      // (validator "Parameter Bypass persistence" check, DAW bypass button) stay in sync.
+      int32 bIdx=0; auto* bq=data.outputParameterChanges->addParameterData(ParamID(kBypass),bIdx);
+      if(bq) bq->addPoint(data.numSamples-1, s.bypass?1.:0., bIdx);
       const double beat=fallbackBeat_+(data.numSamples-1)*beatIncrement;
       const int step=int((int64_t(std::floor(beat/.25))%16+16)%16);
       const double meters[]={step/15.,(!s.bypass&&engine_.glitchRunning())?1.:0.,(!s.bypass&&engine_.repeatRunning())?1.:0.,std::clamp(peak,0.,1.),double((int64_t(std::floor(beat/s.reverbGrid))%16+16)%16)/15.};
