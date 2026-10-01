@@ -97,59 +97,8 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Build Windows installer
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $PSNativeCommandUseErrorActionPreference = $true
-          $cmake = Get-Content (Join-Path $env:PROJECT_DIR 'CMakeLists.txt') -Raw
-          if ($cmake -notmatch 'project\(GrainsDosage VERSION ([0-9]+\.[0-9]+\.[0-9]+)') {
-            throw 'Project version not found.'
-          }
-          $version = $Matches[1]
-          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe'
-          if (!(Test-Path $iscc)) { $iscc = (Get-Command ISCC.exe -ErrorAction Stop).Source }
-          $dist = Join-Path $env:GITHUB_WORKSPACE 'dist'
-          & $iscc "/DAppVersion=$version" "/DProjectDir=$env:PROJECT_DIR" `
-            "/DOutputDir=$dist" (Join-Path $env:PROJECT_DIR 'installer/GrainsDosage.iss')
-          $setup = Join-Path $dist "GrainsDosage-$version-Windows10-x64-Setup.exe"
-          if (!(Test-Path $setup)) { throw 'Installer was not generated.' }
-          Copy-Item (Join-Path $env:PROJECT_DIR 'INSTALL-WINDOWS.txt') $dist
-
-      - name: Test installer and uninstaller
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $PSNativeCommandUseErrorActionPreference = $true
-          $installed = Join-Path $env:CommonProgramFiles 'VST3/GrainsDosage.vst3/Contents/x86_64-win/GrainsDosage.vst3'
-          if (Test-Path $installed) { throw 'Unexpected existing installation on the clean runner.' }
-          $setup = (Get-ChildItem (Join-Path $env:GITHUB_WORKSPACE 'dist/GrainsDosage-*-Windows10-x64-Setup.exe') -File | Select-Object -First 1).FullName
-          if (!$setup) { throw 'Installer executable not found.' }
-          $installLog = Join-Path $env:GITHUB_WORKSPACE 'installer-test.log'
-          $result = Start-Process -FilePath $setup -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/LOG=`"$installLog`"") -Wait -PassThru
-          if ($result.ExitCode -ne 0) { throw "Installer failed: $($result.ExitCode)" }
-          if (!(Test-Path $installed)) { throw 'Installed plugin binary is missing.' }
-          $source = Join-Path $env:PROJECT_DIR 'build/VST3/Release/GrainsDosage.vst3/Contents/x86_64-win/GrainsDosage.vst3'
-          if ((Get-FileHash $installed).Hash -ne (Get-FileHash $source).Hash) {
-            throw 'Installed plugin differs from the tested build.'
-          }
-          $uninstaller = Join-Path $env:ProgramFiles 'GrainsDosage/unins000.exe'
-          $result = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -Wait -PassThru
-          if ($result.ExitCode -ne 0 -or (Test-Path $installed)) { throw 'Uninstall verification failed.' }
-
-      - name: Generate checksums
-        run: |
-          $ErrorActionPreference = 'Stop'
-          Get-ChildItem (Join-Path $env:GITHUB_WORKSPACE 'dist') -File |
-            Where-Object { $_.Extension -in '.exe', '.zip' } |
-            ForEach-Object { "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant())  $($_.Name)" } |
-            Set-Content (Join-Path $env:GITHUB_WORKSPACE 'dist/SHA256SUMS.txt')
-
-      - name: Upload Windows installer and VST3
-        uses: actions/upload-artifact@v4
-        with:
-          name: GrainsDosage-Windows10-x64-Installer
-          path: dist/
-          if-no-files-found: error
-          retention-days: 14
+      # Installer steps removed on request: this workflow now produces only the
+      # portable .vst3 zip (see "Upload portable VST3 bundle" step above).
 
       - name: Save build diagnostics
         if: always()
