@@ -10,6 +10,7 @@
 #include <objidl.h>
 #include "editor.h"
 #include "parameters.h"
+#include "skin_spec.h"
 #include "filter_sequencer.h"
 #include "randomize.h"
 #include "public.sdk/source/common/pluginview.h"
@@ -20,6 +21,8 @@
 #include <vector>
 namespace aztec {
 using namespace Steinberg;using namespace Steinberg::Vst;
+// Astral/Filigree Green: resolve a shared skin colour to a Win32 COLORREF.
+static inline COLORREF C(skin::Rgb k){return RGB(k.r,k.g,k.b);}
 constexpr double slotX[]={16,452,888};
 enum Kind{Knob,Slider,Toggle,Select,Pad,Pan,PanMode};
 struct Control{ParamID id;double x,y,w,h;Kind kind;const char* label;};
@@ -29,7 +32,7 @@ class WinEditor final:public CPluginView{
   int selectedLfo=0,selectedRepeat=0,dragID=-1,dragSlot=-1,dropSlot=-1;
   double originX=0,originY=0,dragValue=0,dragWidth=1;Kind dragKind=Knob;bool dragXY=false;
   uint32_t seed=0;HDC dc=nullptr;
-  ULONG_PTR imaging=0;HBITMAP skin=nullptr;HDC skinDC=nullptr;HGDIOBJ oldSkin=nullptr;std::array<HBITMAP,5> sprites{};std::array<HDC,5> spriteDC{};std::array<HGDIOBJ,5> oldSprite{};
+  ULONG_PTR imaging=0;HBITMAP skin=nullptr;HDC skinDC=nullptr;HGDIOBJ oldSkin=nullptr;std::array<HBITMAP,6> sprites{};std::array<HDC,6> spriteDC{};std::array<HGDIOBJ,6> oldSprite{};
   void loadSprite(int id,int index){
     HMODULE module=nullptr;GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,reinterpret_cast<LPCWSTR>(&proc),&module);
     HRSRC resource=FindResourceW(module,MAKEINTRESOURCEW(id),MAKEINTRESOURCEW(10));if(!resource)return;DWORD bytes=SizeofResource(module,resource);auto loaded=LoadResource(module,resource);const void* data=LockResource(loaded);if(!data||!bytes)return;
@@ -47,7 +50,7 @@ class WinEditor final:public CPluginView{
     void* dest=GlobalLock(memory);if(!dest){GlobalFree(memory);return;}std::memcpy(dest,data,bytes);GlobalUnlock(memory);
     IStream* stream=nullptr;if(FAILED(CreateStreamOnHGlobal(memory,TRUE,&stream))){GlobalFree(memory);return;}
     {Gdiplus::Bitmap bitmap(stream);if(bitmap.GetLastStatus()==Gdiplus::Ok)bitmap.GetHBITMAP(Gdiplus::Color(255,12,9,20),&skin);}
-    stream->Release();if(skin){skinDC=CreateCompatibleDC(nullptr);if(skinDC)oldSkin=SelectObject(skinDC,skin);}for(int i=0;i<5;++i)loadSprite(202+i,i);
+    stream->Release();if(skin){skinDC=CreateCompatibleDC(nullptr);if(skinDC)oldSkin=SelectObject(skinDC,skin);}for(int i=0;i<6;++i)loadSprite(202+i,i);
   }
   void art(int sx,int sy,int sw,int sh,double x,double y,double w,double h){
     const int coordinates[5][4]={{385,260,76,76},{453,636,24,32},{734,456,54,48},{1850,12,136,104},{1726,15,95,104}};for(int i=0;i<5;++i)if(sx==coordinates[i][0]&&sy==coordinates[i][1]&&sw==coordinates[i][2]&&sh==coordinates[i][3]&&spriteDC[size_t(i)]){BITMAP b{};GetObjectW(sprites[size_t(i)],sizeof(b),&b);int old=SetStretchBltMode(dc,HALFTONE);StretchBlt(dc,int(x),int(y),int(w),int(h),spriteDC[size_t(i)],0,0,b.bmWidth,b.bmHeight,SRCCOPY);SetStretchBltMode(dc,old);return;}
@@ -63,19 +66,19 @@ class WinEditor final:public CPluginView{
   }
   void knobCap(double cx,double cy,double value){
     (void)value;
-    disc(cx,cy+2,25,RGB(3,3,5),RGB(3,3,5));
-    disc(cx,cy,23,RGB(30,25,39),RGB(102,79,120));
-    disc(cx,cy-1,20,RGB(39,34,49),RGB(62,54,73));
+    disc(cx,cy+2,25,C(aztec::skin::well),C(aztec::skin::well));
+    disc(cx,cy,23,RGB(30,25,39),C(aztec::skin::filigree));
+    disc(cx,cy-1,20,RGB(39,34,49),C(aztec::skin::filigreeDim));
     disc(cx,cy-2,17,RGB(44,39,53),RGB(44,39,53));
   }
   void panel(double x,double y,double w,double h){
-    box(x,y,w,h,RGB(14,11,20),RGB(99,69,115));
-    box(x+3,y+3,w-6,h-6,RGB(14,11,20),RGB(43,31,56));
-    line(x+15,y+5,x+w-15,y+5,RGB(110,77,125));
+    box(x,y,w,h,C(aztec::skin::panel),C(aztec::skin::filigree));
+    box(x+3,y+3,w-6,h-6,C(aztec::skin::panel),C(aztec::skin::borderDark));
+    line(x+15,y+5,x+w-15,y+5,C(aztec::skin::filigree));
     for(int side=0;side<2;++side){double xx=side?x+w-5:x+5;
-      line(xx,y+14,xx+(side?-2:2),y+h*.33,RGB(79,51,97));
-      line(xx+(side?-2:2),y+h*.33,xx+(side?2:-2),y+h*.66,RGB(79,51,97));
-      line(xx+(side?2:-2),y+h*.66,xx,y+h-14,RGB(79,51,97));
+      line(xx,y+14,xx+(side?-2:2),y+h*.33,C(aztec::skin::filigreeDim));
+      line(xx+(side?-2:2),y+h*.33,xx+(side?2:-2),y+h*.66,C(aztec::skin::filigreeDim));
+      line(xx+(side?2:-2),y+h*.66,xx,y+h-14,C(aztec::skin::filigreeDim));
     }
   }
   double value(ParamID id)const{return controller->getParamNormalized(id);}
@@ -144,16 +147,16 @@ class WinEditor final:public CPluginView{
   }
   static bool inside(double x,double y,double a,double b,double w,double h){return x>=a&&x<a+w&&y>=b&&y<b+h;}
   void point(LPARAM lp,double& x,double& y){RECT r;GetClientRect(window,&r);x=GET_X_LPARAM(lp)*1320./std::max(1L,r.right);y=GET_Y_LPARAM(lp)*1360./std::max(1L,r.bottom);}
-  static COLORREF green(){return RGB(156,255,89);}static COLORREF cream(){return RGB(232,240,250);}static COLORREF dark(){return RGB(6,6,11);}
+  static COLORREF green(){return C(aztec::skin::green);}static COLORREF cream(){return C(aztec::skin::cream);}static COLORREF dark(){return C(aztec::skin::bgDeep);}
   void box(double x,double y,double w,double h,COLORREF fill,COLORREF stroke){HBRUSH b=CreateSolidBrush(fill);HPEN p=CreatePen(PS_SOLID,1,stroke);auto ob=SelectObject(dc,b),op=SelectObject(dc,p);RoundRect(dc,int(x),int(y),int(x+w),int(y+h),8,8);SelectObject(dc,ob);SelectObject(dc,op);DeleteObject(b);DeleteObject(p);}
   void text(std::wstring s,double x,double y,double w,double h,int size,COLORREF color,bool center=false,int minimumSize=14){HFONT f=CreateFontW(-std::max(minimumSize,size),0,0,0,FW_SEMIBOLD,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,ANTIALIASED_QUALITY,DEFAULT_PITCH,L"Segoe UI");auto old=SelectObject(dc,f);SetTextColor(dc,color);SetBkMode(dc,TRANSPARENT);int extra=std::max(0,minimumSize-size);RECT r{int(x),int(y)-extra/2,int(x+w),int(y+h)+extra/2};DrawTextW(dc,s.c_str(),-1,&r,DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS|(center?DT_CENTER:DT_LEFT));SelectObject(dc,old);DeleteObject(f);}
   void line(double x,double y,double xx,double yy,COLORREF color,int width=1){auto p=CreatePen(PS_SOLID,width,color);auto old=SelectObject(dc,p);MoveToEx(dc,int(x),int(y),nullptr);LineTo(dc,int(xx),int(yy));SelectObject(dc,old);DeleteObject(p);}
-  void draw(){layout();box(0,0,1320,1360,dark(),dark());panel(8,8,1304,73);text(L"GRAINS",28,20,165,45,31,RGB(156,97,186));text(L"DOSAGE",196,20,194,45,31,green());art(1850,12,136,104,1118,10,78,60);art(1726,15,95,104,1220,10,55,60);box(420,22,462,30,dark(),green());text(presetName,432,22,438,30,12,cream());
-    box(900,22,96,28,RGB(66,33,94),RGB(122,74,150));text(L"SAVE",900,22,96,28,10,cream(),true);box(1004,22,96,28,RGB(66,33,94),RGB(122,74,150));text(L"LOAD",1004,22,96,28,10,cream(),true);text(L".gdspreset",900,55,200,17,10,cream(),true);
+  void draw(){layout();box(0,0,1320,1360,dark(),dark());panel(8,8,1304,73);text(L"GRAINS",28,20,165,45,31,C(aztec::skin::title));text(L"DOSAGE",196,20,194,45,31,C(aztec::skin::title));art(1850,12,136,104,1118,10,78,60);art(1726,15,95,104,1220,10,55,60);box(420,22,462,30,dark(),green());text(presetName,432,22,438,30,12,cream());
+    box(900,22,96,28,C(aztec::skin::panelRaised),C(aztec::skin::filigree));text(L"SAVE",900,22,96,28,10,cream(),true);box(1004,22,96,28,C(aztec::skin::panelRaised),C(aztec::skin::filigree));text(L"LOAD",1004,22,96,28,10,cream(),true);text(L".gdspreset",900,55,200,17,10,cream(),true);
     const wchar_t* names[]={L"GRANULIZER",L"GLITCH BUFFER",L"BEAT REPEATER"};int play=int(std::round(value(kUiStep)*15));
-    for(int i=0;i<3;++i){double x=slotX[i];int st=stage(i);panel(x,98,416,404);if(dropSlot==i){line(x+10,100,x+406,100,green(),2);}text(std::wstring(L"↔  ")+names[st],x+15,105,210,29,15,cream());box(x+316,106,87,28,RGB(66,33,94),RGB(122,74,150));text(L"RANDOM",x+319,109,81,23,11,cream(),true);
+    for(int i=0;i<3;++i){double x=slotX[i];int st=stage(i);panel(x,98,416,404);if(dropSlot==i){line(x+10,100,x+406,100,green(),2);}text(std::wstring(L"↔  ")+names[st],x+15,105,210,29,15,cream());box(x+316,106,87,28,C(aztec::skin::panelRaised),C(aztec::skin::filigree));text(L"RANDOM",x+319,109,81,23,11,cream(),true);
       bool active=st==0?(value(kGrainEnabled)>.5&&value(kGrainMix)>.001):value(st==1?kUiGlitch:kUiRepeat)>.5;for(int j=0;j<12;++j)box(x+19+j*32,486,23,4,active?green():RGB(25,43,34),dark());
-      if(st==0){box(x+208,248,196,147,RGB(19,11,29),RGB(89,59,112));text(L"MASTER OPTIONS",x+220,252,174,17,10,RGB(205,190,222),true);
+      if(st==0){box(x+208,248,196,147,C(aztec::skin::panelInset),C(aztec::skin::filigreeDim));text(L"MASTER OPTIONS",x+220,252,174,17,10,C(aztec::skin::muted),true);
         if(value(kPanMode)>=.25)text(value(kPanMode)<.75?L"PAN: ALTERNATE L / R":L"PAN: RANDOM L / R",x+170,405,228,16,10,green(),true);
         box(x+14,432,388,48,dark(),RGB(58,69,61));bool active=value(kUiGrainActive)>.5;double left=value(kUiGrainStart),right=value(kUiGrainEnd);
         double wavePeak=.02;for(int b=0;b<128;++b)wavePeak=std::max(wavePeak,value(kUiWave0+b));
@@ -168,40 +171,40 @@ class WinEditor final:public CPluginView{
         for(int j=0;j<16;++j){
           double a=x+19+j%8*48,b=271+j/8*39;bool on=value(kRepeatStep0+j)>.5;
           const bool selected=j==selectedRepeat;const double press=selected?1.:0.;
-          box(a,b+3,43,29,RGB(5,3,7),RGB(6,5,9));
-          box(a,b+press,43,28,on?RGB(61,33,87):RGB(26,19,36),selected?cream():(on?RGB(110,168,133):RGB(69,54,87)));
-          line(a+4,b+2+press,a+39,b+2+press,on?RGB(156,117,179):RGB(87,71,105));
-          line(a+2,b+5+press,a+2,b+24+press,RGB(82,64,102));
-          line(a+3,b+26+press,a+40,b+26+press,RGB(6,4,10));
+          box(a,b+3,43,29,C(aztec::skin::well),C(aztec::skin::borderDark));
+          box(a,b+press,43,28,on?C(aztec::skin::greenDeep):C(aztec::skin::panelRaised),selected?cream():(on?C(aztec::skin::filigreeDim):C(aztec::skin::filigreeDim)));
+          line(a+4,b+2+press,a+39,b+2+press,on?C(aztec::skin::filigree):C(aztec::skin::filigreeDim));
+          line(a+2,b+5+press,a+2,b+24+press,C(aztec::skin::filigreeDim));
+          line(a+3,b+26+press,a+40,b+26+press,C(aztec::skin::well));
           text(std::to_wstring(j+1),a+3,b+2+press,37,13,11,cream(),true,11);
-          text(display(kRepeatRate0+j,value(kRepeatRate0+j)),a+3,b+16+press,37,10,9,on?cream():RGB(199,186,214),true,9);
+          text(display(kRepeatRate0+j,value(kRepeatRate0+j)),a+3,b+16+press,37,10,9,on?cream():C(aztec::skin::muted),true,9);
           if(j==play)line(a+5,b+30,a+38,b+30,green(),2);
         }
       }
     }
     panel(16,516,836,236);text(L"MODULATION",32,526,129,28,13,cream());
-    for(int i=0;i<4;++i){box(171+i*133,528,120,28,i==selectedLfo?RGB(66,33,94):RGB(31,23,46),green());text(L"Mod "+std::to_wstring(i+1),171+i*133,529,120,25,12,cream(),true);}
+    for(int i=0;i<4;++i){box(171+i*133,528,120,28,i==selectedLfo?C(aztec::skin::panelRaised):C(aztec::skin::panel),green());text(L"Mod "+std::to_wstring(i+1),171+i*133,529,120,25,12,cream(),true);}
     box(32,613,220,64,dark(),green());double cycle=std::round(value(kUiLfoCycle0+selectedLfo)*4294967295.-2147483648.);int64_t epoch=int64_t(std::round(value(kUiLfoEpoch0+selectedLfo)*4294967295.-2147483648.));qg::Lfo preview;preview.prepare(0x13579BDFULL+uint64_t(selectedLfo)*104729+(value(lfoID(selectedLfo,lReset))>=.5?uint64_t(epoch)*0x9e3779b97f4a7c15ULL:0));qg::LfoSettings shape;shape.enabled=true;shape.beats=1.;shape.wave=int(std::round(value(value(kModWaveRnd0+selectedLfo)>0.?kUiModWave0+selectedLfo:lfoID(selectedLfo,lWave))*129));shape.randomSteps=1+int(std::round(value(kRandomSteps0+selectedLfo)*63));shape.depth=value(lfoID(selectedLfo,lDepth));shape.phase=0.;shape.glide=.01+.99*value(lfoID(selectedLfo,lGlide));double prev=640;for(int j=0;j<=210;++j){double y=640-preview.process(shape,cycle+j/210.,48000.,false,0)*21;if(j)line(36+j,prev,37+j,y,green());prev=y;}
     double cursor=37.+210.*value(kUiLfoPhase0+selectedLfo);line(cursor,617,cursor,661,cream(),2);
-    panel(864,516,440,236);text(L"XY MORPH",880,526,240,28,13,cream());box(880,566,168,166,dark(),green());double px=880+168*value(kXYX),py=732-166*value(kXYY);line(px,566,px,732,RGB(40,90,60));line(880,py,1048,py,RGB(40,90,60));for(int i=0;i<8;++i){double a=i*qg::tau/8.;for(int j=i+1;j<8;++j){double b=j*qg::tau/8.;line(964+72*std::cos(a),649+71*std::sin(a),964+72*std::cos(b),649+71*std::sin(b),RGB(92,52,117));}}box(px-5,py-5,10,10,green(),cream());
-    panel(16,766,1288,108);text(L"RESLICE",32,781,108,24,14,RGB(205,190,222));box(1052,778,216,28,RGB(61,33,87),green());text(L"RANDOM ONCE",1052,778,216,28,12,cream(),true);
-    for(int i=0;i<16;++i){double x=32+i*78.;bool on=value(kResliceStep0+i)>.5;box(x,823,70,40,on?RGB(59,31,84):dark(),selectedReslice==i?cream():RGB(174,158,192));text(std::to_wstring(i+1)+L" → "+std::to_wstring(1+int(std::round(value(value(kResliceRndOn)>.5?kUiResliceSource0+i:kResliceIndex0+i)*15))),x,827,70,18,10,on?green():cream(),true);if(i==int(std::round(value(kUiResliceStep)*15)))line(x+5,858,x+65,858,value(kUiResliceActive)>.5?green():cream(),2);}
-    panel(16,886,1288,108);text(L"GATER",32,901,104,24,14,RGB(205,190,222));text(L"CLICK: WET / OFF     SHIFT-CLICK: LATCH RELEASE",760,876,500,16,9,RGB(174,158,192),true);
-    for(int i=0;i<16;++i){double x=32+i*78.;int state=value(kGaterState0+i)>=.25?1:0;if(value(kGaterEnabled)>.5&&value(kGaterStepRnd)>.5)state=value(kUiGaterState0+i)>=.5?1:0;bool release=value(kGaterRelease0+i)>=.5;double length=value(kGaterLengthRnd)>.5?value(kUiGaterLength0+i):.05+.95*value(kGaterLength0+i),sustain=value(kGaterSustain0+i);COLORREF color=release?RGB(242,89,82):state?green():RGB(174,158,192);box(x,943,70,40,dark(),selectedGate==i?cream():color);text(std::to_wstring(i+1)+(release?L" REL":state?L" WET":value(kGaterLatch)>.5?L" HOLD":L" OFF"),x+2,944,66,17,10,color,true);box(x+5,965,60,4,RGB(36,31,48),dark());box(x+5,965,60*length,4,color,color);box(x+5,973,60,4,RGB(36,31,48),dark());box(x+5,973,60*sustain,4,RGB(170,117,245),RGB(170,117,245));if(value(kGaterTie)>.5&&state&&!release){int next=(i+1)&15;bool nextOn=value(kGaterState0+next)>=.25&&value(kGaterRelease0+next)<.5;if(nextOn)box(x+71,960,7,3,RGB(170,117,245),RGB(170,117,245));}if(value(kGaterEnabled)>.5&&i==int(std::round(value(kUiGaterStep)*15)))line(x+5,981,x+65,981,cream(),2);}
-    if(value(kGaterTie)>.5&&value(kGaterState0+15)>=.25&&value(kGaterState0)>=.25)box(1274,960,22,3,RGB(170,117,245),RGB(170,117,245));
+    panel(864,516,440,236);text(L"XY MORPH",880,526,240,28,13,cream());box(880,566,168,166,dark(),green());if(spriteDC[5]){BITMAP nb{};GetObjectW(sprites[5],sizeof(nb),&nb);int om=SetStretchBltMode(dc,HALFTONE);StretchBlt(dc,880,566,168,166,spriteDC[5],0,0,nb.bmWidth,nb.bmHeight,SRCCOPY);SetStretchBltMode(dc,om);}double px=880+168*value(kXYX),py=732-166*value(kXYY);line(px,566,px,732,RGB(40,90,60));line(880,py,1048,py,RGB(40,90,60));for(int i=0;i<8;++i){double a=i*qg::tau/8.;for(int j=i+1;j<8;++j){double b=j*qg::tau/8.;line(964+72*std::cos(a),649+71*std::sin(a),964+72*std::cos(b),649+71*std::sin(b),C(aztec::skin::violet));}}box(px-5,py-5,10,10,green(),cream());
+    panel(16,766,1288,108);text(L"RESLICE",32,781,108,24,14,C(aztec::skin::muted));box(1052,778,216,28,C(aztec::skin::greenDeep),green());text(L"RANDOM ONCE",1052,778,216,28,12,cream(),true);
+    for(int i=0;i<16;++i){double x=32+i*78.;bool on=value(kResliceStep0+i)>.5;box(x,823,70,40,on?C(aztec::skin::greenDeep):dark(),selectedReslice==i?cream():C(aztec::skin::muted));text(std::to_wstring(i+1)+L" → "+std::to_wstring(1+int(std::round(value(value(kResliceRndOn)>.5?kUiResliceSource0+i:kResliceIndex0+i)*15))),x,827,70,18,10,on?green():cream(),true);if(i==int(std::round(value(kUiResliceStep)*15)))line(x+5,858,x+65,858,value(kUiResliceActive)>.5?green():cream(),2);}
+    panel(16,886,1288,108);text(L"GATER",32,901,104,24,14,C(aztec::skin::muted));text(L"CLICK: WET / OFF     SHIFT-CLICK: LATCH RELEASE",760,876,500,16,9,C(aztec::skin::muted),true);
+    for(int i=0;i<16;++i){double x=32+i*78.;int state=value(kGaterState0+i)>=.25?1:0;if(value(kGaterEnabled)>.5&&value(kGaterStepRnd)>.5)state=value(kUiGaterState0+i)>=.5?1:0;bool release=value(kGaterRelease0+i)>=.5;double length=value(kGaterLengthRnd)>.5?value(kUiGaterLength0+i):.05+.95*value(kGaterLength0+i),sustain=value(kGaterSustain0+i);COLORREF color=release?C(aztec::skin::release):state?green():C(aztec::skin::muted);box(x,943,70,40,dark(),selectedGate==i?cream():color);text(std::to_wstring(i+1)+(release?L" REL":state?L" WET":value(kGaterLatch)>.5?L" HOLD":L" OFF"),x+2,944,66,17,10,color,true);box(x+5,965,60,4,C(aztec::skin::borderDark),dark());box(x+5,965,60*length,4,color,color);box(x+5,973,60,4,C(aztec::skin::borderDark),dark());box(x+5,973,60*sustain,4,C(aztec::skin::violet),C(aztec::skin::violet));if(value(kGaterTie)>.5&&state&&!release){int next=(i+1)&15;bool nextOn=value(kGaterState0+next)>=.25&&value(kGaterRelease0+next)<.5;if(nextOn)box(x+71,960,7,3,C(aztec::skin::violet),C(aztec::skin::violet));}if(value(kGaterEnabled)>.5&&i==int(std::round(value(kUiGaterStep)*15)))line(x+5,981,x+65,981,cream(),2);}
+    if(value(kGaterTie)>.5&&value(kGaterState0+15)>=.25&&value(kGaterState0)>=.25)box(1274,960,22,3,C(aztec::skin::violet),C(aztec::skin::violet));
     panel(16,1006,540,136);text(L"FILTER",32,1017,100,22,13,cream());
-    panel(568,1006,736,136);text(L"REVERB",584,1017,100,22,13,cream());if(value(kReverbSource)>=.5){box(592,1110,8,8,value(kUiReverbGate)>.5?green():RGB(75,60,90),dark());text(L"RANDOM IMPULSE · 50% CHANCE · TAIL CONTINUES",614,1102,650,28,11,cream());}
+    panel(568,1006,736,136);text(L"REVERB",584,1017,100,22,13,cream());if(value(kReverbSource)>=.5){box(592,1110,8,8,value(kUiReverbGate)>.5?green():C(aztec::skin::filigreeDim),dark());text(L"RANDOM IMPULSE · 50% CHANCE · TAIL CONTINUES",614,1102,650,28,11,cream());}
     panel(16,1154,1288,128);text(L"FILTER SEQUENCER",32,1173,180,22,13,cream());
     if(value(kFilterSeqMode)>.5)text(L"SAMPLE & GLIDE - smooth random cutoff",32,1230,704,24,14,green(),true);
-    else for(int i=0;i<32;++i){double x=32+i*22.,v=qg::filterPattern(int(std::round(value(kFilterSeqPattern)*63.)),i);bool active=value(kFilterSeqOn)>.5&&i==int(std::round(value(kUiFilterSeqStep)*31.));box(x,1223,18,37,dark(),active?green():RGB(150,120,170));box(x+3,1255-25*(v+1)*.5,12,3+25*(v+1)*.5,active?green():RGB(89,56,115),dark());}
-    panel(16,1294,1288,56);text(L"MASTER",32,1312,78,22,13,cream());text(L"OUTPUT",994,1304,106,16,10,cream());for(int j=0;j<24;++j)box(994+j*4,1326,2,12,value(kUiLevel)>j/24.?(j>20?RGB(255,80,40):green()):RGB(26,42,33),dark());
+    else for(int i=0;i<32;++i){double x=32+i*22.,v=qg::filterPattern(int(std::round(value(kFilterSeqPattern)*63.)),i);bool active=value(kFilterSeqOn)>.5&&i==int(std::round(value(kUiFilterSeqStep)*31.));box(x,1223,18,37,dark(),active?green():C(aztec::skin::greenDim));box(x+3,1255-25*(v+1)*.5,12,3+25*(v+1)*.5,active?green():C(aztec::skin::greenDim),dark());}
+    panel(16,1294,1288,56);text(L"MASTER",32,1312,78,22,13,cream());text(L"OUTPUT",994,1304,106,16,10,cream());for(int j=0;j<24;++j)box(994+j*4,1326,2,12,value(kUiLevel)>j/24.?(j>20?C(aztec::skin::hot):C(aztec::skin::amber)):C(aztec::skin::meterOff),dark());
     for(const auto& c:controls){double v=value(c.id);std::wstring title(c.label,c.label+std::strlen(c.label));
-      if(c.kind==PanMode){const wchar_t* modes[]={L"MANUAL",L"ALTERNATE",L"RANDOM"};int mode=int(std::round(v*2));for(int i=0;i<3;++i){double x=c.x+i*c.w/3;box(x,c.y,c.w/3-3,c.h,mode==i?RGB(66,33,94):dark(),mode==i?green():cream());text(modes[i],x,c.y,c.w/3-3,c.h,9,cream(),true);}}
+      if(c.kind==PanMode){const wchar_t* modes[]={L"MANUAL",L"ALTERNATE",L"RANDOM"};int mode=int(std::round(v*2));for(int i=0;i<3;++i){double x=c.x+i*c.w/3;box(x,c.y,c.w/3-3,c.h,mode==i?C(aztec::skin::panelRaised):dark(),mode==i?green():cream());text(modes[i],x,c.y,c.w/3-3,c.h,9,cream(),true);}}
       else if(c.kind==Pan){text(L"L",c.x,c.y,16,16,10,cream());text(L"C",c.x+c.w/2-8,c.y,16,16,10,cream(),true);text(L"R",c.x+c.w-16,c.y,16,16,10,cream());box(c.x+4,c.y+23,c.w-8,3,RGB(80,100,80),dark());box(c.x+v*(c.w-8),c.y+18,8,13,green(),green());}
-      else if(c.kind==Knob){text(title,c.x,c.y,c.w,17,11,cream(),true);double cx=c.x+c.w/2,cy=c.y+43;box(cx-22,cy-22,44,44,RGB(41,26,59),RGB(89,59,112));for(int j=0;j<21;++j){double a=(135+j*13.5)*qg::tau/360.;box(cx+30*std::cos(a)-2,cy+30*std::sin(a)-2,4,4,j/20.<=v?green():RGB(41,36,56),dark());}knobCap(cx,cy,v);double a=(135+270*v)*qg::tau/360.;line(cx+6*std::cos(a),cy+6*std::sin(a),cx+22*std::cos(a),cy+22*std::sin(a),cream(),3);box(c.x+4,c.y+74,c.w-8,19,dark(),RGB(56,51,77));text(display(c.id,v),c.x+5,c.y+75,c.w-10,18,12,RGB(173,232,242),true);}
-      else if(c.kind==Slider){text(title,c.x,c.y,c.w,14,9,cream());box(c.x+4,c.y+20,c.w-8,4,RGB(71,61,89),dark());box(c.x+4,c.y+20,(c.w-8)*v,4,green(),green());art(453,636,24,32,c.x+v*(c.w-8)-2,c.y+13,12,16);if(c.h>=33)text(display(c.id,v),c.x,c.y+28,c.w,13,10,cream(),true);else text(display(c.id,v),c.x+100,c.y,c.w-100,13,9,cream(),true);}
-      else if(c.kind==Select){box(c.x,c.y,c.w,c.h,dark(),RGB(59,46,77));if(c.h>=38)text(title,c.x+7,c.y+3,c.w-20,12,8,cream());text(display(c.id,c.id==lfoID(selectedLfo,lWave)&&value(kModWaveRnd0+selectedLfo)>0.?value(kUiModWave0+selectedLfo):v)+L" ▾",c.x+7,c.y+(c.h>=38?17:5),c.w-14,21,11,cream());}
-      else{bool on=v>=.5;if(c.id>=kGrainEnabled&&c.id<=kRepeatEnabled)title=on?L"ON":L"OFF";box(c.x,c.y,c.w,c.h,on?RGB(19,51,22):RGB(19,14,28),on?green():RGB(74,48,97));if(c.kind==Pad){int step=int(c.id-(c.id>=kReverbStep0?kReverbStep0:kGlitchStep0));art(734,456,54,48,c.x+c.w/2-10,c.y+1,20,18);text(std::to_wstring(step+1),c.x,c.y+c.h-15,c.w,14,10,cream(),true);if(step==(c.id>=kReverbStep0?int(std::round(value(kUiReverb)*15)):play))line(c.x+4,c.y+c.h-3,c.x+c.w-4,c.y+c.h-3,cream(),2);}else{text(title,c.x+18,c.y,c.w-21,c.h,10,cream(),true);if(on)disc(c.x+10,c.y+c.h/2,6,RGB(61,122,31),RGB(61,122,31));disc(c.x+10,c.y+c.h/2,3,on?green():RGB(75,82,67),on?green():dark());}}
+      else if(c.kind==Knob){text(title,c.x,c.y,c.w,17,11,cream(),true);double cx=c.x+c.w/2,cy=c.y+43;box(cx-22,cy-22,44,44,RGB(41,26,59),C(aztec::skin::filigreeDim));for(int j=0;j<21;++j){double a=(135+j*13.5)*qg::tau/360.;box(cx+30*std::cos(a)-2,cy+30*std::sin(a)-2,4,4,j/20.<=v?green():C(aztec::skin::greenDim),dark());}knobCap(cx,cy,v);double a=(135+270*v)*qg::tau/360.;line(cx+6*std::cos(a),cy+6*std::sin(a),cx+22*std::cos(a),cy+22*std::sin(a),cream(),3);box(c.x+4,c.y+74,c.w-8,19,dark(),C(aztec::skin::hairline));text(display(c.id,v),c.x+5,c.y+75,c.w-10,18,12,C(aztec::skin::readout),true);}
+      else if(c.kind==Slider){text(title,c.x,c.y,c.w,14,9,cream());box(c.x+4,c.y+20,c.w-8,4,C(aztec::skin::hairline),dark());box(c.x+4,c.y+20,(c.w-8)*v,4,green(),green());art(453,636,24,32,c.x+v*(c.w-8)-2,c.y+13,12,16);if(c.h>=33)text(display(c.id,v),c.x,c.y+28,c.w,13,10,cream(),true);else text(display(c.id,v),c.x+100,c.y,c.w-100,13,9,cream(),true);}
+      else if(c.kind==Select){box(c.x,c.y,c.w,c.h,dark(),C(aztec::skin::borderDark));if(c.h>=38)text(title,c.x+7,c.y+3,c.w-20,12,8,cream());text(display(c.id,c.id==lfoID(selectedLfo,lWave)&&value(kModWaveRnd0+selectedLfo)>0.?value(kUiModWave0+selectedLfo):v)+L" ▾",c.x+7,c.y+(c.h>=38?17:5),c.w-14,21,11,cream());}
+      else{bool on=v>=.5;if(c.id>=kGrainEnabled&&c.id<=kRepeatEnabled)title=on?L"ON":L"OFF";box(c.x,c.y,c.w,c.h,on?RGB(19,51,22):C(aztec::skin::panelRaised),on?green():C(aztec::skin::filigreeDim));if(c.kind==Pad){int step=int(c.id-(c.id>=kReverbStep0?kReverbStep0:kGlitchStep0));art(734,456,54,48,c.x+c.w/2-10,c.y+1,20,18);text(std::to_wstring(step+1),c.x,c.y+c.h-15,c.w,14,10,cream(),true);if(step==(c.id>=kReverbStep0?int(std::round(value(kUiReverb)*15)):play))line(c.x+4,c.y+c.h-3,c.x+c.w-4,c.y+c.h-3,cream(),2);}else{text(title,c.x+18,c.y,c.w-21,c.h,10,cream(),true);if(on)disc(c.x+10,c.y+c.h/2,6,RGB(61,122,31),RGB(61,122,31));disc(c.x+10,c.y+c.h/2,3,on?green():RGB(75,82,67),on?green():dark());}}
     }
     box(1140,1312,144,26,dark(),green());text(L"UI SIZE ▾",1140,1312,144,26,11,cream(),true);
   }
