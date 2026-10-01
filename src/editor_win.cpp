@@ -27,7 +27,7 @@ static inline COLORREF C(skin::Rgb k){return RGB(k.r,k.g,k.b);}
 // Resolve a colour ROLE against the live (theme-aware) palette.
 static inline COLORREF C(int role){return C(skin::active().at(role));}
 static inline skin::Rgb C2(int role){return skin::active().at(role);}
-#define AZSKIN(k) C(aztec::skin::k)  // theme-aware reference to a skin colour
+#define AZSKIN(k) C(int(aztec::skin::k))  // COLORREF from live palette role
 constexpr double slotX[]={16,452,888};
 enum Kind{Knob,Slider,Toggle,Select,Pad,Pan,PanMode};
 struct Control{ParamID id;double x,y,w,h;Kind kind;const char* label;};

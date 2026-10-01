@@ -51,8 +51,11 @@ static NSColor* rgb(double r,double g,double b,double a=1.) {return [NSColor col
 static NSColor* C(aztec::skin::Rgb k,double a=1.) {return rgb(k.r/255.,k.g/255.,k.b/255.,a);}
 // Resolve a colour ROLE against the live (theme-aware) palette.
 static NSColor* C(int role,double a=1.) {return C(aztec::skin::active().at(role),a);}
-#define AZSKIN(k) C(aztec::skin::k)  // theme-aware reference to a skin colour
-#define AZCOL(k) aztec::skin::active().at(aztec::skin::k)  // raw Rgb of a role
+// Theme-aware reference: map the colour ROLE (kAccent, kPanel, ...) through
+// the live palette and return an NSColor. Passing the enum constant directly
+// would resolve to the static Rgb in namespace skin, not the active theme.
+#define AZSKIN(k) C(int(aztec::skin::k))  // NSColor from live palette role
+#define AZCOL(k) aztec::skin::C(aztec::skin::k)  // raw Rgb of a role (live)
 static NSColor* green() {return AZSKIN(kAccent);}
 static NSColor* cream() {return AZSKIN(kCream);}
 static NSColor* muted() {return AZSKIN(kMuted);}
