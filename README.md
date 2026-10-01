@@ -45,11 +45,9 @@ Upload the extracted archive contents to the root of a GitHub repository, or pla
 
 | Workflow | Output |
 |---|---|
-| `build-macos.yml` | Intel x86_64 VST3 targeting macOS 10.14 (Mojave) |
-| `build-silicon.yml` | Apple Silicon arm64 VST3 |
-| `build-windows.yml` | Windows 10/11 x64 installer and VST3 bundle ZIP |
+| `build-vst3.yml` | VST3 bundles only (no installer): macOS Intel x64, macOS Apple Silicon arm64, Windows 10/11 x64 — each published as a ZIP artifact containing `GrainsDosage.vst3` |
 
-Each workflow builds against its pinned Steinberg VST3 SDK, runs the regression tests and platform GUI smoke test, and publishes installable artifacts. The Mac builds and Windows build must run on their respective GitHub-hosted runners; a Linux test run is not a substitute for installing in Cubase on each target system.
+The workflow builds against its pinned Steinberg VST3 SDK, runs the regression tests and platform GUI smoke test, and publishes portable `.vst3` bundle ZIPs. There is no installer step: download the ZIP for your platform, unzip, and copy the `GrainsDosage.vst3` folder to your DAW's VST3 path. The Mac jobs and the Windows job run on their respective GitHub-hosted runners; a Linux test run is not a substitute for installing in Cubase on each target system.
 
 ## Audio pipeline and compatibility
 

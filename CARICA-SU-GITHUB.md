@@ -6,11 +6,7 @@ I workflow sono già veri file .yml dentro .github/workflows: non devi rinominar
 
 | Workflow | Risultato |
 | --- | --- |
-| build-macos.yml | VST3 Intel con target macOS Mojave 10.14 |
-| build-silicon.yml | VST3 Apple Silicon |
-| release-macos-installer.yml | Installer Mac .pkg universal Intel + Apple Silicon; avviabile manualmente da Actions |
-| build-macos-pkg.yml | Installer Mac .pkg solo Apple Silicon |
-| build-windows.yml | VST3 Windows x64 e installer .exe |
+| build-vst3.yml | Unico workflow: genera solo i bundle .vst3 (niente installer) — macOS Intel x64, macOS Apple Silicon arm64 e Windows 10/11 x64, ciascuno come ZIP negli Artifacts del run |
 
 Su Mac, se la cartella .github non appare nel Finder, premi Cmd + Shift + punto. Assicurati che sia presente anche nella repository dopo il caricamento.
 
