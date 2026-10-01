@@ -94,7 +94,7 @@ class WinEditor final:public CPluginView{
     if(!(p.flags&ParameterInfo::kIsList)&&out.find(L'.')!=std::wstring::npos){wchar_t b[64];swprintf(b,64,L"%.2f",wcstod(out.c_str(),nullptr));out=b;while(out.back()==L'0')out.pop_back();if(out.back()==L'.')out.pop_back();}
     if(p.units[0]){out+=L" ";out+=reinterpret_cast<wchar_t*>(p.units);}return out;}
   std::wstring presetName=L"PRESETS ▾";
-  void loadSkin(){aztec::theme::loadSkinFile(aztec::theme::defaultPath());}
+  void loadSkinArt(){aztec::theme::loadSkinFile(aztec::theme::defaultPath());}
   void saveSkin(){aztec::theme::saveSkinFile(aztec::theme::defaultPath());}
   void skinMenu(){
     HMENU m=CreatePopupMenu();int n=1;for(size_t i=0;i<aztec::theme::themes().size();++i){auto& t=aztec::theme::themes()[i];std::wstring title;for(const char* c=t.title;*c;++c)title+=wchar_t(*c);AppendMenuW(m,MF_STRING,n++,title.c_str());}
@@ -102,11 +102,11 @@ class WinEditor final:public CPluginView{
     int origId=n++;AppendMenuW(m,MF_STRING,origId,L"Original (Astral)");
     int reloadId=n++;AppendMenuW(m,MF_STRING,reloadId,L"Reload skin.txt");
     // Check-mark the live theme so the current GUI is obvious at a glance.
-    MenuCheckMenuItem(m,UINT(aztec::theme::currentTheme())+1,MF_BYCOMMAND|(aztec::theme::customized()?MF_UNCHECKED:MF_CHECKED));
-    if(aztec::theme::currentTheme()==0&&!aztec::theme::customized())MenuCheckMenuItem(m,origId,MF_BYCOMMAND|MF_CHECKED);
+    CheckMenuItem(m,UINT(aztec::theme::currentTheme())+1,MF_BYCOMMAND|(aztec::theme::customized()?MF_UNCHECKED:MF_CHECKED));
+    if(aztec::theme::currentTheme()==0&&!aztec::theme::customized())CheckMenuItem(m,origId,MF_BYCOMMAND|MF_CHECKED);
     POINT p;GetCursorPos(&p);int pick=TrackPopupMenu(m,TPM_RETURNCMD,p.x,p.y,0,window,nullptr);DestroyMenu(m);
     if(!pick)return;
-    if(pick==reloadId){loadSkin();}
+    if(pick==reloadId){loadSkinArt();}
     else if(pick==origId){aztec::theme::applySkin(0,{});DeleteFileW(L"grainsdosage-skin.txt");}
     else{aztec::theme::applySkin(pick-1,{});saveSkin();}
     InvalidateRect(window,nullptr,FALSE);
