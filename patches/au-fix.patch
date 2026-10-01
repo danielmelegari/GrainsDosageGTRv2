@@ -1,0 +1,1458 @@
+From 8de475f1a1be697f119f2edfac7312f91430c7a0 Mon Sep 17 00:00:00 2001
+From: Daniel Melegari <danielmelegari@users.noreply.github.com>
+Date: Thu, 1 Oct 2026 22:08:46 +0000
+Subject: [PATCH 1/3] Add Logic Pro AudioUnit (AU v2) build workflow + optional
+ AU wrapper in CMake
+
+---
+ .github/workflows/build-au-logic.yml | 186 +++++++++++++++++++++++++++
+ .gitignore                           |   2 +-
+ CMakeLists.txt                       |  23 ++++
+ assets/upload-ready.tgz              | Bin 0 -> 35388 bytes
+ src/editor_mac.mm                    |  15 ++-
+ src/editor_win.cpp                   |  13 +-
+ src/skin_spec.h                      |  34 +++--
+ 7 files changed, 250 insertions(+), 23 deletions(-)
+ create mode 100644 .github/workflows/build-au-logic.yml
+ create mode 100644 assets/upload-ready.tgz
+
+diff --git a/.github/workflows/build-au-logic.yml b/.github/workflows/build-au-logic.yml
+new file mode 100644
+index 0000000..652e71f
+--- /dev/null
++++ b/.github/workflows/build-au-logic.yml
+@@ -0,0 +1,186 @@
++name: Build AudioUnit for Logic Pro (no installer)
++
++# Produces ONLY the GrainsDosage.component (AU v2) bundles as zip artifacts,
++# built with the Steinberg VST3->AudioUnit wrapper from the same sources as the
++# VST3 build. No .pkg, nothing to install: unzip into
++#   ~/Library/Audio/Plug-Ins/Components/
++# and rescan in Logic Pro.
++#
++# Run manually: Actions tab -> "Build AudioUnit for Logic Pro" -> Run workflow.
++
++on:
++  workflow_dispatch:
++  push:
++    branches: [main]
++    paths:
++      - 'src/**'
++      - 'assets/**'
++      - 'CMakeLists.txt'
++      - '.github/workflows/build-au-logic.yml'
++
++permissions:
++  contents: read
++
++jobs:
++  # ─────────────────────────── macOS Intel (x86_64) ───────────────────────────
++  au-macos-intel:
++    runs-on: macos-15-intel
++    timeout-minutes: 30
++    env:
++      MACOSX_DEPLOYMENT_TARGET: '10.14'
++    steps:
++      - name: Download project
++        uses: actions/checkout@v4
++
++      - name: Locate project sources
++        shell: bash
++        run: |
++          set -euo pipefail
++          if [[ -f GrainsDosage/CMakeLists.txt && -d GrainsDosage/src ]]; then
++            project_dir="$GITHUB_WORKSPACE/GrainsDosage"
++          elif [[ -f CMakeLists.txt && -d src ]]; then
++            project_dir="$GITHUB_WORKSPACE"
++          else
++            echo 'GrainsDosage sources not found.' >&2
++            exit 1
++          fi
++          printf 'PROJECT_DIR=%s\n' "$project_dir" >> "$GITHUB_ENV"
++
++      - name: Download tested Steinberg SDK
++        shell: bash
++        run: |
++          set -euo pipefail
++          git clone --no-checkout https://github.com/steinbergmedia/vst3sdk.git "$RUNNER_TEMP/vst3sdk"
++          git -C "$RUNNER_TEMP/vst3sdk" checkout 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
++          git -C "$RUNNER_TEMP/vst3sdk" submodule update --init --recursive --depth 1
++
++      - name: Configure AudioUnit build (Intel)
++        shell: bash
++        run: |
++          set -euo pipefail
++          cd "$PROJECT_DIR"
++          cmake -S . -B build-au -G Xcode \
++            -DVST3_SDK_ROOT="$RUNNER_TEMP/vst3sdk" \
++            -DCMAKE_OSX_ARCHITECTURES=x86_64 \
++            -DCMAKE_OSX_DEPLOYMENT_TARGET=10.14 \
++            -DSMTG_CREATE_PLUGIN_LINK=OFF \
++            -DSMTG_BUILD_UNIVERSAL_BINARY=OFF \
++            -DSMTG_ENABLE_AUV2_PLUGIN=ON \
++            -DSMTG_RUN_VST_VALIDATOR=OFF \
++            -DGRAINS_BUILD_TESTS=OFF
++
++      - name: Build AudioUnit component
++        shell: bash
++        run: |
++          set -euo pipefail
++          cd "$PROJECT_DIR"
++          cmake --build build-au --config Release --parallel 4 \
++            2>&1 | tee "$GITHUB_WORKSPACE/build-au-macos-intel.log"
++
++      - name: Locate, sign and package the .component bundle
++        shell: bash
++        run: |
++          set -euo pipefail
++          cd "$PROJECT_DIR"
++          comp="$(find build-au -type d -name 'GrainsDosage.component' -path '*Release*' | head -n 1)"
++          if [[ -z "$comp" ]]; then
++            echo 'GrainsDosage.component not found after build.' >&2
++            find build-au -maxdepth 6 -type d | sed -n 1,80p >&2
++            exit 1
++          fi
++          echo "Component: $comp"
++          binary="$comp/Contents/MacOS/GrainsDosage"
++          test -f "$binary"
++          lipo "$binary" -verify_arch x86_64
++          codesign --force --sign - --timestamp=none "$comp"
++          codesign --verify --strict "$comp"
++          mkdir -p "$GITHUB_WORKSPACE/dist"
++          ditto -c -k --sequesterRsrc --keepParent "$comp" \
++            "$GITHUB_WORKSPACE/dist/GrainsDosage-macOS-x64.component.zip"
++
++      - name: Upload AU component only
++        uses: actions/upload-artifact@v4
++        with:
++          name: GrainsDosage-macOS-Intel-x64-AU-LogicPro
++          path: dist/GrainsDosage-macOS-x64.component.zip
++          if-no-files-found: error
++          retention-days: 14
++
++  # ────────────────────────── macOS Apple Silicon (arm64) ─────────────────────
++  au-macos-arm64:
++    runs-on: macos-15
++    timeout-minutes: 30
++    steps:
++      - name: Checkout repository
++        uses: actions/checkout@v4
++
++      - name: Locate project sources
++        shell: bash
++        run: |
++          set -euo pipefail
++          if [[ -f GrainsDosage/CMakeLists.txt && -d GrainsDosage/src ]]; then
++            project_dir="$GITHUB_WORKSPACE/GrainsDosage"
++          elif [[ -f CMakeLists.txt && -d src ]]; then
++            project_dir="$GITHUB_WORKSPACE"
++          else
++            echo 'GrainsDosage sources not found.' >&2
++            exit 1
++          fi
++          echo "PROJECT_DIR=$project_dir" >> "$GITHUB_ENV"
++
++      - name: Download Steinberg VST3 SDK
++        shell: bash
++        run: |
++          set -euo pipefail
++          git clone --no-checkout https://github.com/steinbergmedia/vst3sdk.git "$RUNNER_TEMP/vst3sdk"
++          git -C "$RUNNER_TEMP/vst3sdk" checkout 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
++          git -C "$RUNNER_TEMP/vst3sdk" submodule update --init --recursive --depth 1
++
++      - name: Configure AudioUnit build (Apple Silicon)
++        shell: bash
++        run: |
++          set -euo pipefail
++          cd "$PROJECT_DIR"
++          cmake -S . -B build-au -G Xcode \
++            -DVST3_SDK_ROOT="$RUNNER_TEMP/vst3sdk" \
++            -DCMAKE_OSX_ARCHITECTURES=arm64 \
++            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
++            -DSMTG_CREATE_PLUGIN_LINK=OFF \
++            -DSMTG_BUILD_UNIVERSAL_BINARY=OFF \
++            -DSMTG_ENABLE_AUV2_PLUGIN=ON \
++            -DSMTG_RUN_VST_VALIDATOR=OFF \
++            -DGRAINS_BUILD_TESTS=OFF
++
++      - name: Build AudioUnit component
++        shell: bash
++        run: |
++          set -euo pipefail
++          cd "$PROJECT_DIR"
++          cmake --build build-au --config Release --parallel 4 \
++            2>&1 | tee "$GITHUB_WORKSPACE/build-au-macos-arm64.log"
++
++      - name: Locate, sign and package the .component bundle
++        shell: bash
++        run: |
++          set -euo pipefail
++          cd "$PROJECT_DIR"
++          comp="$(find build-au -type d -name 'GrainsDosage.component' -path '*Release*' | head -n 1)"
++          if [[ -z "$comp" ]]; then
++            echo 'GrainsDosage.component not found after build.' >&2
++            find build-au -maxdepth 6 -type d | sed -n 1,80p >&2
++            exit 1
++          fi
++          echo "Component: $comp"
++          codesign --force --sign - --timestamp=none "$comp"
++          codesign --verify --strict "$comp"
++          mkdir -p "$GITHUB_WORKSPACE/dist"
++          ditto -c -k --sequesterRsrc --keepParent "$comp" \
++            "$GITHUB_WORKSPACE/dist/GrainsDosage-macOS-arm64.component.zip"
++
++      - name: Upload AU component only
++        uses: actions/upload-artifact@v4
++        with:
++          name: GrainsDosage-macOS-AppleSilicon-arm64-AU-LogicPro
++          path: dist/GrainsDosage-macOS-arm64.component.zip
++          if-no-files-found: error
++          retention-days: 14
+diff --git a/.gitignore b/.gitignore
+index a952a55..6b4bdee 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,2 +1,2 @@
+-# Compressed archives
++# Compressed files
+ *.tgz
+\ No newline at end of file
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 49df9d2..edfad21 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -15,6 +15,13 @@ set(SMTG_ENABLE_VST3_HOSTING_EXAMPLES OFF CACHE BOOL "" FORCE)
+ set(SMTG_ENABLE_VSTGUI_SUPPORT OFF CACHE BOOL "" FORCE)
+ set(SMTG_RUN_VST_VALIDATOR ON CACHE BOOL "" FORCE)
+ 
++# AudioUnit (AU v2) wrapper support for macOS — needed by the Logic Pro AU build.
++# Enabled only on Apple; the VST3-only workflow is unaffected because the SDK's
++# own default (OFF) stays in place unless a caller passes -DSMTG_ENABLE_AUV2_PLUGIN=ON.
++if(APPLE AND SMTG_ENABLE_AUV2_PLUGIN)
++  set(SMTG_ENABLE_AUDIOUNIT_WRAPPER ON CACHE BOOL "Build the Steinberg AUv2 wrapper" FORCE)
++endif()
++
+ if(NOT DEFINED VST3_SDK_ROOT)
+   message(FATAL_ERROR "Set -DVST3_SDK_ROOT=/path/to/vst3sdk (with submodules)")
+ endif()
+@@ -59,6 +66,22 @@ if(APPLE)
+   find_library(AZTEC_COCOA_FRAMEWORK Cocoa REQUIRED)
+   find_library(AZTEC_COREFOUNDATION_FRAMEWORK CoreFoundation REQUIRED)
+   target_link_libraries(GrainsDosage PRIVATE ${AZTEC_COCOA_FRAMEWORK} ${AZTEC_COREFOUNDATION_FRAMEWORK})
++
++  # Optional AudioUnit (AU v2) variant for Logic Pro / GarageBand. Enabled with
++  # -DSMTG_ENABLE_AUV2_PLUGIN=ON; adds the Steinberg VST3->AU wrapper sources
++  # and links the required Apple frameworks onto the same plugin target.
++  if(SMTG_ENABLE_AUV2_PLUGIN)
++    smtg_target_add_plugin_sources(GrainsDosage
++      "${VST3_SDK_ROOT}/public.sdk/source/vst/auWRAPPER"
++      "${VST3_SDK_ROOT}/public.sdk/source/vst/shared/vst3classids.cpp")
++    find_library(AU_AUDIOUNIT_FRAMEWORK AudioUnit REQUIRED)
++    find_library(AU_AUDIOTOOLBOX_FRAMEWORK AudioToolbox REQUIRED)
++    find_library(AU_COREAUDIO_FRAMEWORK CoreAudio REQUIRED)
++    find_library(AU_CARBON_FRAMEWORK Carbon REQUIRED)
++    target_link_libraries(GrainsDosage PRIVATE
++      ${AU_AUDIOUNIT_FRAMEWORK} ${AU_AUDIOTOOLBOX_FRAMEWORK}
++      ${AU_COREAUDIO_FRAMEWORK} ${AU_CARBON_FRAMEWORK})
++  endif()
+   # A native smoke test and screenshot, run on the macOS CI runner.
+   add_executable(aztec_gui_smoke src/gui_smoke.mm src/editor_mac.mm)
+   set_source_files_properties(src/gui_smoke.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
+diff --git a/assets/upload-ready.tgz b/assets/upload-ready.tgz
+new file mode 100644
+index 0000000000000000000000000000000000000000..5bb177e64b1ec6b326a21adfbaad10f401f52a45
+GIT binary patch
+literal 35388
+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
+
+literal 0
+HcmV?d00001
+
+diff --git a/src/editor_mac.mm b/src/editor_mac.mm
+index 734a2a0..bf0c470 100644
+--- a/src/editor_mac.mm
++++ b/src/editor_mac.mm
+@@ -60,6 +60,7 @@ static NSColor* green() {return AZSKIN(kAccent);}
+ static NSColor* cream() {return AZSKIN(kCream);}
+ static NSColor* muted() {return AZSKIN(kMuted);}
+ static NSColor* dark() {return AZSKIN(kBgDeep);}
++static NSColor* onText() {return AZSKIN(kOnText);}   // dark text for lit green fills
+ static void box(NSRect r,NSColor* fill,NSColor* stroke,double radius=8.) {
+   NSBezierPath* p=[NSBezierPath bezierPathWithRoundedRect:r xRadius:radius yRadius:radius];
+   [fill setFill];[p fill];
+@@ -202,7 +203,7 @@ static constexpr double slotX[3]={16.,452.,888.};
+ - (void)drawControl:(const aztec::Control&)c {
+   using namespace aztec;NSRect r=c.rect;double v=std::clamp(owner->value(c.id),0.,1.);
+   NSString* title=[NSString stringWithUTF8String:c.label.c_str()];
+-  if(c.kind==PanMode){const char* modes[]={"MANUAL","ALTERNATE","RANDOM"};int mode=int(std::round(v*2.));for(int i=0;i<3;++i){NSRect b=NSMakeRect(r.origin.x+i*r.size.width/3.,r.origin.y,r.size.width/3.-3,r.size.height);box(b,mode==i?AZSKIN(kAccentGlow):dark(),mode==i?green():muted(),4);label([NSString stringWithUTF8String:modes[i]],NSInsetRect(b,2,6),9,cream(),true);}return;}
++  if(c.kind==PanMode){const char* modes[]={"MANUAL","ALTERNATE","RANDOM"};int mode=int(std::round(v*2.));for(int i=0;i<3;++i){NSRect b=NSMakeRect(r.origin.x+i*r.size.width/3.,r.origin.y,r.size.width/3.-3,r.size.height);box(b,mode==i?AZSKIN(kAccentGlow):dark(),mode==i?green():muted(),4);label([NSString stringWithUTF8String:modes[i]],NSInsetRect(b,2,6),9,mode==i?onText():cream(),true);}return;}
+   if(c.kind==Pan){label(@"L",NSMakeRect(r.origin.x,r.origin.y,16,16),10,cream());label(@"C",NSMakeRect(NSMidX(r)-8,r.origin.y,16,16),10,cream(),true);label(@"R",NSMakeRect(NSMaxX(r)-16,r.origin.y,16,16),10,cream());box(NSMakeRect(r.origin.x+4,r.origin.y+23,r.size.width-8,3),muted(),nil,1);box(NSMakeRect(r.origin.x+v*(r.size.width-8),r.origin.y+18,8,13),green(),nil,3);return;}
+   if(c.kind==Knob){
+     label(title,NSMakeRect(r.origin.x,r.origin.y,r.size.width,16),11,cream(),true);
+@@ -250,13 +251,13 @@ static constexpr double slotX[3]={16.,452.,888.};
+     bool on=v>=.5;if(c.id>=kGrainEnabled&&c.id<=kRepeatEnabled)title=on?@"ON":@"OFF";box(r,on?AZSKIN(kAccentGlow):AZSKIN(kPanelRaised),on?green():AZSKIN(kFiligreeDim),6);
+     if(on)box(NSMakeRect(r.origin.x+6,NSMidY(r)-6,12,12),AZSKIN(kAccentBright),nil,6);
+     box(NSMakeRect(r.origin.x+9,NSMidY(r)-3,6,6),on?green():muted(),nil,3);
+-    label(title,NSMakeRect(r.origin.x+20,r.origin.y+(r.size.height-14)/2.,r.size.width-25,16),10,on?cream():muted(),true);
++    label(title,NSMakeRect(r.origin.x+20,r.origin.y+(r.size.height-14)/2.,r.size.width-25,16),10,on?onText():muted(),true);
+   }else{
+     bool on=v>=.5;box(r,on?AZSKIN(kAccentGlow):AZSKIN(kPanelRaised),on?green():AZSKIN(kFiligreeDim),5);
+     int step=c.id>=kReverbStep0?int(c.id-kReverbStep0)+1:c.id>=kGlitchStep0?int(c.id-kGlitchStep0)+1:int(c.id-kStep0)+1;
+     if(step==1+int(std::round(owner->value(c.id>=kReverbStep0?kUiReverb:kUiStep)*15.)))box(NSInsetRect(r,1,1),[NSColor clearColor],cream(),4);
+     [self art:NSMakeRect(734,456,54,48) in:NSMakeRect(NSMidX(r)-10,r.origin.y+1,20,18) opacity:(on?1.:.35)];
+-    label([NSString stringWithFormat:@"%d",step],NSMakeRect(r.origin.x,NSMaxY(r)-15,r.size.width,14),10,on?cream():muted(),true);
++    label([NSString stringWithFormat:@"%d",step],NSMakeRect(r.origin.x,NSMaxY(r)-15,r.size.width,14),10,on?onText():muted(),true);
+   }
+ }
+ - (void)drawRect:(NSRect)dirty {
+@@ -307,8 +308,8 @@ static constexpr double slotX[3]={16.,452.,888.};
+         box(NSMakeRect(a+4,b+2+press,35,1),enabled?AZSKIN(kFiligree):AZSKIN(kFiligreeDim),nil,0);
+         box(NSMakeRect(a+2,b+5+press,1,19),AZSKIN(kFiligreeDim),nil,0);
+         box(NSMakeRect(a+3,b+26+press,37,1),AZSKIN(kWell),nil,0);
+-        label([NSString stringWithFormat:@"%d",i+1],NSMakeRect(a+3,b+2+press,37,13),11,enabled?cream():muted(),true,11);
+-        label(owner->display(aztec::kRepeatRate0+i,owner->value(aztec::kRepeatRate0+i),false),NSMakeRect(a+3,b+16+press,37,10),9,enabled?cream():muted(),true,9);
++        label([NSString stringWithFormat:@"%d",i+1],NSMakeRect(a+3,b+2+press,37,13),11,enabled?onText():muted(),true,11);
++        label(owner->display(aztec::kRepeatRate0+i,owner->value(aztec::kRepeatRate0+i),false),NSMakeRect(a+3,b+16+press,37,10),9,enabled?onText():muted(),true,9);
+         if(i==int(std::round(owner->value(aztec::kUiStep)*15.)))box(NSMakeRect(a+5,b+30,33,2),green(),nil,1);
+       }
+     }
+@@ -344,8 +345,8 @@ static constexpr double slotX[3]={16.,452.,888.};
+   NSBezierPath* cross=[NSBezierPath bezierPath];[cross moveToPoint:NSMakePoint(px,pad.origin.y)];[cross lineToPoint:NSMakePoint(px,NSMaxY(pad))];[cross moveToPoint:NSMakePoint(pad.origin.x,py)];[cross lineToPoint:NSMakePoint(NSMaxX(pad),py)];[[AZSKIN(kAccent) colorWithAlphaComponent:.25] setStroke];cross.lineWidth=1.;[cross stroke];
+   box(NSMakeRect(px-5,py-5,10,10),green(),cream(),5);
+   [self panel:NSMakeRect(16,766,1288,108)];label(@"RESLICE",NSMakeRect(32,781,108,24),14,muted());
+-  box(NSMakeRect(1052,778,216,28),AZSKIN(kAccentGlow),green(),5);label(@"RANDOM ONCE",NSMakeRect(1052,782,216,20),12,cream(),true);
+-  for(int i=0;i<16;++i){double x=32+i*78.;bool on=owner->value(aztec::kResliceStep0+i)>.5;box(NSMakeRect(x,823,70,40),on?AZSKIN(kAccentGlow):dark(),selectedReslice==i?cream():muted(),5);label([NSString stringWithFormat:@"%02d → %02d",i+1,1+int(std::round(owner->value(owner->value(aztec::kResliceRndOn)>.5?aztec::kUiResliceSource0+i:aztec::kResliceIndex0+i)*15.))],NSMakeRect(x,827,70,18),10,on?green():muted(),true);if(i==int(std::round(owner->value(aztec::kUiResliceStep)*15.)))box(NSMakeRect(x+5,858,60,2),owner->value(aztec::kUiResliceActive)>.5?green():cream(),nil,1);}
++  box(NSMakeRect(1052,778,216,28),AZSKIN(kAccentGlow),green(),5);label(@"RANDOM ONCE",NSMakeRect(1052,782,216,20),12,onText(),true);
++  for(int i=0;i<16;++i){double x=32+i*78.;bool on=owner->value(aztec::kResliceStep0+i)>.5;box(NSMakeRect(x,823,70,40),on?AZSKIN(kAccentGlow):dark(),selectedReslice==i?cream():muted(),5);label([NSString stringWithFormat:@"%02d → %02d",i+1,1+int(std::round(owner->value(owner->value(aztec::kResliceRndOn)>.5?aztec::kUiResliceSource0+i:aztec::kResliceIndex0+i)*15.))],NSMakeRect(x,827,70,18),10,on?onText():muted(),true);if(i==int(std::round(owner->value(aztec::kUiResliceStep)*15.)))box(NSMakeRect(x+5,858,60,2),owner->value(aztec::kUiResliceActive)>.5?green():cream(),nil,1);}
+   [self panel:NSMakeRect(16,886,1288,108)];label(@"GATER",NSMakeRect(32,901,104,24),14,muted());
+   label(@"CLICK: WET / OFF     SHIFT-CLICK: LATCH RELEASE",NSMakeRect(760,876,500,16),9,muted(),true);
+   for(int i=0;i<16;++i){double x=32+i*78.;int state=owner->value(aztec::kGaterState0+i)>=.25?1:0;if(owner->value(aztec::kGaterEnabled)>.5&&owner->value(aztec::kGaterStepRnd)>.5)state=owner->value(aztec::kUiGaterState0+i)>=.5?1:0;bool release=owner->value(aztec::kGaterRelease0+i)>=.5;double length=owner->value(aztec::kGaterLengthRnd)>.5?owner->value(aztec::kUiGaterLength0+i):.05+.95*owner->value(aztec::kGaterLength0+i);double sustain=owner->value(aztec::kGaterSustain0+i);NSColor* color=release?AZSKIN(kRelease):state?green():muted();
+diff --git a/src/editor_win.cpp b/src/editor_win.cpp
+index b68d538..aed2add 100644
+--- a/src/editor_win.cpp
++++ b/src/editor_win.cpp
+@@ -28,6 +28,7 @@ static inline COLORREF C(skin::Rgb k){return RGB(k.r,k.g,k.b);}
+ static inline COLORREF C(int role){return C(skin::active().at(role));}
+ static inline skin::Rgb C2(int role){return skin::active().at(role);}
+ #define AZSKIN(k) C(int(aztec::skin::k))  // COLORREF from live palette role
++#define ONTEXT() AZSKIN(kOnText)             // dark text for lit green fills
+ constexpr double slotX[]={16,452,888};
+ enum Kind{Knob,Slider,Toggle,Select,Pad,Pan,PanMode};
+ struct Control{ParamID id;double x,y,w,h;Kind kind;const char* label;};
+@@ -198,8 +199,8 @@ class WinEditor final:public CPluginView{
+           line(a+4,b+2+press,a+39,b+2+press,on?AZSKIN(kFiligree):AZSKIN(kFiligreeDim));
+           line(a+2,b+5+press,a+2,b+24+press,AZSKIN(kFiligreeDim));
+           line(a+3,b+26+press,a+40,b+26+press,AZSKIN(kWell));
+-          text(std::to_wstring(j+1),a+3,b+2+press,37,13,11,cream(),true,11);
+-          text(display(kRepeatRate0+j,value(kRepeatRate0+j)),a+3,b+16+press,37,10,9,on?cream():AZSKIN(kMuted),true,9);
++          text(std::to_wstring(j+1),a+3,b+2+press,37,13,11,on?ONTEXT():cream(),true,11);
++          text(display(kRepeatRate0+j,value(kRepeatRate0+j)),a+3,b+16+press,37,10,9,on?ONTEXT():AZSKIN(kMuted),true,9);
+           if(j==play)line(a+5,b+30,a+38,b+30,green(),2);
+         }
+       }
+@@ -209,8 +210,8 @@ class WinEditor final:public CPluginView{
+     box(32,613,220,64,dark(),green());double cycle=std::round(value(kUiLfoCycle0+selectedLfo)*4294967295.-2147483648.);int64_t epoch=int64_t(std::round(value(kUiLfoEpoch0+selectedLfo)*4294967295.-2147483648.));qg::Lfo preview;preview.prepare(0x13579BDFULL+uint64_t(selectedLfo)*104729+(value(lfoID(selectedLfo,lReset))>=.5?uint64_t(epoch)*0x9e3779b97f4a7c15ULL:0));qg::LfoSettings shape;shape.enabled=true;shape.beats=1.;shape.wave=int(std::round(value(value(kModWaveRnd0+selectedLfo)>0.?kUiModWave0+selectedLfo:lfoID(selectedLfo,lWave))*129));shape.randomSteps=1+int(std::round(value(kRandomSteps0+selectedLfo)*63));shape.depth=value(lfoID(selectedLfo,lDepth));shape.phase=0.;shape.glide=.01+.99*value(lfoID(selectedLfo,lGlide));double prev=640;for(int j=0;j<=210;++j){double y=640-preview.process(shape,cycle+j/210.,48000.,false,0)*21;if(j)line(36+j,prev,37+j,y,green());prev=y;}
+     double cursor=37.+210.*value(kUiLfoPhase0+selectedLfo);line(cursor,617,cursor,661,cream(),2);
+     panel(864,516,440,236);text(L"XY MORPH",880,526,240,28,13,cream());box(880,566,168,166,dark(),green());if(spriteDC[5]){BITMAP nb{};GetObjectW(sprites[5],sizeof(nb),&nb);int om=SetStretchBltMode(dc,HALFTONE);StretchBlt(dc,880,566,168,166,spriteDC[5],0,0,nb.bmWidth,nb.bmHeight,SRCCOPY);SetStretchBltMode(dc,om);}double px=880+168*value(kXYX),py=732-166*value(kXYY);line(px,566,px,732,C(skin::scale(C2(skin::kAccent),.35)));line(880,py,1048,py,C(skin::scale(C2(skin::kAccent),.35)));for(int i=0;i<8;++i){double a=i*qg::tau/8.;for(int j=i+1;j<8;++j){double b=j*qg::tau/8.;line(964+72*std::cos(a),649+71*std::sin(a),964+72*std::cos(b),649+71*std::sin(b),AZSKIN(kViolet));}}box(px-5,py-5,10,10,green(),cream());
+-    panel(16,766,1288,108);text(L"RESLICE",32,781,108,24,14,AZSKIN(kMuted));box(1052,778,216,28,AZSKIN(kAccentGlow),green());text(L"RANDOM ONCE",1052,778,216,28,12,cream(),true);
+-    for(int i=0;i<16;++i){double x=32+i*78.;bool on=value(kResliceStep0+i)>.5;box(x,823,70,40,on?AZSKIN(kAccentGlow):dark(),selectedReslice==i?cream():AZSKIN(kMuted));text(std::to_wstring(i+1)+L" → "+std::to_wstring(1+int(std::round(value(value(kResliceRndOn)>.5?kUiResliceSource0+i:kResliceIndex0+i)*15))),x,827,70,18,10,on?green():cream(),true);if(i==int(std::round(value(kUiResliceStep)*15)))line(x+5,858,x+65,858,value(kUiResliceActive)>.5?green():cream(),2);}
++    panel(16,766,1288,108);text(L"RESLICE",32,781,108,24,14,AZSKIN(kMuted));box(1052,778,216,28,AZSKIN(kAccentGlow),green());text(L"RANDOM ONCE",1052,778,216,28,12,ONTEXT(),true);
++    for(int i=0;i<16;++i){double x=32+i*78.;bool on=value(kResliceStep0+i)>.5;box(x,823,70,40,on?AZSKIN(kAccentGlow):dark(),selectedReslice==i?cream():AZSKIN(kMuted));text(std::to_wstring(i+1)+L" → "+std::to_wstring(1+int(std::round(value(value(kResliceRndOn)>.5?kUiResliceSource0+i:kResliceIndex0+i)*15))),x,827,70,18,10,on?ONTEXT():cream(),true);if(i==int(std::round(value(kUiResliceStep)*15)))line(x+5,858,x+65,858,value(kUiResliceActive)>.5?green():cream(),2);}
+     panel(16,886,1288,108);text(L"GATER",32,901,104,24,14,AZSKIN(kMuted));text(L"CLICK: WET / OFF     SHIFT-CLICK: LATCH RELEASE",760,876,500,16,9,AZSKIN(kMuted),true);
+     for(int i=0;i<16;++i){double x=32+i*78.;int state=value(kGaterState0+i)>=.25?1:0;if(value(kGaterEnabled)>.5&&value(kGaterStepRnd)>.5)state=value(kUiGaterState0+i)>=.5?1:0;bool release=value(kGaterRelease0+i)>=.5;double length=value(kGaterLengthRnd)>.5?value(kUiGaterLength0+i):.05+.95*value(kGaterLength0+i),sustain=value(kGaterSustain0+i);COLORREF color=release?AZSKIN(kRelease):state?green():AZSKIN(kMuted);box(x,943,70,40,dark(),selectedGate==i?cream():color);text(std::to_wstring(i+1)+(release?L" REL":state?L" WET":value(kGaterLatch)>.5?L" HOLD":L" OFF"),x+2,944,66,17,10,color,true);box(x+5,965,60,4,AZSKIN(kBorderDark),dark());box(x+5,965,60*length,4,color,color);box(x+5,973,60,4,AZSKIN(kBorderDark),dark());box(x+5,973,60*sustain,4,AZSKIN(kViolet),AZSKIN(kViolet));if(value(kGaterTie)>.5&&state&&!release){int next=(i+1)&15;bool nextOn=value(kGaterState0+next)>=.25&&value(kGaterRelease0+next)<.5;if(nextOn)box(x+71,960,7,3,AZSKIN(kViolet),AZSKIN(kViolet));}if(value(kGaterEnabled)>.5&&i==int(std::round(value(kUiGaterStep)*15)))line(x+5,981,x+65,981,cream(),2);}
+     if(value(kGaterTie)>.5&&value(kGaterState0+15)>=.25&&value(kGaterState0)>=.25)box(1274,960,22,3,AZSKIN(kViolet),AZSKIN(kViolet));
+@@ -221,12 +222,12 @@ class WinEditor final:public CPluginView{
+     else for(int i=0;i<32;++i){double x=32+i*22.,v=qg::filterPattern(int(std::round(value(kFilterSeqPattern)*63.)),i);bool active=value(kFilterSeqOn)>.5&&i==int(std::round(value(kUiFilterSeqStep)*31.));box(x,1223,18,37,dark(),active?green():AZSKIN(kAccentTrack));box(x+3,1255-25*(v+1)*.5,12,3+25*(v+1)*.5,active?green():AZSKIN(kAccentTrack),dark());}
+     panel(16,1294,1288,56);text(L"MASTER",32,1312,78,22,13,cream());text(L"OUTPUT",994,1304,106,16,10,cream());for(int j=0;j<24;++j)box(994+j*4,1326,2,12,value(kUiLevel)>j/24.?(j>20?AZSKIN(kHot):AZSKIN(kMeter)):AZSKIN(kMeterOff),dark());
+     for(const auto& c:controls){double v=value(c.id);std::wstring title(c.label,c.label+std::strlen(c.label));
+-      if(c.kind==PanMode){const wchar_t* modes[]={L"MANUAL",L"ALTERNATE",L"RANDOM"};int mode=int(std::round(v*2));for(int i=0;i<3;++i){double x=c.x+i*c.w/3;box(x,c.y,c.w/3-3,c.h,mode==i?AZSKIN(kPanelRaised):dark(),mode==i?green():cream());text(modes[i],x,c.y,c.w/3-3,c.h,9,cream(),true);}}
++      if(c.kind==PanMode){const wchar_t* modes[]={L"MANUAL",L"ALTERNATE",L"RANDOM"};int mode=int(std::round(v*2));for(int i=0;i<3;++i){double x=c.x+i*c.w/3;box(x,c.y,c.w/3-3,c.h,mode==i?AZSKIN(kPanelRaised):dark(),mode==i?green():cream());text(modes[i],x,c.y,c.w/3-3,c.h,9,mode==i?ONTEXT():cream(),true);}}
+       else if(c.kind==Pan){text(L"L",c.x,c.y,16,16,10,cream());text(L"C",c.x+c.w/2-8,c.y,16,16,10,cream(),true);text(L"R",c.x+c.w-16,c.y,16,16,10,cream());box(c.x+4,c.y+23,c.w-8,3,AZSKIN(kHairline),dark());box(c.x+v*(c.w-8),c.y+18,8,13,green(),green());}
+       else if(c.kind==Knob){text(title,c.x,c.y,c.w,17,11,cream(),true);double cx=c.x+c.w/2,cy=c.y+43;box(cx-22,cy-22,44,44,AZSKIN(kViolet),AZSKIN(kFiligreeDim));for(int j=0;j<21;++j){double a=(135+j*13.5)*qg::tau/360.;box(cx+30*std::cos(a)-2,cy+30*std::sin(a)-2,4,4,j/20.<=v?green():AZSKIN(kAccentTrack),dark());}knobCap(cx,cy,v);double a=(135+270*v)*qg::tau/360.;line(cx+6*std::cos(a),cy+6*std::sin(a),cx+22*std::cos(a),cy+22*std::sin(a),cream(),3);box(c.x+4,c.y+74,c.w-8,19,dark(),AZSKIN(kHairline));text(display(c.id,v),c.x+5,c.y+75,c.w-10,18,12,AZSKIN(kReadout),true);}
+       else if(c.kind==Slider){text(title,c.x,c.y,c.w,14,9,cream());box(c.x+4,c.y+20,c.w-8,4,AZSKIN(kHairline),dark());box(c.x+4,c.y+20,(c.w-8)*v,4,green(),green());art(453,636,24,32,c.x+v*(c.w-8)-2,c.y+13,12,16);if(c.h>=33)text(display(c.id,v),c.x,c.y+28,c.w,13,10,cream(),true);else text(display(c.id,v),c.x+100,c.y,c.w-100,13,9,cream(),true);}
+       else if(c.kind==Select){box(c.x,c.y,c.w,c.h,dark(),AZSKIN(kBorderDark));if(c.h>=38)text(title,c.x+7,c.y+3,c.w-20,12,8,cream());text(display(c.id,c.id==lfoID(selectedLfo,lWave)&&value(kModWaveRnd0+selectedLfo)>0.?value(kUiModWave0+selectedLfo):v)+L" ▾",c.x+7,c.y+(c.h>=38?17:5),c.w-14,21,11,cream());}
+-      else{bool on=v>=.5;if(c.id>=kGrainEnabled&&c.id<=kRepeatEnabled)title=on?L"ON":L"OFF";box(c.x,c.y,c.w,c.h,on?AZSKIN(kAccentGlow):AZSKIN(kPanelRaised),on?green():AZSKIN(kFiligreeDim));if(c.kind==Pad){int step=int(c.id-(c.id>=kReverbStep0?kReverbStep0:kGlitchStep0));art(734,456,54,48,c.x+c.w/2-10,c.y+1,20,18);text(std::to_wstring(step+1),c.x,c.y+c.h-15,c.w,14,10,cream(),true);if(step==(c.id>=kReverbStep0?int(std::round(value(kUiReverb)*15)):play))line(c.x+4,c.y+c.h-3,c.x+c.w-4,c.y+c.h-3,cream(),2);}else{text(title,c.x+18,c.y,c.w-21,c.h,10,cream(),true);if(on)disc(c.x+10,c.y+c.h/2,6,AZSKIN(kAccent),AZSKIN(kAccent));disc(c.x+10,c.y+c.h/2,3,on?green():AZSKIN(kMuted),on?green():dark());}}
++      else{bool on=v>=.5;if(c.id>=kGrainEnabled&&c.id<=kRepeatEnabled)title=on?L"ON":L"OFF";box(c.x,c.y,c.w,c.h,on?AZSKIN(kAccentGlow):AZSKIN(kPanelRaised),on?green():AZSKIN(kFiligreeDim));if(c.kind==Pad){int step=int(c.id-(c.id>=kReverbStep0?kReverbStep0:kGlitchStep0));art(734,456,54,48,c.x+c.w/2-10,c.y+1,20,18);text(std::to_wstring(step+1),c.x,c.y+c.h-15,c.w,14,10,on?ONTEXT():cream(),true);if(step==(c.id>=kReverbStep0?int(std::round(value(kUiReverb)*15)):play))line(c.x+4,c.y+c.h-3,c.x+c.w-4,c.y+c.h-3,cream(),2);}else{text(title,c.x+18,c.y,c.w-21,c.h,10,on?ONTEXT():cream(),true);if(on)disc(c.x+10,c.y+c.h/2,6,AZSKIN(kAccent),AZSKIN(kAccent));disc(c.x+10,c.y+c.h/2,3,on?green():AZSKIN(kMuted),on?green():dark());}}
+     }
+     box(982,1312,144,26,dark(),AZSKIN(kFiligreeDim));{std::wstring label=L"SKIN: ";for(const char* c=aztec::theme::skinLabel().c_str();*c;++c)label+=wchar_t(*c);label+=L" ▾";text(label,982,1312,144,26,10,cream(),true);}
+     box(1140,1312,144,26,dark(),green());text(L"UI SIZE ▾",1140,1312,144,26,11,cream(),true);
+diff --git a/src/skin_spec.h b/src/skin_spec.h
+index bfbf3f4..d15117f 100644
+--- a/src/skin_spec.h
++++ b/src/skin_spec.h
+@@ -27,6 +27,7 @@
+ // change ONLY colour/style, never geometry or parameter bindings.
+ // ─────────────────────────────────────────────────────────────────────────────
+ #include <string>
++#include <cmath>
+ namespace aztec {
+ namespace skin {
+ 
+@@ -62,6 +63,7 @@ constexpr Rgb cream   {230, 240, 250};     // primary labels / values
+ constexpr Rgb muted   {150, 144, 160};     // secondary labels (cool grey)
+ constexpr Rgb faint   {96,  90, 108};      // tertiary / captions
+ constexpr Rgb readout {174, 224, 232};     // knob numeric readout (cool cyan)
++constexpr Rgb onText    { 8,  16,  4};     // DARK label drawn on lit accent fills
+ 
+ // ── Meter / warnings ──────────────────────────────────────────────────────────
+ constexpr Rgb amber    {232, 161, 60};     // output meter body
+@@ -92,7 +94,7 @@ enum ColorKey {
+   kBgDeep, kPanel, kPanelRaised, kPanelInset, kWell,
+   kFiligree, kFiligreeDim, kBorderDark, kHairline,
+   kAccent, kAccentBright, kAccentTrack, kAccentGlow,
+-  kTitle, kCream, kMuted, kFaint, kReadout,
++  kTitle, kCream, kMuted, kFaint, kReadout, kOnText,
+   kMeter, kMeterLow, kHot, kMeterOff,
+   kViolet, kRelease,
+   kColorCount
+@@ -102,7 +104,7 @@ inline const char* colorName(int i) {
+     "bg_deep","panel","panel_raised","panel_inset","well",
+     "filigree","filigree_dim","border_dark","hairline",
+     "accent","accent_bright","accent_track","accent_glow",
+-    "title","cream","muted","faint","readout",
++    "title","cream","muted","faint","readout","on_text",
+     "meter","meter_low","hot","meter_off",
+     "violet","release"};
+   return i>=0&&i<kColorCount?names[i]:"";
+@@ -113,7 +115,7 @@ inline Rgb baseRgb(int i) {
+   const Rgb f[kColorCount] = {bgDeep,panel,panelRaised,panelInset,well,
+     filigree,filigreeDim,borderDark,hairline,
+     green,greenGlow,greenDim,greenDeep,
+-    title,cream,muted,faint,readout,
++    title,cream,muted,faint,readout,onText,
+     amber,amberLow,hot,meterOff,violet,release};
+   return i>=0&&i<kColorCount?f[i]:Rgb{};
+ }
+@@ -147,6 +149,20 @@ inline void finalize(Palette& p,const bool* pinned=nullptr){
+   if(!skip(kAccentGlow))  p.v[kAccentGlow]  =scale(p.at(kAccent),.30);
+   if(!skip(kMeterLow))    p.v[kMeterLow]    =scale(p.at(kMeter),.52);
+   if(!skip(kMeterOff))    p.v[kMeterOff]    =mix(p.at(kBgDeep),p.at(kMeter),.12);
++  // Legibility guard: labels drawn on lit accent fills (ON pills, green pads,
++  // RANDOM ONCE...) must clear WCAG-AA against the fill on EVERY theme and
++  // custom skin. If the configured on-text colour is too close to the accent
++  // glow, auto-pick black or white — whichever contrasts better with it.
++  {
++    auto relLum=[](Rgb c){auto lin=[](int v){double x=v/255.;return x<=.03928?x/12.92:std::pow((x+.055)/1.055,2.4);};
++      return .2126*lin(c.r)+.7152*lin(c.g)+.0722*lin(c.b);};
++    Rgb bg=p.at(kAccentGlow);double lb=relLum(bg);
++    auto ratio=[&](Rgb t){double lt=relLum(t);double a=lt>lb?lt:lb,b=lt>lb?lb:lt;return (a+.05)/(b+.05);};
++    if(ratio(p.at(kOnText))<4.5){
++      Rgb blk{0,0,0},wht{255,255,255};
++      p.v[kOnText]=ratio(blk)>=ratio(wht)?blk:wht;
++    }
++  }
+ }
+ 
+ // ── Built-in themes ───────────────────────────────────────────────────────────
+@@ -169,7 +185,7 @@ inline Palette ember(){
+   static const ThemeDef e[]={
+     {kBgDeep,{16,11,8}},{kPanel,{34,26,22}},{kPanelRaised,{45,34,28}},{kPanelInset,{20,14,11}},{kWell,{12,8,6}},
+     {kFiligree,{186,152,104}},{kFiligreeDim,{110,88,60}},{kBorderDark,{54,42,32}},{kHairline,{70,56,44}},
+-    {kAccent,{255,146,64}},
++    {kAccent,{255,146,64}},{kOnText,{20,10,4}},
+     {kTitle,{228,208,182}},{kCream,{250,238,222}},{kMuted,{172,150,130}},{kFaint,{112,94,78}},{kReadout,{255,196,140}},
+     {kMeter,{255,180,70}},{kHot,{255,72,52}},
+     {kViolet,{232,120,196}},{kRelease,{242,80,74}}};
+@@ -180,7 +196,7 @@ inline Palette nebula(){
+   static const ThemeDef e[]={
+     {kBgDeep,{9,8,22}},{kPanel,{24,20,44}},{kPanelRaised,{33,28,58}},{kPanelInset,{14,11,28}},{kWell,{8,6,18}},
+     {kFiligree,{142,132,188}},{kFiligreeDim,{86,78,120}},{kBorderDark,{40,36,66}},{kHairline,{56,52,88}},
+-    {kAccent,{255,96,192}},
++    {kAccent,{255,96,192}},{kOnText,{20,4,14}},
+     {kTitle,{206,198,232}},{kCream,{234,230,250}},{kMuted,{150,142,180}},{kFaint,{96,90,128}},{kReadout,{160,232,248}},
+     {kMeter,{255,150,90}},{kHot,{255,70,70}},
+     {kViolet,{150,120,255}},{kRelease,{255,84,110}}};
+@@ -191,8 +207,8 @@ inline Palette arctic(){
+   static const ThemeDef e[]={
+     {kBgDeep,{10,13,17}},{kPanel,{26,31,38}},{kPanelRaised,{36,42,52}},{kPanelInset,{15,19,25}},{kWell,{9,12,16}},
+     {kFiligree,{172,184,200}},{kFiligreeDim,{104,116,132}},{kBorderDark,{44,52,64}},{kHairline,{62,72,86}},
+-    {kAccent,{96,220,255}},
+-    {kTitle,{214,224,236}},{kCream,{238,244,250}},{kMuted,{152,164,180}},{kFaint,{98,110,126}},{kReadout,{180,236,255}},
++    {kAccent,{96,220,255}},{kOnText,{4,14,20}},
++    {kOnText,{10,14,20}},{kTitle,{214,224,236}},{kCream,{238,244,250}},{kMuted,{152,164,180}},{kFaint,{98,110,126}},{kReadout,{180,236,255}},
+     {kMeter,{236,196,96}},{kHot,{255,92,72}},
+     {kViolet,{150,170,255}},{kRelease,{255,104,96}}};
+   return makeTheme(e,sizeof(e)/sizeof(*e),"arctic");
+@@ -205,7 +221,7 @@ inline Palette aurora(){
+     {kBgDeep,{3,2,10}},{kPanel,{22,22,32}},{kPanelRaised,{31,31,43}},{kPanelInset,{11,22,27}},{kWell,{8,6,14}},
+     {kFiligree,{168,172,178}},{kFiligreeDim,{104,104,115}},{kBorderDark,{40,40,52}},{kHairline,{58,58,70}},
+     {kAccent,{156,250,110}},{kAccentBright,{206,255,176}},{kAccentGlow,{182,253,166}},
+-    {kTitle,{224,228,231}},{kCream,{241,250,253}},{kMuted,{150,154,150}},{kFaint,{96,100,96}},{kReadout,{114,244,170}},
++    {kOnText,{6,16,6}},{kTitle,{224,228,231}},{kCream,{241,250,253}},{kMuted,{150,154,150}},{kFaint,{96,100,96}},{kReadout,{114,244,170}},
+     {kViolet,{110,85,137}}};
+   return makeTheme(e,sizeof(e)/sizeof(*e),"aurora");
+ }
+@@ -214,7 +230,7 @@ inline Palette midnight(){
+   static const ThemeDef e[]={
+     {kBgDeep,{6,6,8}},{kPanel,{18,18,22}},{kPanelRaised,{26,26,32}},{kPanelInset,{10,10,14}},{kWell,{5,5,8}},
+     {kFiligree,{168,168,176}},{kFiligreeDim,{92,92,102}},{kBorderDark,{36,36,44}},{kHairline,{52,52,62}},
+-    {kAccent,{235,235,235}},
++    {kAccent,{235,235,235}},{kOnText,{10,10,12}},
+     {kTitle,{200,200,208}},{kCream,{240,240,244}},{kMuted,{150,150,158}},{kFaint,{92,92,100}},{kReadout,{200,220,230}},
+     {kMeter,{220,220,220}},{kHot,{255,90,70}},
+     {kViolet,{180,180,200}},{kRelease,{240,110,100}}};
+-- 
+2.39.5
+
+
+From 5254c893842ec85fcb5e889d0648f0b2504757af Mon Sep 17 00:00:00 2001
+From: "qwen.ai[bot]" <qwenlm-intl@service.alibaba.com>
+Date: Thu, 1 Oct 2026 22:37:22 +0000
+Subject: [PATCH 3/3] =?UTF-8?q?fix(au):=20correct=20AUv2=20build=20?=
+ =?UTF-8?q?=E2=80=94=20real=20wrapper=20path=20(auwrapper),=20Apple=20Audi?=
+ =?UTF-8?q?oUnitSDK=20auto-fetch,=20sdk=5Fhosting=20enablement,=20proper?=
+ =?UTF-8?q?=20au-info.plist,=20GrainsDosageAU=20target=20via=20smtg=5Ftarg?=
+ =?UTF-8?q?et=5Fadd=5Fauv2;=20CI=20builds=20only=20the=20AU=20target=20and?=
+ =?UTF-8?q?=20verifies=20embedded=20plugin.vst3?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ .github/workflows/build-au-logic.yml | 48 ++++++++++++++++------
+ CMakeLists.txt                       | 59 ++++++++++++++++++++--------
+ src/au_info.plist.in                 | 53 +++++++++++++++++++++++++
+ 3 files changed, 131 insertions(+), 29 deletions(-)
+ create mode 100644 src/au_info.plist.in
+
+diff --git a/.github/workflows/build-au-logic.yml b/.github/workflows/build-au-logic.yml
+index 652e71f..a5b2bc8 100644
+--- a/.github/workflows/build-au-logic.yml
++++ b/.github/workflows/build-au-logic.yml
+@@ -50,9 +50,13 @@ jobs:
+         shell: bash
+         run: |
+           set -euo pipefail
+-          git clone --no-checkout https://github.com/steinbergmedia/vst3sdk.git "$RUNNER_TEMP/vst3sdk"
+-          git -C "$RUNNER_TEMP/vst3sdk" checkout 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
+-          git -C "$RUNNER_TEMP/vst3sdk" submodule update --init --recursive --depth 1
++          # The project's CMakeLists.txt auto-fetches the Apple AudioUnitSDK into
++          # <sdk>/../AudioUnitSDK at configure time when -DSMTG_ENABLE_AUV2_PLUGIN=ON
++          # is passed; keep this exact folder layout.
++          git clone --no-checkout https://github.com/steinbergmedia/vst3sdk.git "$RUNNER_TEMP/AudioUnitBuild/vst3sdk"
++          git -C "$RUNNER_TEMP/AudioUnitBuild/vst3sdk" checkout 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
++          git -C "$RUNNER_TEMP/AudioUnitBuild/vst3sdk" submodule update --init --recursive --depth 1
++
+ 
+       - name: Configure AudioUnit build (Intel)
+         shell: bash
+@@ -60,7 +64,8 @@ jobs:
+           set -euo pipefail
+           cd "$PROJECT_DIR"
+           cmake -S . -B build-au -G Xcode \
+-            -DVST3_SDK_ROOT="$RUNNER_TEMP/vst3sdk" \
++            -DVST3_SDK_ROOT="$RUNNER_TEMP/AudioUnitBuild/vst3sdk" \
++            -DSMTG_AUDIOUNIT_SDK_PATH="$RUNNER_TEMP/AudioUnitBuild/AudioUnitSDK" \
+             -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+             -DCMAKE_OSX_DEPLOYMENT_TARGET=10.14 \
+             -DSMTG_CREATE_PLUGIN_LINK=OFF \
+@@ -74,7 +79,7 @@ jobs:
+         run: |
+           set -euo pipefail
+           cd "$PROJECT_DIR"
+-          cmake --build build-au --config Release --parallel 4 \
++          cmake --build build-au --config Release --target GrainsDosageAU --parallel 4 \
+             2>&1 | tee "$GITHUB_WORKSPACE/build-au-macos-intel.log"
+ 
+       - name: Locate, sign and package the .component bundle
+@@ -82,7 +87,7 @@ jobs:
+         run: |
+           set -euo pipefail
+           cd "$PROJECT_DIR"
+-          comp="$(find build-au -type d -name 'GrainsDosage.component' -path '*Release*' | head -n 1)"
++          comp="$(find build-au -type d -name 'GrainsDosage.component' | head -n 1)"
+           if [[ -z "$comp" ]]; then
+             echo 'GrainsDosage.component not found after build.' >&2
+             find build-au -maxdepth 6 -type d | sed -n 1,80p >&2
+@@ -92,6 +97,12 @@ jobs:
+           binary="$comp/Contents/MacOS/GrainsDosage"
+           test -f "$binary"
+           lipo "$binary" -verify_arch x86_64
++          # The wrapper embeds the VST3 bundle; a broken link here means Logic would not find the plug-in.
++          vst3link="$comp/Contents/Resources/plugin.vst3"
++          test -e "$vst3link" || { echo "plugin.vst3 missing from component" >&2; exit 1; }
++          ditto "$vst3link" "$GITHUB_WORKSPACE/dist-vst3-check.vst3" 2>/dev/null || cp -R "$vst3link" "$GITHUB_WORKSPACE/dist-vst3-check.vst3"
++          find "$GITHUB_WORKSPACE/dist-vst3-check.vst3" -name 'GrainsDosage' -type f | head -n1 | xargs -I{} lipo {} -verify_arch x86_64
++          rm -rf "$GITHUB_WORKSPACE/dist-vst3-check.vst3"
+           codesign --force --sign - --timestamp=none "$comp"
+           codesign --verify --strict "$comp"
+           mkdir -p "$GITHUB_WORKSPACE/dist"
+@@ -132,9 +143,13 @@ jobs:
+         shell: bash
+         run: |
+           set -euo pipefail
+-          git clone --no-checkout https://github.com/steinbergmedia/vst3sdk.git "$RUNNER_TEMP/vst3sdk"
+-          git -C "$RUNNER_TEMP/vst3sdk" checkout 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
+-          git -C "$RUNNER_TEMP/vst3sdk" submodule update --init --recursive --depth 1
++          # The project's CMakeLists.txt auto-fetches the Apple AudioUnitSDK into
++          # <sdk>/../AudioUnitSDK at configure time when -DSMTG_ENABLE_AUV2_PLUGIN=ON
++          # is passed; keep this exact folder layout.
++          git clone --no-checkout https://github.com/steinbergmedia/vst3sdk.git "$RUNNER_TEMP/AudioUnitBuild/vst3sdk"
++          git -C "$RUNNER_TEMP/AudioUnitBuild/vst3sdk" checkout 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
++          git -C "$RUNNER_TEMP/AudioUnitBuild/vst3sdk" submodule update --init --recursive --depth 1
++
+ 
+       - name: Configure AudioUnit build (Apple Silicon)
+         shell: bash
+@@ -142,7 +157,8 @@ jobs:
+           set -euo pipefail
+           cd "$PROJECT_DIR"
+           cmake -S . -B build-au -G Xcode \
+-            -DVST3_SDK_ROOT="$RUNNER_TEMP/vst3sdk" \
++            -DVST3_SDK_ROOT="$RUNNER_TEMP/AudioUnitBuild/vst3sdk" \
++            -DSMTG_AUDIOUNIT_SDK_PATH="$RUNNER_TEMP/AudioUnitBuild/AudioUnitSDK" \
+             -DCMAKE_OSX_ARCHITECTURES=arm64 \
+             -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
+             -DSMTG_CREATE_PLUGIN_LINK=OFF \
+@@ -156,7 +172,7 @@ jobs:
+         run: |
+           set -euo pipefail
+           cd "$PROJECT_DIR"
+-          cmake --build build-au --config Release --parallel 4 \
++          cmake --build build-au --config Release --target GrainsDosageAU --parallel 4 \
+             2>&1 | tee "$GITHUB_WORKSPACE/build-au-macos-arm64.log"
+ 
+       - name: Locate, sign and package the .component bundle
+@@ -164,13 +180,21 @@ jobs:
+         run: |
+           set -euo pipefail
+           cd "$PROJECT_DIR"
+-          comp="$(find build-au -type d -name 'GrainsDosage.component' -path '*Release*' | head -n 1)"
++          comp="$(find build-au -type d -name 'GrainsDosage.component' | head -n 1)"
+           if [[ -z "$comp" ]]; then
+             echo 'GrainsDosage.component not found after build.' >&2
+             find build-au -maxdepth 6 -type d | sed -n 1,80p >&2
+             exit 1
+           fi
+           echo "Component: $comp"
++          binary="$comp/Contents/MacOS/GrainsDosage"
++          test -f "$binary"
++          lipo "$binary" -verify_arch arm64
++          vst3link="$comp/Contents/Resources/plugin.vst3"
++          test -e "$vst3link" || { echo "plugin.vst3 missing from component" >&2; exit 1; }
++          ditto "$vst3link" "$GITHUB_WORKSPACE/dist-vst3-check.vst3" 2>/dev/null || cp -R "$vst3link" "$GITHUB_WORKSPACE/dist-vst3-check.vst3"
++          find "$GITHUB_WORKSPACE/dist-vst3-check.vst3" -name 'GrainsDosage' -type f | head -n1 | xargs -I{} lipo {} -verify_arch arm64
++          rm -rf "$GITHUB_WORKSPACE/dist-vst3-check.vst3"
+           codesign --force --sign - --timestamp=none "$comp"
+           codesign --verify --strict "$comp"
+           mkdir -p "$GITHUB_WORKSPACE/dist"
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index edfad21..d936ba9 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -16,10 +16,31 @@ set(SMTG_ENABLE_VSTGUI_SUPPORT OFF CACHE BOOL "" FORCE)
+ set(SMTG_RUN_VST_VALIDATOR ON CACHE BOOL "" FORCE)
+ 
+ # AudioUnit (AU v2) wrapper support for macOS — needed by the Logic Pro AU build.
+-# Enabled only on Apple; the VST3-only workflow is unaffected because the SDK's
+-# own default (OFF) stays in place unless a caller passes -DSMTG_ENABLE_AUV2_PLUGIN=ON.
++# The Steinberg SDK enables its AUv2 machinery only when it finds an Apple
++# AudioUnitSDK checkout; see the resolution block below. The VST3-only workflow
++# is unaffected: nothing changes unless -DSMTG_ENABLE_AUV2_PLUGIN=ON is passed.
++# Resolve the Apple AudioUnit SDK location BEFORE the sdk subproject runs its
++# CoreAudio support setup (which only auto-enables AUv2 builds when it finds an
++# AudioUnitSDK.xcodeproj). If not provided and not already sitting next to the
++# sdk, fetch it once from Apple's official repo.
+ if(APPLE AND SMTG_ENABLE_AUV2_PLUGIN)
+-  set(SMTG_ENABLE_AUDIOUNIT_WRAPPER ON CACHE BOOL "Build the Steinberg AUv2 wrapper" FORCE)
++  if("${SMTG_AUDIOUNIT_SDK_PATH}" STREQUAL "")
++    get_filename_component(_gd_au_parent "${VST3_SDK_ROOT}" DIRECTORY)
++    set(_gd_au_sdk "${_gd_au_parent}/AudioUnitSDK")
++    if(NOT EXISTS "${_gd_au_sdk}/AudioUnitSDK.xcodeproj")
++      find_package(Git REQUIRED)
++      execute_process(COMMAND "${GIT_EXECUTABLE}" clone --depth 1
++        https://github.com/Apple/AudioUnitSDK.git "${_gd_au_sdk}"
++        RESULT_VARIABLE _gd_au_clone OUTPUT_VARIABLE _gd_au_clone_msg)
++      if(NOT _gd_au_clone EQUAL 0)
++        message(FATAL_ERROR "[GrainsDosage] could not clone Apple AudioUnitSDK: ${_gd_au_clone_msg}")
++      endif()
++    endif()
++    set(SMTG_AUDIOUNIT_SDK_PATH "${_gd_au_sdk}" CACHE PATH "Path to the AudioUnit SDK" FORCE)
++  endif()
++  # The SDK builds the hosting library only with hosting examples enabled;
++  # the AU wrapper needs sdk_hosting, so force it ON just for AU builds.
++  set(SMTG_ENABLE_VST3_HOSTING_EXAMPLES ON CACHE BOOL "" FORCE)
+ endif()
+ 
+ if(NOT DEFINED VST3_SDK_ROOT)
+@@ -67,20 +88,24 @@ if(APPLE)
+   find_library(AZTEC_COREFOUNDATION_FRAMEWORK CoreFoundation REQUIRED)
+   target_link_libraries(GrainsDosage PRIVATE ${AZTEC_COCOA_FRAMEWORK} ${AZTEC_COREFOUNDATION_FRAMEWORK})
+ 
+-  # Optional AudioUnit (AU v2) variant for Logic Pro / GarageBand. Enabled with
+-  # -DSMTG_ENABLE_AUV2_PLUGIN=ON; adds the Steinberg VST3->AU wrapper sources
+-  # and links the required Apple frameworks onto the same plugin target.
+-  if(SMTG_ENABLE_AUV2_PLUGIN)
+-    smtg_target_add_plugin_sources(GrainsDosage
+-      "${VST3_SDK_ROOT}/public.sdk/source/vst/auWRAPPER"
+-      "${VST3_SDK_ROOT}/public.sdk/source/vst/shared/vst3classids.cpp")
+-    find_library(AU_AUDIOUNIT_FRAMEWORK AudioUnit REQUIRED)
+-    find_library(AU_AUDIOTOOLBOX_FRAMEWORK AudioToolbox REQUIRED)
+-    find_library(AU_COREAUDIO_FRAMEWORK CoreAudio REQUIRED)
+-    find_library(AU_CARBON_FRAMEWORK Carbon REQUIRED)
+-    target_link_libraries(GrainsDosage PRIVATE
+-      ${AU_AUDIOUNIT_FRAMEWORK} ${AU_AUDIOTOOLBOX_FRAMEWORK}
+-      ${AU_COREAUDIO_FRAMEWORK} ${AU_CARBON_FRAMEWORK})
++  # Optional AudioUnit (AU v2) bundle for Logic Pro / GarageBand. Enabled with
++  # -DSMTG_ENABLE_AUV2_PLUGIN=ON: builds a separate GrainsDosage.component whose
++  # binary is the Steinberg VST3->AU wrapper, embedding the freshly built
++  # GrainsDosage.vst3 via Resources/plugin.vst3 (same code path as the SDK's own
++  # AUv2 samples). Requires the Xcode generator and an Apple AudioUnitSDK checkout.
++  if(SMTG_ENABLE_AUV2_PLUGIN AND SMTG_ENABLE_AUV2_BUILDS)
++    configure_file(src/au_info.plist.in "${CMAKE_CURRENT_BINARY_DIR}/au_info.plist" COPYONLY)
++    smtg_target_add_auv2(GrainsDosageAU
++      BUNDLE_NAME            "GrainsDosage"
++      BUNDLE_IDENTIFIER      com.danielmelegari.aztecgrains.au
++      INFO_PLIST_TEMPLATE    "${CMAKE_CURRENT_BINARY_DIR}/au_info.plist"
++      VST3_PLUGIN_TARGET     GrainsDosage
++    )
++  elseif(SMTG_ENABLE_AUV2_PLUGIN)
++    message(FATAL_ERROR
++      "[GrainsDosage] -DSMTG_ENABLE_AUV2_PLUGIN=ON was requested but the SDK did not "
++      "enable AUv2 builds. Use the Xcode generator (-G Xcode) and make sure the Apple "
++      "AudioUnitSDK is available (SMTG_AUDIOUNIT_SDK_PATH or cloned next to the sdk).")
+   endif()
+   # A native smoke test and screenshot, run on the macOS CI runner.
+   add_executable(aztec_gui_smoke src/gui_smoke.mm src/editor_mac.mm)
+diff --git a/src/au_info.plist.in b/src/au_info.plist.in
+new file mode 100644
+index 0000000..cac0ddd
+--- /dev/null
++++ b/src/au_info.plist.in
+@@ -0,0 +1,53 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
++<plist version="1.0">
++<dict>
++	<key>CFBundleDevelopmentRegion</key>
++	<string>English</string>
++	<key>CFBundleExecutable</key>
++	<string>GrainsDosage</string>
++	<key>CFBundleIdentifier</key>
++	<string>com.danielmelegari.aztecgrains.au</string>
++	<key>CFBundleInfoDictionaryVersion</key>
++	<string>6.0</string>
++	<key>CFBundleName</key>
++	<string>GrainsDosage</string>
++	<key>CFBundlePackageType</key>
++	<string>AUwr</string>
++	<key>CFBundleShortVersionString</key>
++	<string>0.13.0</string>
++	<key>CFBundleVersion</key>
++	<string>0.13.0</string>
++	<key>CSResourcesFileMapped</key>
++	<true/>
++	<key>AUVersion</key>
++	<string>0.13.0</string>
++	<key>AudioComponents</key>
++	<array>
++		<dict>
++			<key>name</key>
++			<string>Daniel Melegari: GrainsDosage</string>
++			<key>description</key>
++			<string>GrainsDosage (AudioUnit wrapper for the VST3 plug-in)</string>
++			<key>factory</key>
++			<string>com.danielmelegari.aztecgrains.au</string>
++			<key>singular</key>
++			<string>com.danielmelegari.aztecgrains.au.instance</string>
++			<key>type</key>
++			<string>aufx</string>
++			<key>subtype</key>
++			<string>Gdsg</string>
++			<key>version</key>
++			<integer>851968</integer>
++			<key>category</key>
++			<string>Effect</string>
++			<key>tags</key>
++			<array>
++				<string>Grain</string>
++				<string>Time-Stretch</string>
++				<string>Loop</string>
++			</array>
++		</dict>
++	</array>
++</dict>
++</plist>
+-- 
+2.39.5
+
