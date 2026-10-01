@@ -15,6 +15,13 @@ set(SMTG_ENABLE_VST3_HOSTING_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(SMTG_ENABLE_VSTGUI_SUPPORT OFF CACHE BOOL "" FORCE)
 set(SMTG_RUN_VST_VALIDATOR ON CACHE BOOL "" FORCE)
 
+# AudioUnit (AU v2) wrapper support for macOS — needed by the Logic Pro AU build.
+# Enabled only on Apple; the VST3-only workflow is unaffected because the SDK's
+# own default (OFF) stays in place unless a caller passes -DSMTG_ENABLE_AUV2_PLUGIN=ON.
+if(APPLE AND SMTG_ENABLE_AUV2_PLUGIN)
+  set(SMTG_ENABLE_AUDIOUNIT_WRAPPER ON CACHE BOOL "Build the Steinberg AUv2 wrapper" FORCE)
+endif()
+
 if(NOT DEFINED VST3_SDK_ROOT)
   message(FATAL_ERROR "Set -DVST3_SDK_ROOT=/path/to/vst3sdk (with submodules)")
 endif()
@@ -59,6 +66,22 @@ if(APPLE)
   find_library(AZTEC_COCOA_FRAMEWORK Cocoa REQUIRED)
   find_library(AZTEC_COREFOUNDATION_FRAMEWORK CoreFoundation REQUIRED)
   target_link_libraries(GrainsDosage PRIVATE ${AZTEC_COCOA_FRAMEWORK} ${AZTEC_COREFOUNDATION_FRAMEWORK})
+
+  # Optional AudioUnit (AU v2) variant for Logic Pro / GarageBand. Enabled with
+  # -DSMTG_ENABLE_AUV2_PLUGIN=ON; adds the Steinberg VST3->AU wrapper sources
+  # and links the required Apple frameworks onto the same plugin target.
+  if(SMTG_ENABLE_AUV2_PLUGIN)
+    smtg_target_add_plugin_sources(GrainsDosage
+      "${VST3_SDK_ROOT}/public.sdk/source/vst/auWRAPPER"
+      "${VST3_SDK_ROOT}/public.sdk/source/vst/shared/vst3classids.cpp")
+    find_library(AU_AUDIOUNIT_FRAMEWORK AudioUnit REQUIRED)
+    find_library(AU_AUDIOTOOLBOX_FRAMEWORK AudioToolbox REQUIRED)
+    find_library(AU_COREAUDIO_FRAMEWORK CoreAudio REQUIRED)
+    find_library(AU_CARBON_FRAMEWORK Carbon REQUIRED)
+    target_link_libraries(GrainsDosage PRIVATE
+      ${AU_AUDIOUNIT_FRAMEWORK} ${AU_AUDIOTOOLBOX_FRAMEWORK}
+      ${AU_COREAUDIO_FRAMEWORK} ${AU_CARBON_FRAMEWORK})
+  endif()
   # A native smoke test and screenshot, run on the macOS CI runner.
   add_executable(aztec_gui_smoke src/gui_smoke.mm src/editor_mac.mm)
   set_source_files_properties(src/gui_smoke.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")

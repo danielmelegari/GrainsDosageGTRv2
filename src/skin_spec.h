@@ -27,6 +27,7 @@
 // change ONLY colour/style, never geometry or parameter bindings.
 // ─────────────────────────────────────────────────────────────────────────────
 #include <string>
+#include <cmath>
 namespace aztec {
 namespace skin {
 
@@ -62,6 +63,7 @@ constexpr Rgb cream   {230, 240, 250};     // primary labels / values
 constexpr Rgb muted   {150, 144, 160};     // secondary labels (cool grey)
 constexpr Rgb faint   {96,  90, 108};      // tertiary / captions
 constexpr Rgb readout {174, 224, 232};     // knob numeric readout (cool cyan)
+constexpr Rgb onText    { 8,  16,  4};     // DARK label drawn on lit accent fills
 
 // ── Meter / warnings ──────────────────────────────────────────────────────────
 constexpr Rgb amber    {232, 161, 60};     // output meter body
@@ -92,7 +94,7 @@ enum ColorKey {
   kBgDeep, kPanel, kPanelRaised, kPanelInset, kWell,
   kFiligree, kFiligreeDim, kBorderDark, kHairline,
   kAccent, kAccentBright, kAccentTrack, kAccentGlow,
-  kTitle, kCream, kMuted, kFaint, kReadout,
+  kTitle, kCream, kMuted, kFaint, kReadout, kOnText,
   kMeter, kMeterLow, kHot, kMeterOff,
   kViolet, kRelease,
   kColorCount
@@ -102,7 +104,7 @@ inline const char* colorName(int i) {
     "bg_deep","panel","panel_raised","panel_inset","well",
     "filigree","filigree_dim","border_dark","hairline",
     "accent","accent_bright","accent_track","accent_glow",
-    "title","cream","muted","faint","readout",
+    "title","cream","muted","faint","readout","on_text",
     "meter","meter_low","hot","meter_off",
     "violet","release"};
   return i>=0&&i<kColorCount?names[i]:"";
@@ -113,7 +115,7 @@ inline Rgb baseRgb(int i) {
   const Rgb f[kColorCount] = {bgDeep,panel,panelRaised,panelInset,well,
     filigree,filigreeDim,borderDark,hairline,
     green,greenGlow,greenDim,greenDeep,
-    title,cream,muted,faint,readout,
+    title,cream,muted,faint,readout,onText,
     amber,amberLow,hot,meterOff,violet,release};
   return i>=0&&i<kColorCount?f[i]:Rgb{};
 }
@@ -147,6 +149,20 @@ inline void finalize(Palette& p,const bool* pinned=nullptr){
   if(!skip(kAccentGlow))  p.v[kAccentGlow]  =scale(p.at(kAccent),.30);
   if(!skip(kMeterLow))    p.v[kMeterLow]    =scale(p.at(kMeter),.52);
   if(!skip(kMeterOff))    p.v[kMeterOff]    =mix(p.at(kBgDeep),p.at(kMeter),.12);
+  // Legibility guard: labels drawn on lit accent fills (ON pills, green pads,
+  // RANDOM ONCE...) must clear WCAG-AA against the fill on EVERY theme and
+  // custom skin. If the configured on-text colour is too close to the accent
+  // glow, auto-pick black or white — whichever contrasts better with it.
+  {
+    auto relLum=[](Rgb c){auto lin=[](int v){double x=v/255.;return x<=.03928?x/12.92:std::pow((x+.055)/1.055,2.4);};
+      return .2126*lin(c.r)+.7152*lin(c.g)+.0722*lin(c.b);};
+    Rgb bg=p.at(kAccentGlow);double lb=relLum(bg);
+    auto ratio=[&](Rgb t){double lt=relLum(t);double a=lt>lb?lt:lb,b=lt>lb?lb:lt;return (a+.05)/(b+.05);};
+    if(ratio(p.at(kOnText))<4.5){
+      Rgb blk{0,0,0},wht{255,255,255};
+      p.v[kOnText]=ratio(blk)>=ratio(wht)?blk:wht;
+    }
+  }
 }
 
 // ── Built-in themes ───────────────────────────────────────────────────────────
@@ -169,7 +185,7 @@ inline Palette ember(){
   static const ThemeDef e[]={
     {kBgDeep,{16,11,8}},{kPanel,{34,26,22}},{kPanelRaised,{45,34,28}},{kPanelInset,{20,14,11}},{kWell,{12,8,6}},
     {kFiligree,{186,152,104}},{kFiligreeDim,{110,88,60}},{kBorderDark,{54,42,32}},{kHairline,{70,56,44}},
-    {kAccent,{255,146,64}},
+    {kAccent,{255,146,64}},{kOnText,{20,10,4}},
     {kTitle,{228,208,182}},{kCream,{250,238,222}},{kMuted,{172,150,130}},{kFaint,{112,94,78}},{kReadout,{255,196,140}},
     {kMeter,{255,180,70}},{kHot,{255,72,52}},
     {kViolet,{232,120,196}},{kRelease,{242,80,74}}};
@@ -180,7 +196,7 @@ inline Palette nebula(){
   static const ThemeDef e[]={
     {kBgDeep,{9,8,22}},{kPanel,{24,20,44}},{kPanelRaised,{33,28,58}},{kPanelInset,{14,11,28}},{kWell,{8,6,18}},
     {kFiligree,{142,132,188}},{kFiligreeDim,{86,78,120}},{kBorderDark,{40,36,66}},{kHairline,{56,52,88}},
-    {kAccent,{255,96,192}},
+    {kAccent,{255,96,192}},{kOnText,{20,4,14}},
     {kTitle,{206,198,232}},{kCream,{234,230,250}},{kMuted,{150,142,180}},{kFaint,{96,90,128}},{kReadout,{160,232,248}},
     {kMeter,{255,150,90}},{kHot,{255,70,70}},
     {kViolet,{150,120,255}},{kRelease,{255,84,110}}};
@@ -191,8 +207,8 @@ inline Palette arctic(){
   static const ThemeDef e[]={
     {kBgDeep,{10,13,17}},{kPanel,{26,31,38}},{kPanelRaised,{36,42,52}},{kPanelInset,{15,19,25}},{kWell,{9,12,16}},
     {kFiligree,{172,184,200}},{kFiligreeDim,{104,116,132}},{kBorderDark,{44,52,64}},{kHairline,{62,72,86}},
-    {kAccent,{96,220,255}},
-    {kTitle,{214,224,236}},{kCream,{238,244,250}},{kMuted,{152,164,180}},{kFaint,{98,110,126}},{kReadout,{180,236,255}},
+    {kAccent,{96,220,255}},{kOnText,{4,14,20}},
+    {kOnText,{10,14,20}},{kTitle,{214,224,236}},{kCream,{238,244,250}},{kMuted,{152,164,180}},{kFaint,{98,110,126}},{kReadout,{180,236,255}},
     {kMeter,{236,196,96}},{kHot,{255,92,72}},
     {kViolet,{150,170,255}},{kRelease,{255,104,96}}};
   return makeTheme(e,sizeof(e)/sizeof(*e),"arctic");
@@ -205,7 +221,7 @@ inline Palette aurora(){
     {kBgDeep,{3,2,10}},{kPanel,{22,22,32}},{kPanelRaised,{31,31,43}},{kPanelInset,{11,22,27}},{kWell,{8,6,14}},
     {kFiligree,{168,172,178}},{kFiligreeDim,{104,104,115}},{kBorderDark,{40,40,52}},{kHairline,{58,58,70}},
     {kAccent,{156,250,110}},{kAccentBright,{206,255,176}},{kAccentGlow,{182,253,166}},
-    {kTitle,{224,228,231}},{kCream,{241,250,253}},{kMuted,{150,154,150}},{kFaint,{96,100,96}},{kReadout,{114,244,170}},
+    {kOnText,{6,16,6}},{kTitle,{224,228,231}},{kCream,{241,250,253}},{kMuted,{150,154,150}},{kFaint,{96,100,96}},{kReadout,{114,244,170}},
     {kViolet,{110,85,137}}};
   return makeTheme(e,sizeof(e)/sizeof(*e),"aurora");
 }
@@ -214,7 +230,7 @@ inline Palette midnight(){
   static const ThemeDef e[]={
     {kBgDeep,{6,6,8}},{kPanel,{18,18,22}},{kPanelRaised,{26,26,32}},{kPanelInset,{10,10,14}},{kWell,{5,5,8}},
     {kFiligree,{168,168,176}},{kFiligreeDim,{92,92,102}},{kBorderDark,{36,36,44}},{kHairline,{52,52,62}},
-    {kAccent,{235,235,235}},
+    {kAccent,{235,235,235}},{kOnText,{10,10,12}},
     {kTitle,{200,200,208}},{kCream,{240,240,244}},{kMuted,{150,150,158}},{kFaint,{92,92,100}},{kReadout,{200,220,230}},
     {kMeter,{220,220,220}},{kHot,{255,90,70}},
     {kViolet,{180,180,200}},{kRelease,{240,110,100}}};

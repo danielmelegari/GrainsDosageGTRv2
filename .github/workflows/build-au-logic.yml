@@ -1,0 +1,186 @@
+name: Build AudioUnit for Logic Pro (no installer)
+
+# Produces ONLY the GrainsDosage.component (AU v2) bundles as zip artifacts,
+# built with the Steinberg VST3->AudioUnit wrapper from the same sources as the
+# VST3 build. No .pkg, nothing to install: unzip into
+#   ~/Library/Audio/Plug-Ins/Components/
+# and rescan in Logic Pro.
+#
+# Run manually: Actions tab -> "Build AudioUnit for Logic Pro" -> Run workflow.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'assets/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/build-au-logic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  # ─────────────────────────── macOS Intel (x86_64) ───────────────────────────
+  au-macos-intel:
+    runs-on: macos-15-intel
+    timeout-minutes: 30
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '10.14'
+    steps:
+      - name: Download project
+        uses: actions/checkout@v4
+
+      - name: Locate project sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f GrainsDosage/CMakeLists.txt && -d GrainsDosage/src ]]; then
+            project_dir="$GITHUB_WORKSPACE/GrainsDosage"
+          elif [[ -f CMakeLists.txt && -d src ]]; then
+            project_dir="$GITHUB_WORKSPACE"
+          else
+            echo 'GrainsDosage sources not found.' >&2
+            exit 1
+          fi
+          printf 'PROJECT_DIR=%s\n' "$project_dir" >> "$GITHUB_ENV"
+
+      - name: Download tested Steinberg SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --no-checkout https://github.com/steinbergmedia/vst3sdk.git "$RUNNER_TEMP/vst3sdk"
+          git -C "$RUNNER_TEMP/vst3sdk" checkout 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
+          git -C "$RUNNER_TEMP/vst3sdk" submodule update --init --recursive --depth 1
+
+      - name: Configure AudioUnit build (Intel)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          cmake -S . -B build-au -G Xcode \
+            -DVST3_SDK_ROOT="$RUNNER_TEMP/vst3sdk" \
+            -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=10.14 \
+            -DSMTG_CREATE_PLUGIN_LINK=OFF \
+            -DSMTG_BUILD_UNIVERSAL_BINARY=OFF \
+            -DSMTG_ENABLE_AUV2_PLUGIN=ON \
+            -DSMTG_RUN_VST_VALIDATOR=OFF \
+            -DGRAINS_BUILD_TESTS=OFF
+
+      - name: Build AudioUnit component
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          cmake --build build-au --config Release --parallel 4 \
+            2>&1 | tee "$GITHUB_WORKSPACE/build-au-macos-intel.log"
+
+      - name: Locate, sign and package the .component bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          comp="$(find build-au -type d -name 'GrainsDosage.component' -path '*Release*' | head -n 1)"
+          if [[ -z "$comp" ]]; then
+            echo 'GrainsDosage.component not found after build.' >&2
+            find build-au -maxdepth 6 -type d | sed -n 1,80p >&2
+            exit 1
+          fi
+          echo "Component: $comp"
+          binary="$comp/Contents/MacOS/GrainsDosage"
+          test -f "$binary"
+          lipo "$binary" -verify_arch x86_64
+          codesign --force --sign - --timestamp=none "$comp"
+          codesign --verify --strict "$comp"
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          ditto -c -k --sequesterRsrc --keepParent "$comp" \
+            "$GITHUB_WORKSPACE/dist/GrainsDosage-macOS-x64.component.zip"
+
+      - name: Upload AU component only
+        uses: actions/upload-artifact@v4
+        with:
+          name: GrainsDosage-macOS-Intel-x64-AU-LogicPro
+          path: dist/GrainsDosage-macOS-x64.component.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  # ────────────────────────── macOS Apple Silicon (arm64) ─────────────────────
+  au-macos-arm64:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Locate project sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f GrainsDosage/CMakeLists.txt && -d GrainsDosage/src ]]; then
+            project_dir="$GITHUB_WORKSPACE/GrainsDosage"
+          elif [[ -f CMakeLists.txt && -d src ]]; then
+            project_dir="$GITHUB_WORKSPACE"
+          else
+            echo 'GrainsDosage sources not found.' >&2
+            exit 1
+          fi
+          echo "PROJECT_DIR=$project_dir" >> "$GITHUB_ENV"
+
+      - name: Download Steinberg VST3 SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --no-checkout https://github.com/steinbergmedia/vst3sdk.git "$RUNNER_TEMP/vst3sdk"
+          git -C "$RUNNER_TEMP/vst3sdk" checkout 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
+          git -C "$RUNNER_TEMP/vst3sdk" submodule update --init --recursive --depth 1
+
+      - name: Configure AudioUnit build (Apple Silicon)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          cmake -S . -B build-au -G Xcode \
+            -DVST3_SDK_ROOT="$RUNNER_TEMP/vst3sdk" \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
+            -DSMTG_CREATE_PLUGIN_LINK=OFF \
+            -DSMTG_BUILD_UNIVERSAL_BINARY=OFF \
+            -DSMTG_ENABLE_AUV2_PLUGIN=ON \
+            -DSMTG_RUN_VST_VALIDATOR=OFF \
+            -DGRAINS_BUILD_TESTS=OFF
+
+      - name: Build AudioUnit component
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          cmake --build build-au --config Release --parallel 4 \
+            2>&1 | tee "$GITHUB_WORKSPACE/build-au-macos-arm64.log"
+
+      - name: Locate, sign and package the .component bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          comp="$(find build-au -type d -name 'GrainsDosage.component' -path '*Release*' | head -n 1)"
+          if [[ -z "$comp" ]]; then
+            echo 'GrainsDosage.component not found after build.' >&2
+            find build-au -maxdepth 6 -type d | sed -n 1,80p >&2
+            exit 1
+          fi
+          echo "Component: $comp"
+          codesign --force --sign - --timestamp=none "$comp"
+          codesign --verify --strict "$comp"
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          ditto -c -k --sequesterRsrc --keepParent "$comp" \
+            "$GITHUB_WORKSPACE/dist/GrainsDosage-macOS-arm64.component.zip"
+
+      - name: Upload AU component only
+        uses: actions/upload-artifact@v4
+        with:
+          name: GrainsDosage-macOS-AppleSilicon-arm64-AU-LogicPro
+          path: dist/GrainsDosage-macOS-arm64.component.zip
+          if-no-files-found: error
+          retention-days: 14

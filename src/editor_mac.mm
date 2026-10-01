@@ -60,6 +60,7 @@ static NSColor* green() {return AZSKIN(kAccent);}
 static NSColor* cream() {return AZSKIN(kCream);}
 static NSColor* muted() {return AZSKIN(kMuted);}
 static NSColor* dark() {return AZSKIN(kBgDeep);}
+static NSColor* onText() {return AZSKIN(kOnText);}   // dark text for lit green fills
 static void box(NSRect r,NSColor* fill,NSColor* stroke,double radius=8.) {
   NSBezierPath* p=[NSBezierPath bezierPathWithRoundedRect:r xRadius:radius yRadius:radius];
   [fill setFill];[p fill];
@@ -202,7 +203,7 @@ static constexpr double slotX[3]={16.,452.,888.};
 - (void)drawControl:(const aztec::Control&)c {
   using namespace aztec;NSRect r=c.rect;double v=std::clamp(owner->value(c.id),0.,1.);
   NSString* title=[NSString stringWithUTF8String:c.label.c_str()];
-  if(c.kind==PanMode){const char* modes[]={"MANUAL","ALTERNATE","RANDOM"};int mode=int(std::round(v*2.));for(int i=0;i<3;++i){NSRect b=NSMakeRect(r.origin.x+i*r.size.width/3.,r.origin.y,r.size.width/3.-3,r.size.height);box(b,mode==i?AZSKIN(kAccentGlow):dark(),mode==i?green():muted(),4);label([NSString stringWithUTF8String:modes[i]],NSInsetRect(b,2,6),9,cream(),true);}return;}
+  if(c.kind==PanMode){const char* modes[]={"MANUAL","ALTERNATE","RANDOM"};int mode=int(std::round(v*2.));for(int i=0;i<3;++i){NSRect b=NSMakeRect(r.origin.x+i*r.size.width/3.,r.origin.y,r.size.width/3.-3,r.size.height);box(b,mode==i?AZSKIN(kAccentGlow):dark(),mode==i?green():muted(),4);label([NSString stringWithUTF8String:modes[i]],NSInsetRect(b,2,6),9,mode==i?onText():cream(),true);}return;}
   if(c.kind==Pan){label(@"L",NSMakeRect(r.origin.x,r.origin.y,16,16),10,cream());label(@"C",NSMakeRect(NSMidX(r)-8,r.origin.y,16,16),10,cream(),true);label(@"R",NSMakeRect(NSMaxX(r)-16,r.origin.y,16,16),10,cream());box(NSMakeRect(r.origin.x+4,r.origin.y+23,r.size.width-8,3),muted(),nil,1);box(NSMakeRect(r.origin.x+v*(r.size.width-8),r.origin.y+18,8,13),green(),nil,3);return;}
   if(c.kind==Knob){
     label(title,NSMakeRect(r.origin.x,r.origin.y,r.size.width,16),11,cream(),true);
@@ -250,13 +251,13 @@ static constexpr double slotX[3]={16.,452.,888.};
     bool on=v>=.5;if(c.id>=kGrainEnabled&&c.id<=kRepeatEnabled)title=on?@"ON":@"OFF";box(r,on?AZSKIN(kAccentGlow):AZSKIN(kPanelRaised),on?green():AZSKIN(kFiligreeDim),6);
     if(on)box(NSMakeRect(r.origin.x+6,NSMidY(r)-6,12,12),AZSKIN(kAccentBright),nil,6);
     box(NSMakeRect(r.origin.x+9,NSMidY(r)-3,6,6),on?green():muted(),nil,3);
-    label(title,NSMakeRect(r.origin.x+20,r.origin.y+(r.size.height-14)/2.,r.size.width-25,16),10,on?cream():muted(),true);
+    label(title,NSMakeRect(r.origin.x+20,r.origin.y+(r.size.height-14)/2.,r.size.width-25,16),10,on?onText():muted(),true);
   }else{
     bool on=v>=.5;box(r,on?AZSKIN(kAccentGlow):AZSKIN(kPanelRaised),on?green():AZSKIN(kFiligreeDim),5);
     int step=c.id>=kReverbStep0?int(c.id-kReverbStep0)+1:c.id>=kGlitchStep0?int(c.id-kGlitchStep0)+1:int(c.id-kStep0)+1;
     if(step==1+int(std::round(owner->value(c.id>=kReverbStep0?kUiReverb:kUiStep)*15.)))box(NSInsetRect(r,1,1),[NSColor clearColor],cream(),4);
     [self art:NSMakeRect(734,456,54,48) in:NSMakeRect(NSMidX(r)-10,r.origin.y+1,20,18) opacity:(on?1.:.35)];
-    label([NSString stringWithFormat:@"%d",step],NSMakeRect(r.origin.x,NSMaxY(r)-15,r.size.width,14),10,on?cream():muted(),true);
+    label([NSString stringWithFormat:@"%d",step],NSMakeRect(r.origin.x,NSMaxY(r)-15,r.size.width,14),10,on?onText():muted(),true);
   }
 }
 - (void)drawRect:(NSRect)dirty {
@@ -307,8 +308,8 @@ static constexpr double slotX[3]={16.,452.,888.};
         box(NSMakeRect(a+4,b+2+press,35,1),enabled?AZSKIN(kFiligree):AZSKIN(kFiligreeDim),nil,0);
         box(NSMakeRect(a+2,b+5+press,1,19),AZSKIN(kFiligreeDim),nil,0);
         box(NSMakeRect(a+3,b+26+press,37,1),AZSKIN(kWell),nil,0);
-        label([NSString stringWithFormat:@"%d",i+1],NSMakeRect(a+3,b+2+press,37,13),11,enabled?cream():muted(),true,11);
-        label(owner->display(aztec::kRepeatRate0+i,owner->value(aztec::kRepeatRate0+i),false),NSMakeRect(a+3,b+16+press,37,10),9,enabled?cream():muted(),true,9);
+        label([NSString stringWithFormat:@"%d",i+1],NSMakeRect(a+3,b+2+press,37,13),11,enabled?onText():muted(),true,11);
+        label(owner->display(aztec::kRepeatRate0+i,owner->value(aztec::kRepeatRate0+i),false),NSMakeRect(a+3,b+16+press,37,10),9,enabled?onText():muted(),true,9);
         if(i==int(std::round(owner->value(aztec::kUiStep)*15.)))box(NSMakeRect(a+5,b+30,33,2),green(),nil,1);
       }
     }
@@ -344,8 +345,8 @@ static constexpr double slotX[3]={16.,452.,888.};
   NSBezierPath* cross=[NSBezierPath bezierPath];[cross moveToPoint:NSMakePoint(px,pad.origin.y)];[cross lineToPoint:NSMakePoint(px,NSMaxY(pad))];[cross moveToPoint:NSMakePoint(pad.origin.x,py)];[cross lineToPoint:NSMakePoint(NSMaxX(pad),py)];[[AZSKIN(kAccent) colorWithAlphaComponent:.25] setStroke];cross.lineWidth=1.;[cross stroke];
   box(NSMakeRect(px-5,py-5,10,10),green(),cream(),5);
   [self panel:NSMakeRect(16,766,1288,108)];label(@"RESLICE",NSMakeRect(32,781,108,24),14,muted());
-  box(NSMakeRect(1052,778,216,28),AZSKIN(kAccentGlow),green(),5);label(@"RANDOM ONCE",NSMakeRect(1052,782,216,20),12,cream(),true);
-  for(int i=0;i<16;++i){double x=32+i*78.;bool on=owner->value(aztec::kResliceStep0+i)>.5;box(NSMakeRect(x,823,70,40),on?AZSKIN(kAccentGlow):dark(),selectedReslice==i?cream():muted(),5);label([NSString stringWithFormat:@"%02d → %02d",i+1,1+int(std::round(owner->value(owner->value(aztec::kResliceRndOn)>.5?aztec::kUiResliceSource0+i:aztec::kResliceIndex0+i)*15.))],NSMakeRect(x,827,70,18),10,on?green():muted(),true);if(i==int(std::round(owner->value(aztec::kUiResliceStep)*15.)))box(NSMakeRect(x+5,858,60,2),owner->value(aztec::kUiResliceActive)>.5?green():cream(),nil,1);}
+  box(NSMakeRect(1052,778,216,28),AZSKIN(kAccentGlow),green(),5);label(@"RANDOM ONCE",NSMakeRect(1052,782,216,20),12,onText(),true);
+  for(int i=0;i<16;++i){double x=32+i*78.;bool on=owner->value(aztec::kResliceStep0+i)>.5;box(NSMakeRect(x,823,70,40),on?AZSKIN(kAccentGlow):dark(),selectedReslice==i?cream():muted(),5);label([NSString stringWithFormat:@"%02d → %02d",i+1,1+int(std::round(owner->value(owner->value(aztec::kResliceRndOn)>.5?aztec::kUiResliceSource0+i:aztec::kResliceIndex0+i)*15.))],NSMakeRect(x,827,70,18),10,on?onText():muted(),true);if(i==int(std::round(owner->value(aztec::kUiResliceStep)*15.)))box(NSMakeRect(x+5,858,60,2),owner->value(aztec::kUiResliceActive)>.5?green():cream(),nil,1);}
   [self panel:NSMakeRect(16,886,1288,108)];label(@"GATER",NSMakeRect(32,901,104,24),14,muted());
   label(@"CLICK: WET / OFF     SHIFT-CLICK: LATCH RELEASE",NSMakeRect(760,876,500,16),9,muted(),true);
   for(int i=0;i<16;++i){double x=32+i*78.;int state=owner->value(aztec::kGaterState0+i)>=.25?1:0;if(owner->value(aztec::kGaterEnabled)>.5&&owner->value(aztec::kGaterStepRnd)>.5)state=owner->value(aztec::kUiGaterState0+i)>=.5?1:0;bool release=owner->value(aztec::kGaterRelease0+i)>=.5;double length=owner->value(aztec::kGaterLengthRnd)>.5?owner->value(aztec::kUiGaterLength0+i):.05+.95*owner->value(aztec::kGaterLength0+i);double sustain=owner->value(aztec::kGaterSustain0+i);NSColor* color=release?AZSKIN(kRelease):state?green():muted();
