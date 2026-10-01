@@ -8,14 +8,13 @@ copy it into the VST3 folder and your DAW finds it on next scan.
 1. Push your code to GitHub (main branch), or open the Actions tab of
    `danielmelegari/GrainsDosageGTRv2`.
 2. Go to **Actions** → pick the workflow for your machine:
-   - **Build VST3 - Windows x64** (`build-windows.yml`)
-   - **Build VST3 - Mojave Intel** (`build-macos.yml`)
-   - **Build VST3 - Apple Silicon** (`build-macos-pkg.yml`)
+   - **Build VST3 only (no installer)** (`build-vst3.yml`) — unico workflow, genera 3 artefatti:
+     macOS Intel x64, macOS Apple Silicon arm64 e Windows 10/11 x64 (solo zip .vst3, niente .pkg/.exe)
 3. Click **Run workflow** → **Run workflow** (green button). Wait ~5–10 min.
-4. Open the finished run and under **Artifacts** download:
-   - Windows: `GrainsDosage-Windows10-x64-Installer` → inside the zip you get
-     the plain **`GrainsDosage.vst3` folder** (ignore Setup.exe, don't run it).
-   - macOS: `GrainsDosage-*-VST3` artifact → contains `GrainsDosage.vst3`.
+4. Open the finished run and under **Artifacts** download the zip for your platform:
+   - Windows: `GrainsDosage-Windows10-x64-VST3.zip` → contains the plain **`GrainsDosage.vst3` bundle** (no installer).
+   - macOS Intel: `GrainsDosage-macOS-x64-VST3.zip`.
+   - Apple Silicon: `GrainsDosage-macOS-arm64-VST3.zip`.
 5. Unzip and **copy the whole `GrainsDosage.vst3` folder** (not just the file
    inside it) to the DAW scan path shown below. Done — no installer involved.
 

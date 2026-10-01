@@ -19,7 +19,7 @@ Le nuove funzioni automatiche partono disattivate. I vecchi preset e gli stati d
 Le vecchie Window 1/1 e 1/2 mantengono la durata. Le precedenti 1/3 e 1/4, eliminate dal menu richiesto, vengono convertite a 1/2: quei preset avranno una finestra diversa. Controllare eventuali automazioni host delle liste Window e destinazioni Mod, i cui valori normalizzati sono cambiati.
 
 ## Compilazione e installazione
-Questo ZIP contiene i sorgenti, skin, 30 preset e workflow, non un VST3 già compilato. Caricare tutto il contenuto nella radice della repo, inclusa .github/workflows. Usare build-macos.yml per Intel/Mojave, build-silicon.yml per Apple Silicon o build-windows.yml per Windows x64. Scaricare l'artefatto del plugin dal run riuscito; build-diagnostics contiene soltanto log.
+Questo ZIP contiene i sorgenti, skin, 30 preset e workflow, non un VST3 già compilato. Caricare tutto il contenuto nella radice della repo, inclusa .github/workflows. L'unico workflow è build-vst3.yml: genera solo i bundle .vst3 (macOS Intel, Apple Silicon e Windows x64) come ZIP, senza installer. Scarica lo zip dal run riuscito nella sezione Artifacts e copia la cartella GrainsDosage.vst3 nel percorso VST3 della DAW; build-diagnostics contiene soltanto log.
 La GUI conserva le skin e aggiunge una fascia per il sequencer filtro; dimensione iniziale 792 x 816, ridimensionabile.
 
 ## Verifica
