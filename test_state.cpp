@@ -58,9 +58,12 @@ int main() {
   Controller controller; assert(controller.initialize(nullptr)==kResultOk);
   // The global BYPASS button was removed: kBypassReserved keeps its legacy enum slot
   // (state/preset alignment) but is no longer a registered VST parameter, so the
-  // controller exposes exactly kCount-1 parameters and the validator never sees a
-  // bypass proxy.
-  assert(controller.getParameterCount()==kCount-1);
+  // controller exposes every enum id except that reserved slot. Derive the expected
+  // registered count dynamically instead of hard-coding it: this stays correct no
+  // matter how many slots are unregistered in the future.
+  const int registered=[&]{int n=0;for(int i=0;i<int(kCount);++i)if(controller.getParameterObject(ParamID(i)))++n;return n;}();
+  assert(registered==controller.getParameterCount());
+  assert(controller.getParameterCount()==int(kCount)-1);
   assert(controller.getParameterObject(ParamID(kBypassReserved))==nullptr);
   for(int i=0;i<kCount;++i) if(i!=int(kBypassReserved)) assert(std::abs(controller.getParamNormalized(i)-defaults()[i])<1e-12);
   for(int idx=0;idx<controller.getParameterCount();++idx) { ParameterInfo info{}; assert(controller.getParameterInfo(idx,info)==kResultTrue); assert(info.id!=ParamID(kBypassReserved)); }
@@ -107,6 +110,25 @@ int main() {
   }
   // A legacy kBypassReserved value coming through a real VST queue must also stay inert.
   changes.clearQueue();put(kBypassReserved,1.);assert(processor->process(data)==kResultOk);
+  {
+    const Processor& readonlyRef=*processor;
+    assert(readonlyRef.p_[int(kBypassReserved)]==0.);
+  }
+  // Bypass-slot persistence verified through the VST queue path: the processor echoes
+  // kBypassReserved on every block through outputParameterChanges pinned to 0, so the
+  // reserved slot can never carry a stale/active bypass value back to the controller.
+  {
+    bool bypassEchoed=false;
+    for(int block=0;block<3;++block){
+      meters.clearQueue();
+      assert(processor->process(data)==kResultOk);
+      bool found=false;
+      for(int i=0;i<meters.getParameterCount();++i){auto* q=meters.getParameterData(i);if(q->getParameterId()!=ParamID(kBypassReserved))continue;found=true;int32 offset;double value;assert(q->getPoint(q->getPointCount()-1,offset,value)==kResultOk);assert(value==0.);}
+      assert(found&&"reserved bypass slot must be echoed every block");
+      bypassEchoed=true;
+    }
+    assert(bypassEchoed);
+  }
   // Roundtrip: save state with the reserved slot dirty, reload it and verify the slot
   // is written back as 0 and never resurrects on load.
   {

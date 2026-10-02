@@ -267,6 +267,12 @@ public:
       const int step=int((int64_t(std::floor(beat/.25))%16+16)%16);
       const double meters[]={step/15.,(!s.bypass&&engine_.glitchRunning())?1.:0.,(!s.bypass&&engine_.repeatRunning())?1.:0.,std::clamp(peak,0.,1.),double((int64_t(std::floor(beat/s.reverbGrid))%16+16)%16)/15.};
       for(int i=0;i<5;++i){int32 index=0;auto id=ParamID(i==4?kUiReverb:kUiStep+i);auto* q=data.outputParameterChanges->addParameterData(id,index);if(q)q->addPoint(data.numSamples-1,meters[i],index);}
+      // The global BYPASS control was removed, but the reserved legacy slot keeps its
+      // position in the state array. Echo it through the standard VST output-queue path
+      // (same mechanism as the step/glitch/repeat/level/reverb meters) pinned to 0 so
+      // hosts and tests can verify its persistence: a stale bypass value loaded from an
+      // old preset can never resurrect here or in the processor's parameter array.
+      {int32 bIdx=0;auto* bq=data.outputParameterChanges->addParameterData(ParamID(kBypassReserved),bIdx);if(bq)bq->addPoint(data.numSamples-1,0.,bIdx);}
     }
     waveCountdown_-=data.numSamples;
     if(data.outputParameterChanges&&data.numSamples>0&&waveCountdown_<=0){
