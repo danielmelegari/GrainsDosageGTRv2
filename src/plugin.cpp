@@ -139,7 +139,6 @@ class Processor final : public AudioEffect {
   qg::InputDeclick declick_;
   qg::MasterFx master_;
   std::array<double, kCount> p_{};
-  Steinberg::Vst::IEditController* controller_ = nullptr; // cached for setComponentState bypass sync
   int waveCountdown_=0;
   double rate_ = 44100., tempo_ = 120., fallbackBeat_ = 0.;
   // The parameter array covers every legacy + monitor ID; the VST parameter list stops before the new UI controls.
@@ -187,28 +186,19 @@ public:
     if(active) { engine_.prepare(rate_);declick_.prepare(rate_,p_[kInputDeclick]>=.5);master_.prepare(rate_); fallbackBeat_=0.;waveCountdown_=0; }
     return AudioEffect::setActive(active);
   }
-  // The validator's "Parameter Bypass persistence" check requires the component to
-  // mirror its bypass state into the controller through this VST3 channel.
+  // Mirror bypass into the controller for the validator's "Parameter Bypass
+  // persistence" check. AudioEffect::setBypass is the SDK-supported channel:
+  // it forwards to the linked controller when one exists. (We must not use
+  // getController()/IEditController here: this SDK's IEditController has no
+  // performEdit member, and Steinberg interfaces are not RTTI-polymorphic.)
   tresult PLUGIN_API setComponentState(IBStream* stream) override {
     if(!stream) return kResultFalse;
     std::array<double, kCount> p{};
     if(!loadState(stream,p)) return kResultFalse;
     p_ = p;
-    // The validator's "Parameter Bypass persistence" check requires that a
-    // state-driven bypass change is mirrored in the controller. Query our own
-    // controller (fetched once, cached) and perform an edit on the kBypass id.
-    if(!controller_) {
-      IController* c=nullptr;
-      if(getController(c) && c) {
-        auto* ec=dynamic_cast<IEditController*>(c);
-        if(ec) { controller_=ec; controller_->addRef(); }
-      }
-      if(c) c->release();
-    }
-    if(controller_) controller_->performEdit(ParamID(kBypass), p[kBypass]>=.5 ? 1. : 0.);
+    setBypass(p[kBypass]>=.5);
     return kResultOk;
   }
-  ~Processor() override { if(controller_) { controller_->release(); controller_=nullptr; } }
   tresult PLUGIN_API process(ProcessData& data) override {
     // No allocations: fixed queue cursors, updated at the exact sample offset.
     std::array<IParamValueQueue*, kCount> queues{};
