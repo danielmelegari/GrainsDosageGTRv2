@@ -186,17 +186,11 @@ public:
     if(active) { engine_.prepare(rate_);declick_.prepare(rate_,p_[kInputDeclick]>=.5);master_.prepare(rate_); fallbackBeat_=0.;waveCountdown_=0; }
     return AudioEffect::setActive(active);
   }
-  // Mirror bypass into the controller for the validator's "Parameter Bypass
-  // persistence" check. AudioEffect::setBypass is the SDK-supported channel:
-  // it forwards to the linked controller when one exists. (We must not use
-  // getController()/IEditController here: this SDK's IEditController has no
-  // performEdit member, and Steinberg interfaces are not RTTI-polymorphic.)
   tresult PLUGIN_API setComponentState(IBStream* stream) override {
     if(!stream) return kResultFalse;
     std::array<double, kCount> p{};
     if(!loadState(stream,p)) return kResultFalse;
     p_ = p;
-    setBypass(p[kBypass]>=.5);
     return kResultOk;
   }
   tresult PLUGIN_API process(ProcessData& data) override {
