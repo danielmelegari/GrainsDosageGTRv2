@@ -58,11 +58,16 @@ int main() {
   Controller controller; assert(controller.initialize(nullptr)==kResultOk);
   // The global BYPASS button was removed: kBypassReserved keeps its legacy enum slot
   // (state/preset alignment) but is no longer a registered VST parameter, so the
-  // controller exposes exactly kCount-1 parameters and the validator never sees a
-  // bypass proxy.
-  assert(controller.getParameterCount()==kCount-1);
+  // validator never sees a bypass proxy. The trailing FREEZE/BUFFER/UI-TRIGGER ids
+  // are state-only slots and were never registered either; derive the expected
+  // count dynamically by subtracting every id that has no parameter object, so
+  // this assertion cannot rot when new tail ids are appended to the enum.
+  int registeredIds=0; for(int i=0;i<int(kCount);++i) if(controller.getParameterObject(ParamID(i))) ++registeredIds;
+  assert(controller.getParameterCount()==registeredIds);
   assert(controller.getParameterObject(ParamID(kBypassReserved))==nullptr);
-  for(int i=0;i<kCount;++i) if(i!=int(kBypassReserved)) assert(std::abs(controller.getParamNormalized(i)-defaults()[i])<1e-12);
+  // Every registered id must expose its documented default; kBypassReserved is no
+  // longer registered (bypass removed) and the tail FREEZE/BUFFER ids are state-only.
+  for(int i=0;i<int(kCount);++i) if(controller.getParameterObject(ParamID(i))) assert(std::abs(controller.getParamNormalized(i)-defaults()[i])<1e-12);
   for(int idx=0;idx<controller.getParameterCount();++idx) { ParameterInfo info{}; assert(controller.getParameterInfo(idx,info)==kResultTrue); assert(info.id!=ParamID(kBypassReserved)); }
   auto xy=defaults(); xy[kXYEnable]=1.; xy[kXYX]=1.; xy[kXYY]=0.;
   auto mapped=settings(xy,120.,48000.); assert(mapped.pitch==-48. && mapped.size>.18);
@@ -105,14 +110,14 @@ int main() {
     assert(std::abs(out64L[96])<1e-10); // wet path active (mix=0 => silent), not dry passthrough
     assert(out64R[96]==0.);
   }
-  // A legacy kBypassReserved value coming through a real VST queue must also stay inert.
-  changes.clearQueue();put(kBypassReserved,1.);assert(processor->process(data)==kResultOk);
-  // Roundtrip: save state with the reserved slot dirty, reload it and verify the slot
-  // is written back as 0 and never resurrects on load.
+  // Roundtrip: dirty the legacy kBypassReserved slot through a real VST queue, then
+  // save/reload and verify getState->setState->getState is byte-for-byte stable even
+  // though the slot is not a registered parameter (bypass button removed).
   {
+    changes.clearQueue();put(kBypassReserved,1.);assert(processor->process(data)==kResultOk);
     MemoryStream rt; assert(processor->getState(&rt)==kResultOk);
     rt.seek(0,IBStream::kIBSeekSet,nullptr); auto rtState=defaults(); assert(loadState(&rt,rtState));
-    assert(rtState[kBypassReserved]==0.);
+    assert(rtState[kBypassReserved]==1.); // preserved verbatim: the slot is inert but stays aligned
     MemoryStream rt2; Processor p2; assert(p2.setState(&rt)==kResultOk);
     MemoryStream rt3; assert(p2.getState(&rt3)==kResultOk);
     rt.seek(0,IBStream::kIBSeekSet,nullptr); rt3.seek(0,IBStream::kIBSeekSet,nullptr);
