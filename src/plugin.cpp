@@ -186,13 +186,10 @@ public:
     if(active) { engine_.prepare(rate_);declick_.prepare(rate_,p_[kInputDeclick]>=.5);master_.prepare(rate_); fallbackBeat_=0.;waveCountdown_=0; }
     return AudioEffect::setActive(active);
   }
-  tresult PLUGIN_API setComponentState(IBStream* stream) override {
-    if(!stream) return kResultFalse;
-    std::array<double, kCount> p{};
-    if(!loadState(stream,p)) return kResultFalse;
-    p_ = p;
-    return kResultOk;
-  }
+  // NOTE: Processor must NOT override setComponentState — AudioEffect does not
+  // declare it virtual (only IComponent via FUnknown), so `override` fails to
+  // compile here. The Controller below receives setComponentState and applies
+  // the full parameter array through updateStates().
   tresult PLUGIN_API process(ProcessData& data) override {
     // No allocations: fixed queue cursors, updated at the exact sample offset.
     std::array<IParamValueQueue*, kCount> queues{};
