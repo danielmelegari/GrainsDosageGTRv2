@@ -79,7 +79,9 @@ qg::Settings settings(const std::array<double, kCount>& saved, double tempo, dou
   s.repeatAuto=value(p,kRepeatAuto)>=.5;s.repeatInterval=captureIntervals[int(std::round(value(p,kRepeatInterval)*7.))];
   s.repeatDuration=.25+value(p,kRepeatDuration)*7.75;s.repeatChance=value(p,kRepeatChance);
   s.order=std::min(6,int(std::round(value(p,kModuleOrder)*6.)));
-  s.bypass=value(p,kBypass)>=.5; s.densityFlow=value(p,kDensityFlow)>=.5; s.transpose=value(p,kTranspose)*96.-48.;
+  // Global BYPASS button removed from the plugin: kBypassReserved stays in the enum only so
+  // legacy state/preset IDs keep their positions, but it is never read anymore.
+  s.bypass=false; s.densityFlow=value(p,kDensityFlow)>=.5; s.transpose=value(p,kTranspose)*96.-48.;
   s.stretchOn=value(p,kStretchOn)>=.5; s.stretchSpeed=.25+value(p,kStretchSpeed)*3.75;
   for(int i=0;i<qg::lfoCount;++i) {
     auto& l=s.lfos[i]; const int base=lfoID(i,0);
@@ -103,7 +105,9 @@ bool loadState(IBStream* stream, std::array<double,kCount>& p) {
   const int count = magic==0x51473144 ? int(kCount) : magic==0x51473143 ? int(kResliceRndOn) : magic==0x51473130 ? int(kGrainMix) : (magic==0x51473131 ? int(kLfo0) : (magic==0x51473132 ? int(kLegacyCount) : (magic==0x51473133 ? int(kModuleOrder) : (magic==0x51473134 ? int(kExtraRoutes0) : (magic==0x51473135 ? int(kGlitchMove) : (magic==0x51473136 ? int(kMasterFilter) : (magic==0x51473137 ? int(kNormalize) : (magic==0x51473138 ? int(kReverbLength) : (magic==0x51473139 ? int(kUiWave0) : (magic==0x5147313A ? int(kLfoSlots0) : (magic==0x5147313B ? int(kModWaveRnd0) : (magic==0x5147313C ? int(kReverbSource) : (magic==0x5147313D ? int(kLimiterCeiling) : (magic==0x5147313E ? int(kGaterEnabled) : (magic==0x5147313F ? int(kInputDeclick) : (magic==0x51473140 ? int(kFilterModel) : (magic==0x51473141 ? int(kGaterMinLength) : int(kGlitchTriggerRate))))))))))))))))));
   for(int i=0;i<count;++i) {
     double v=0.; if(!in.readDouble(v) || !std::isfinite(v)) return false;
-    result[i]=std::clamp(v,0.,1.);
+    // kBypassReserved slot is read from legacy streams (to keep alignment) but never
+    // applied: the global bypass button was removed, so its old value must stay inert.
+    if(i!=int(kBypassReserved)) result[i]=std::clamp(v,0.,1.);
   }
   if(magic==0x51473133) result[kModuleOrder]=1.; // Preserve version 0.5 parallel routing.
   if(magic<0x51473133) {
@@ -172,7 +176,10 @@ public:
     // v0.14 additions: buffer size, freeze state, then RANDOM/PRESET ids kept for array alignment.
     if(!out.writeDouble(value(p_,kGrainBuffer))) return kResultFalse;
     if(!out.writeDouble(engine_.isFrozen()?1.:0.)) return kResultFalse;
-    for(int i=kGrainBuffer+2;i<int(kCount);++i) if(!out.writeDouble(p_[i])) return kResultFalse;
+    // kBypassReserved is serialized as a constant 0 so the stream layout keeps its
+    // historical kCount doubles (old files stay loadable); the global bypass was
+    // removed, so its legacy value must never be written back out.
+    for(int i=kGrainBuffer+2;i<int(kCount);++i) if(!out.writeDouble(i==int(kBypassReserved)?0.:p_[i])) return kResultFalse;
     return kResultOk;
   }
   tresult PLUGIN_API canProcessSampleSize(int32 size) override {
@@ -256,10 +263,6 @@ public:
       }
     }
     if(data.outputParameterChanges&&data.numSamples>0){
-      // Report our bypass state back to the controller so host-side Bypass toggles
-      // (validator "Parameter Bypass persistence" check, DAW bypass button) stay in sync.
-      int32 bIdx=0; auto* bq=data.outputParameterChanges->addParameterData(ParamID(kBypass),bIdx);
-      if(bq) bq->addPoint(data.numSamples-1, s.bypass?1.:0., bIdx);
       const double beat=fallbackBeat_+(data.numSamples-1)*beatIncrement;
       const int step=int((int64_t(std::floor(beat/.25))%16+16)%16);
       const double meters[]={step/15.,(!s.bypass&&engine_.glitchRunning())?1.:0.,(!s.bypass&&engine_.repeatRunning())?1.:0.,std::clamp(peak,0.,1.),double((int64_t(std::floor(beat/s.reverbGrid))%16+16)%16)/15.};
@@ -328,7 +331,14 @@ public:
     toggle(STR16("Repeat Hold"),kRepeatOn,0.);
     range(STR16("Repeat Mix"),kRepeatMix,STR16("%"),0,100,100,0);
     effectGrid(STR16("Repeat Length"),kRepeatDivision,4./15.);
-    toggle(STR16("Bypass"),kBypass,0.,ParameterInfo::kIsBypass);
+    // Global BYPASS button removed from the plugin: kBypassReserved keeps its legacy ID
+    // slot (so old states/presets stay aligned) but is exposed only as a hidden,
+    // non-automatable parameter without the kIsBypass flag.
+    // NOTE: kIsHidden is NOT enough here — the VST3 ParameterValidator treats every
+    // parameter carrying kIsHidden as a host-bypass proxy and fails the "Parameter
+    // Bypass persistence" check when it cannot toggle it. So the reserved legacy slot
+    // is not registered as a live parameter at all; state/preset code only ever reads
+    // it from the raw p_ array, which keeps its index for backward compatibility.
     for(int i=0;i<qg::lfoCount;++i) {
       String128 name{};
       auto title=[&](const char* label) -> const TChar* {
@@ -496,7 +506,9 @@ public:
   }
   tresult PLUGIN_API setComponentState(IBStream* stream) override {
     auto p=defaults(); if(!loadState(stream,p)) return kResultFalse;
-    for(int i=0;i<kCount;++i) setParamNormalized(i,p[i]);
+    // kBypassReserved is not a registered parameter anymore (bypass button removed):
+    // only set IDs that the controller actually exposes.
+    for(int i=0;i<kCount;++i) if(parameters.getParameter(i)) setParamNormalized(i,p[i]);
     return kResultOk;
   }
 };
