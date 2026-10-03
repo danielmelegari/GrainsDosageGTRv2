@@ -1,1 +1,6 @@
-(empty)
+# Build artifacts
+build-local/
+build/
+*.log
+logs.zip
+joblog.zip
