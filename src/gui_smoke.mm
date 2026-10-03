@@ -101,8 +101,13 @@ int main(int argc,char** argv){
       checkGui(controller->getParamNormalized(aztec::kReverbOn)==1.,"Reverb toggle");
       send(NSEventTypeLeftMouseDown,603,1115);send(NSEventTypeLeftMouseUp,603,1115);
       checkGui(controller->getParamNormalized(aztec::kReverbStep0)==0.,"Reverb step toggle");
-      send(NSEventTypeLeftMouseDown,724,120);send(NSEventTypeLeftMouseUp,724,120);
-      checkGui(controller->getParamNormalized(aztec::kGrainEnabled)==0.,"Moved module bypass");
+      // Module ON/OFF toggles sit at slotX[slot(stage)]+238..306, y 106..134
+      // (editor_layout_win.inl, shared with Cocoa). Default order: stage 0
+      // (kGrainEnabled) is in physical slot 0 -> logical x 254, y 120.
+      // The old x=724 click hit slot 1's RANDOM button and never toggled the
+      // module bypass, so this check always failed.
+      send(NSEventTypeLeftMouseDown,254,120);send(NSEventTypeLeftMouseUp,254,120);
+      checkGui(controller->getParamNormalized(aztec::kGrainEnabled)==0.,"Module bypass");
       controller->setParamNormalized(aztec::kPanMode,.5);
       checkGui(controller->getParamNormalized(aztec::kPanMode)==.5,"Alternate pan mode");
       controller->setParamNormalized(aztec::kPanMode,0.);
