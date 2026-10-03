@@ -1,6 +1,2 @@
-# Build artifacts
+# Build and test artifacts
 build-local/
-build/
-*.log
-logs.zip
-joblog.zip

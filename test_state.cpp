@@ -67,7 +67,15 @@ int main() {
   assert(controller.getParameterObject(ParamID(kBypassReserved))==nullptr);
   // Every registered id must expose its documented default; kBypassReserved is no
   // longer registered (bypass removed) and the tail FREEZE/BUFFER ids are state-only.
-  for(int i=0;i<int(kCount);++i) if(controller.getParameterObject(ParamID(i))) assert(std::abs(controller.getParamNormalized(i)-defaults()[i])<1e-12);
+  // NOTE: getParamNormalized() takes a PARAMETER INDEX (order of registration in
+  // Parameters), not a ParamID — the enum value and the registration index only
+  // coincide while every id 0..kCount-1 is registered in ascending order, which is
+  // no longer true since kBypassReserved (id 34) was un-registered. Look each id up
+  // by ID first, then read it back through its own object's normalized value.
+  for(int i=0;i<int(kCount);++i) {
+    auto* param=controller.getParameterObject(ParamID(i));
+    if(param) assert(std::abs(param->getNormalized()-defaults()[i])<1e-12);
+  }
   for(int idx=0;idx<controller.getParameterCount();++idx) { ParameterInfo info{}; assert(controller.getParameterInfo(idx,info)==kResultTrue); assert(info.id!=ParamID(kBypassReserved)); }
   auto xy=defaults(); xy[kXYEnable]=1.; xy[kXYX]=1.; xy[kXYY]=0.;
   auto mapped=settings(xy,120.,48000.); assert(mapped.pitch==-48. && mapped.size>.18);
