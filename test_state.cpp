@@ -67,14 +67,19 @@ int main() {
   assert(controller.getParameterObject(ParamID(kBypassReserved))==nullptr);
   // Every registered id must expose its documented default; kBypassReserved is no
   // longer registered (bypass removed) and the tail FREEZE/BUFFER ids are state-only.
-  // NOTE: getParamNormalized() takes a PARAMETER INDEX (order of registration in
-  // Parameters), not a ParamID — the enum value and the registration index only
-  // coincide while every id 0..kCount-1 is registered in ascending order, which is
-  // no longer true since kBypassReserved (id 34) was un-registered. Look each id up
-  // by ID first, then read it back through its own object's normalized value.
+  // NOTE: getParamNormalized()/setParamNormalized() take a PARAMETER INDEX (order of
+  // registration in Parameters), not a ParamID — the enum value and the registration
+  // index only coincide while every id 0..kCount-1 is registered in ascending order,
+  // which stopped being true when kBypassReserved (id 34) was un-registered. Reading
+  // by index silently queried the wrong parameter for everything after slot 34.
+  const auto def=defaults();
   for(int i=0;i<int(kCount);++i) {
     auto* param=controller.getParameterObject(ParamID(i));
-    if(param) assert(std::abs(param->getNormalized()-defaults()[i])<1e-12);
+    if(!param) continue;
+    // setParamNormalized routes through the same container lookup as the host path;
+    // verify write-by-ID/read-by-ID round-trips at the documented default.
+    assert(controller.setParamNormalized(ParamID(i),def[i])==kResultTrue);
+    assert(std::abs(controller.getParamNormalized(ParamID(i))-def[i])<1e-12);
   }
   for(int idx=0;idx<controller.getParameterCount();++idx) { ParameterInfo info{}; assert(controller.getParameterInfo(idx,info)==kResultTrue); assert(info.id!=ParamID(kBypassReserved)); }
   auto xy=defaults(); xy[kXYEnable]=1.; xy[kXYX]=1.; xy[kXYY]=0.;
@@ -126,12 +131,16 @@ int main() {
     MemoryStream rt; assert(processor->getState(&rt)==kResultOk);
     rt.seek(0,IBStream::kIBSeekSet,nullptr); auto rtState=defaults(); assert(loadState(&rt,rtState));
     assert(rtState[kBypassReserved]==1.); // preserved verbatim: the slot is inert but stays aligned
+    rt.seek(0,IBStream::kIBSeekSet,nullptr); // rewind: loadState above left the cursor at EOF
     MemoryStream rt2; Processor p2; assert(p2.setState(&rt)==kResultOk);
     MemoryStream rt3; assert(p2.getState(&rt3)==kResultOk);
     rt.seek(0,IBStream::kIBSeekSet,nullptr); rt3.seek(0,IBStream::kIBSeekSet,nullptr);
     int32 m1=0,m2=0;IBStreamer r1(&rt,kLittleEndian),r2(&rt3,kLittleEndian);
-    r1.readInt32(m1);r2.readInt32(m2);assert(m1==m2);
-    for(int i=0;i<int(kCount)+2;++i){double a=0,b=0;r1.readDouble(a);r2.readDouble(b);assert(a==b);}
+    r1.readInt32(m1);r2.readInt32(m2);assert(m1==m2&&m1==0x51473145);
+    // getState layout: kParamEnd values, buffer size, freeze flag, then the tail
+    // (kBypassReserved lives in this region) up to kCount.
+    const int fields=kParamEnd+2+(int(kCount)-int(kGrainBuffer)-2);
+    for(int i=0;i<fields;++i){double a=0,b=0;assert(r1.readDouble(a)&&r2.readDouble(b));assert(a==b);}
   }
   processor->setActive(false);processor->terminate();processor->release();
   std::cout<<"PASS: v0.1–v0.12.0 state migration and legacy parallel mode, disabled legacy routes, malformed state rejection, controller defaults, appended Speed/Transpose routes, XY routing and processor state roundtrip, master host automation\n";

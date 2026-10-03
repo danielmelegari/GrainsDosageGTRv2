@@ -98,17 +98,36 @@ qg::Settings settings(const std::array<double, kCount>& saved, double tempo, dou
   return s;
 }
 std::array<double,kCount> defaults(){return initialParameters();}
+// Last id that is part of the plain (contiguous) parameter array region written
+// by getState; everything after it up to kCount is appended in the tail layout.
+static constexpr int kParamEnd = int(kUiFilterSeqStep) + 1;
 bool loadState(IBStream* stream, std::array<double,kCount>& p) {
   IBStreamer in(stream,kLittleEndian); int32 magic=0;
-  if(!in.readInt32(magic) || (magic!=0x51473130 && magic!=0x51473131 && magic!=0x51473132 && magic!=0x51473133 && magic!=0x51473134 && magic!=0x51473135 && magic!=0x51473136 && magic!=0x51473137 && magic!=0x51473138 && magic!=0x51473139 && magic!=0x5147313A && magic!=0x5147313B && magic!=0x5147313C && magic!=0x5147313D && magic!=0x5147313E && magic!=0x5147313F && magic!=0x51473140 && magic!=0x51473141 && magic!=0x51473142 && magic!=0x51473143 && magic!=0x51473144)) return false;
+  if(!in.readInt32(magic) || (magic!=0x51473130 && magic!=0x51473131 && magic!=0x51473132 && magic!=0x51473133 && magic!=0x51473134 && magic!=0x51473135 && magic!=0x51473136 && magic!=0x51473137 && magic!=0x51473138 && magic!=0x51473139 && magic!=0x5147313A && magic!=0x5147313B && magic!=0x5147313C && magic!=0x5147313D && magic!=0x5147313E && magic!=0x5147313F && magic!=0x51473140 && magic!=0x51473141 && magic!=0x51473142 && magic!=0x51473143 && magic!=0x51473144 && magic!=0x51473145)) return false;
   auto result=defaults();
-  const int count = magic==0x51473144 ? int(kCount) : magic==0x51473143 ? int(kResliceRndOn) : magic==0x51473130 ? int(kGrainMix) : (magic==0x51473131 ? int(kLfo0) : (magic==0x51473132 ? int(kLegacyCount) : (magic==0x51473133 ? int(kModuleOrder) : (magic==0x51473134 ? int(kExtraRoutes0) : (magic==0x51473135 ? int(kGlitchMove) : (magic==0x51473136 ? int(kMasterFilter) : (magic==0x51473137 ? int(kNormalize) : (magic==0x51473138 ? int(kReverbLength) : (magic==0x51473139 ? int(kUiWave0) : (magic==0x5147313A ? int(kLfoSlots0) : (magic==0x5147313B ? int(kModWaveRnd0) : (magic==0x5147313C ? int(kReverbSource) : (magic==0x5147313D ? int(kLimiterCeiling) : (magic==0x5147313E ? int(kGaterEnabled) : (magic==0x5147313F ? int(kInputDeclick) : (magic==0x51473140 ? int(kFilterModel) : (magic==0x51473141 ? int(kGaterMinLength) : int(kGlitchTriggerRate))))))))))))))))));
+  // Layouts: legacy versions store `count` plain doubles. Current saves
+  // (0x51473145, written by getState) use the same prefix plus three extra
+  // fields injected after kParamEnd: buffer size, freeze flag, then the array
+  // continues at kGrainBuffer+2 through kCount-1.
+  const bool current=magic==0x51473145;
+  const int count = current ? int(kParamEnd) : magic==0x51473144 ? int(kCount) : magic==0x51473143 ? int(kResliceRndOn) : magic==0x51473130 ? int(kGrainMix) : (magic==0x51473131 ? int(kLfo0) : (magic==0x51473132 ? int(kLegacyCount) : (magic==0x51473133 ? int(kModuleOrder) : (magic==0x51473134 ? int(kExtraRoutes0) : (magic==0x51473135 ? int(kGlitchMove) : (magic==0x51473136 ? int(kMasterFilter) : (magic==0x51473137 ? int(kNormalize) : (magic==0x51473138 ? int(kReverbLength) : (magic==0x51473139 ? int(kUiWave0) : (magic==0x5147313A ? int(kLfoSlots0) : (magic==0x5147313B ? int(kModWaveRnd0) : (magic==0x5147313C ? int(kReverbSource) : (magic==0x5147313D ? int(kLimiterCeiling) : (magic==0x5147313E ? int(kGaterEnabled) : (magic==0x5147313F ? int(kInputDeclick) : (magic==0x51473140 ? int(kFilterModel) : (magic==0x51473141 ? int(kGaterMinLength) : int(kGlitchTriggerRate))))))))))))))))));
   for(int i=0;i<count;++i) {
     double v=0.; if(!in.readDouble(v) || !std::isfinite(v)) return false;
     // kBypassReserved keeps its legacy position in the stream; the global bypass
     // button was removed, but the slot still holds a normal (inert) parameter value,
     // exactly like every other id, so round-trips stay byte-for-byte stable.
     result[i]=std::clamp(v,0.,1.);
+  }
+  if(current) {
+    double bufferValue=0., frozen=0.;
+    if(!in.readDouble(bufferValue) || !std::isfinite(bufferValue)) return false;
+    if(!in.readDouble(frozen) || !std::isfinite(frozen)) return false;
+    result[kGrainBuffer]=std::clamp(bufferValue,0.,1.);
+    result[kFreeze]=frozen>=.5?1.:0.;
+    for(int i=kGrainBuffer+2;i<int(kCount);++i) {
+      double v=0.; if(!in.readDouble(v) || !std::isfinite(v)) return false;
+      result[i]=std::clamp(v,0.,1.);
+    }
   }
   if(magic==0x51473133) result[kModuleOrder]=1.; // Preserve version 0.5 parallel routing.
   if(magic<0x51473133) {
@@ -147,7 +166,6 @@ class Processor final : public AudioEffect {
   int waveCountdown_=0;
   double rate_ = 44100., tempo_ = 120., fallbackBeat_ = 0.;
   // The parameter array covers every legacy + monitor ID; the VST parameter list stops before the new UI controls.
-  static constexpr int kParamEnd = int(kUiFilterSeqStep) + 1;
   bool freezePending_ = false; // FREEZE is a momentary button: consumed by the next process() call
 public:
   Processor() {
@@ -507,9 +525,13 @@ public:
   }
   tresult PLUGIN_API setComponentState(IBStream* stream) override {
     auto p=defaults(); if(!loadState(stream,p)) return kResultFalse;
-    // kBypassReserved is not a registered parameter anymore (bypass button removed):
-    // only set IDs that the controller actually exposes.
-    for(int i=0;i<kCount;++i) if(parameters.getParameter(i)) setParamNormalized(i,p[i]);
+    // kBypassReserved is not a registered parameter anymore (bypass button removed).
+    // IMPORTANT: EditController::setParamNormalized(id,value) resolves the id through
+    // Parameters::getParameter(index), i.e. it expects a REGISTRATION INDEX, not a
+    // ParamID — and with the legacy slot 34 unregistered, indices no longer match IDs
+    // for anything after kBypassReserved. Use the container directly so every value
+    // lands on the parameter that actually owns that ID.
+    for(int i=0;i<kCount;++i) if(auto* param=parameters.getParameter(ParamID(i))) param->setNormalized(p[i]);
     return kResultOk;
   }
 };
