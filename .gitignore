@@ -1,7 +1,14 @@
-# Build directories
-build/
+# Build artifacts
 build-local/
-CMakeCache.txt
-CMakeFiles/
+
+# Compiled/Binary files
 *.o
-*.obj
+*.out
+*.a
+*.so
+*.dll
+*.exe
+
+# Compressed files
+*.zipbuild-local/
+*.zip

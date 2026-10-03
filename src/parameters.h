@@ -21,6 +21,33 @@ enum LfoParam { lEnabled, lWave, lSync, lHz, lGrid, lDepth, lPhase, lReset, lGli
 constexpr std::array<std::array<int,3>,6> moduleOrders={{{0,1,2},{0,2,1},{1,0,2},{1,2,0},{2,0,1},{2,1,0}}};
 constexpr std::array<double,21> lfoBeats={32.,16.,8.,4.,2.,1.,.5,.25,.125,.0625,2./3.,1./3.,1./6.,1./12.,1.5,.75,.375,.1875,64.,128.,256.};
 constexpr std::array<double,16> effectDivisions={4.,2.,1.,.5,.25,.125,.0625,.03125,2./3.,1./3.,1./6.,1./12.,1.5,.75,.375,.1875};
+// Modulation depth for the accent-coloured bar drawn around each knob: summed
+// |amount| of every enabled LFO routed to that destination (scaled by its Depth)
+// plus the XY-morph amount when XY is on. Editors snapshot their own controller
+// values into a kCount array and call aztec::modulationDepths(snapshot).
+inline std::array<double,kCount> modulationDepths(const std::array<double,kCount>& p) {
+  std::array<double,kCount> d{};
+  if(p[kXYEnable]>=.5) {
+    // XY targets are 1-based over the primary parameter IDs (kDivision..kTranspose).
+    const int xt=int(std::round(p[kXTarget]*int(kTranspose)));
+    const int yt=int(std::round(p[kYTarget]*int(kTranspose)));
+    if(xt>=0&&xt<=int(kTranspose))d[xt]+=std::abs(p[kXAmount]);
+    if(yt>=0&&yt<=int(kTranspose))d[yt]+=std::abs(p[kYAmount]);
+  }
+  for(int l=0;l<qg::lfoCount;++l) if(p[lfoID(l,lEnabled)]>=.5) {
+    const double dep=p[lfoID(l,lDepth)];
+    // First six legacy routes target Size/Density/Pitch/Lookback/Chaos/Grain Mix.
+    static const int routeTargets[]={kSize,kDensity,kPitch,kPosition,kChaos,kGrainMix};
+    for(int t=0;t<6;++t) d[routeTargets[t]]+=dep*std::abs(p[lfoID(l,lRoute0+t)]);
+    // Six slot destinations are 1-based indices into qg::modulationNames; the first
+    // eight destinations map onto real knobs, so only those feed the bars.
+    for(int s=0;s<6;++s){const int tgt=int(std::round(p[slotTarget(l,s)]*qg::modTargetCount)); // 1-based destination
+      if(tgt>=1&&tgt<=qg::modTargetCount)d[tgt-1]+=dep*std::abs(p[slotAmount(l,s)]);}
+  }
+  for(auto& v:d)v=std::clamp(v,0.,1.);
+  return d;
+}
+
 constexpr const char* waveFamilies[]={"Sine Warp","Skew Triangle","Pulse","Rise Curve","Fall Curve","Harmonic","Staircase","Random Curve"};
 constexpr const char* targetNames[]={"Size","Density","Pitch","Lookback","Chaos","Granular Mix","Speed","Transpose"};
 constexpr int lfoID(int index,int offset) { return kLfo0+index*lStride+offset; }
@@ -44,3 +71,11 @@ inline void migrateRoutes(std::array<double,kCount>& p){for(int l=0;l<4;++l){int
 }
 
 namespace aztec { inline void migrateModSlots(std::array<double,kCount>& p){for(int l=0;l<4;++l)for(int s=0;s<6;++s)p[slotTarget(l,s)]=std::round(p[slotTarget(l,s)]*11.)/qg::modTargetCount;} }
+
+namespace aztec {
+// Live modulation-depth map consumed by both editors' knob bars. The editor's
+// 30fps tick refreshes it from its own controller snapshot before drawing.
+inline std::array<double,kCount>& modDepthMap() { static std::array<double,kCount> m{}; return m; }
+inline void updateModDepths(const std::array<double,kCount>& p) { modDepthMap()=modulationDepths(p); }
+inline double modDepth(int id) { return id>=0&&id<int(kCount)?modDepthMap()[id]:0.; }
+}
