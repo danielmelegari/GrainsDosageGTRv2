@@ -47,7 +47,7 @@
   ADD(kReverbSource,946,1016,330,24,Select,"TRIGGER SOURCE");
   if(value(kReverbSource)<.5)for(int i=0;i<16;++i)ADD(kReverbStep0+i,584+i*44,1100,39,30,Pad,"");
   ADD(kMix,116,1302,174,40,Slider,"DRY / WET");ADD(kNormalize,306,1312,116,26,Toggle,"NORMALIZE");
-  ADD(kMasterLimiter,438,1312,102,26,Toggle,"LIMITER");ADD(kLimiterCeiling,548,1312,80,26,Select,"CEILING");ADD(kBypass,636,1312,90,26,Toggle,"BYPASS");
+  ADD(kMasterLimiter,438,1312,102,26,Toggle,"LIMITER");ADD(kLimiterCeiling,548,1312,80,26,Select,"CEILING");
   ADD(kModuleOrder,734,1302,244,40,Select,"AUDIO ORDER");
   for(int i=0;i<3;++i)ADD(kGrainEnabled+i,slotX[slot(i)]+238,106,68,28,Toggle,"ON");
 

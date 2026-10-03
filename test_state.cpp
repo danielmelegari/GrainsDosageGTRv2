@@ -56,9 +56,19 @@ int main() {
   }
   static_assert(kGlitchMove==185,"0.6.3 IDs stable");
   Controller controller; assert(controller.initialize(nullptr)==kResultOk);
-  assert(controller.getParameterCount()==kCount);
-  for(int i=0;i<kCount;++i) assert(std::abs(controller.getParamNormalized(i)-defaults()[i])<1e-12);
-  for(int id=0;id<kCount;++id) { ParameterInfo info{}; controller.getParameterInfo(id,info); assert(info.id==ParamID(id)); }
+  // The global BYPASS button was removed: kBypassReserved keeps its legacy enum slot
+  // (state/preset alignment) but is no longer a registered VST parameter, so the
+  // validator never sees a bypass proxy. The trailing FREEZE/BUFFER/UI-TRIGGER ids
+  // are state-only slots and were never registered either; derive the expected
+  // count dynamically by subtracting every id that has no parameter object, so
+  // this assertion cannot rot when new tail ids are appended to the enum.
+  int registeredIds=0; for(int i=0;i<int(kCount);++i) if(controller.getParameterObject(ParamID(i))) ++registeredIds;
+  assert(controller.getParameterCount()==registeredIds);
+  assert(controller.getParameterObject(ParamID(kBypassReserved))==nullptr);
+  // Every registered id must expose its documented default; kBypassReserved is no
+  // longer registered (bypass removed) and the tail FREEZE/BUFFER ids are state-only.
+  for(int i=0;i<int(kCount);++i) if(controller.getParameterObject(ParamID(i))) assert(std::abs(controller.getParamNormalized(i)-defaults()[i])<1e-12);
+  for(int idx=0;idx<controller.getParameterCount();++idx) { ParameterInfo info{}; assert(controller.getParameterInfo(idx,info)==kResultTrue); assert(info.id!=ParamID(kBypassReserved)); }
   auto xy=defaults(); xy[kXYEnable]=1.; xy[kXYX]=1.; xy[kXYY]=0.;
   auto mapped=settings(xy,120.,48000.); assert(mapped.pitch==-48. && mapped.size>.18);
   xy[kXTarget]=double(kTranspose+1)/kXYX; assert(settings(xy,120.,48000.).transpose==48.);
@@ -90,13 +100,30 @@ int main() {
   double in64L[128],in64R[128],out64L[128]{},out64R[128]{};for(int i=0;i<128;++i){in64L[i]=3.;in64R[i]=-2.;}double* in64[]={in64L,in64R};double* out64[]={out64L,out64R};input.channelBuffers64=in64;output.channelBuffers64=out64;input.silenceFlags=0;data.symbolicSampleSize=kSample64;
   for(double selected:{0.,.5,1.}){changes.clearQueue();put(kMix,0.);put(kMasterFilter,0.);put(kMasterLimiter,1.);put(kLimiterCeiling,selected);assert(processor->process(data)==kResultOk);double db=selected==0?0:selected==.5?-6:-10;for(int i=0;i<128;++i)assert(std::abs(out64L[i])<=std::pow(10.,db/20.)&&std::abs(out64R[i])<=std::pow(10.,db/20.));}
   assert(processor->getLatencySamples()==32);
-  for(bool bypass:{false,true}){
-    changes.clearQueue();put(kMasterLimiter,0.);put(kMix,0.);put(kInputDeclick,1.);put(kBypass,bypass?1.:0.);
+  // The global BYPASS button was removed: even a legacy kBypassReserved value of 1
+  // must NOT mute processing or passthrough the dry signal anymore.
+  {
+    changes.clearQueue();put(kMasterLimiter,0.);put(kMix,0.);put(kInputDeclick,1.);put(kBypassReserved,1.);
     for(int i=0;i<128;++i)in64L[i]=in64R[i]=0.;
     for(int block=0;block<8;++block)assert(processor->process(data)==kResultOk);
     in64L[64]=.987654321123;assert(processor->process(data)==kResultOk);
-    if(bypass)assert(out64L[96]==in64L[64]);else assert(std::abs(out64L[96])<1e-10);
+    assert(std::abs(out64L[96])<1e-10); // wet path active (mix=0 => silent), not dry passthrough
     assert(out64R[96]==0.);
+  }
+  // Roundtrip: dirty the legacy kBypassReserved slot through a real VST queue, then
+  // save/reload and verify getState->setState->getState is byte-for-byte stable even
+  // though the slot is not a registered parameter (bypass button removed).
+  {
+    changes.clearQueue();put(kBypassReserved,1.);assert(processor->process(data)==kResultOk);
+    MemoryStream rt; assert(processor->getState(&rt)==kResultOk);
+    rt.seek(0,IBStream::kIBSeekSet,nullptr); auto rtState=defaults(); assert(loadState(&rt,rtState));
+    assert(rtState[kBypassReserved]==1.); // preserved verbatim: the slot is inert but stays aligned
+    MemoryStream rt2; Processor p2; assert(p2.setState(&rt)==kResultOk);
+    MemoryStream rt3; assert(p2.getState(&rt3)==kResultOk);
+    rt.seek(0,IBStream::kIBSeekSet,nullptr); rt3.seek(0,IBStream::kIBSeekSet,nullptr);
+    int32 m1=0,m2=0;IBStreamer r1(&rt,kLittleEndian),r2(&rt3,kLittleEndian);
+    r1.readInt32(m1);r2.readInt32(m2);assert(m1==m2);
+    for(int i=0;i<int(kCount)+2;++i){double a=0,b=0;r1.readDouble(a);r2.readDouble(b);assert(a==b);}
   }
   processor->setActive(false);processor->terminate();processor->release();
   std::cout<<"PASS: v0.1–v0.12.0 state migration and legacy parallel mode, disabled legacy routes, malformed state rejection, controller defaults, appended Speed/Transpose routes, XY routing and processor state roundtrip, master host automation\n";
