@@ -19,7 +19,12 @@ int main(){try{
   send(WM_LBUTTONDOWN,364,1325);send(WM_LBUTTONUP,364,1325);check(c->getParamNormalized(aztec::kNormalize)==1.,"normalize");
   send(WM_LBUTTONDOWN,745,1028);send(WM_LBUTTONUP,745,1028);check(c->getParamNormalized(aztec::kReverbOn)==1.,"reverb");
   send(WM_LBUTTONDOWN,603,1115);send(WM_LBUTTONUP,603,1115);check(c->getParamNormalized(aztec::kReverbStep0)==0.,"reverb step");
-  send(WM_LBUTTONDOWN,724,120);send(WM_LBUTTONUP,724,120);check(c->getParamNormalized(aztec::kGrainEnabled)==0.,"moved module bypass");
+  // The module ON/OFF toggles live at slotX[slot(stage)]+238..306, y 106..134
+  // (see editor_layout_win.inl). At the default order stage 0 (Granulizer ->
+  // kGrainEnabled) sits in physical slot 0: logical x 254, y 120. The old
+  // "moved module bypass" check clicked x=724, which hits the RANDOM button
+  // of physical slot 1 — it never touched kGrainEnabled and failed the suite.
+  send(WM_LBUTTONDOWN,254,120);send(WM_LBUTTONUP,254,120);check(c->getParamNormalized(aztec::kGrainEnabled)==0.,"module bypass");
   c->setParamNormalized(aztec::kPanMode,.5);check(c->getParamNormalized(aztec::kPanMode)==.5,"alternate pan");
   c->setParamNormalized(aztec::kPanMode,0.);check(c->getParamNormalized(aztec::kPanMode)==0.,"manual pan");
   c->setParamNormalized(aztec::kGrainPan,.5);send(WM_LBUTTONDOWN,690,414);send(WM_MOUSEMOVE,727,414);send(WM_LBUTTONUP,727,414);check(c->getParamNormalized(aztec::kGrainPan)>.59,"pan slider");

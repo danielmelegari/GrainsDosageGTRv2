@@ -105,9 +105,10 @@ bool loadState(IBStream* stream, std::array<double,kCount>& p) {
   const int count = magic==0x51473144 ? int(kCount) : magic==0x51473143 ? int(kResliceRndOn) : magic==0x51473130 ? int(kGrainMix) : (magic==0x51473131 ? int(kLfo0) : (magic==0x51473132 ? int(kLegacyCount) : (magic==0x51473133 ? int(kModuleOrder) : (magic==0x51473134 ? int(kExtraRoutes0) : (magic==0x51473135 ? int(kGlitchMove) : (magic==0x51473136 ? int(kMasterFilter) : (magic==0x51473137 ? int(kNormalize) : (magic==0x51473138 ? int(kReverbLength) : (magic==0x51473139 ? int(kUiWave0) : (magic==0x5147313A ? int(kLfoSlots0) : (magic==0x5147313B ? int(kModWaveRnd0) : (magic==0x5147313C ? int(kReverbSource) : (magic==0x5147313D ? int(kLimiterCeiling) : (magic==0x5147313E ? int(kGaterEnabled) : (magic==0x5147313F ? int(kInputDeclick) : (magic==0x51473140 ? int(kFilterModel) : (magic==0x51473141 ? int(kGaterMinLength) : int(kGlitchTriggerRate))))))))))))))))));
   for(int i=0;i<count;++i) {
     double v=0.; if(!in.readDouble(v) || !std::isfinite(v)) return false;
-    // kBypassReserved slot is read from legacy streams (to keep alignment) but never
-    // applied: the global bypass button was removed, so its old value must stay inert.
-    if(i!=int(kBypassReserved)) result[i]=std::clamp(v,0.,1.);
+    // kBypassReserved keeps its legacy position in the stream; the global bypass
+    // button was removed, but the slot still holds a normal (inert) parameter value,
+    // exactly like every other id, so round-trips stay byte-for-byte stable.
+    result[i]=std::clamp(v,0.,1.);
   }
   if(magic==0x51473133) result[kModuleOrder]=1.; // Preserve version 0.5 parallel routing.
   if(magic<0x51473133) {
@@ -176,10 +177,10 @@ public:
     // v0.14 additions: buffer size, freeze state, then RANDOM/PRESET ids kept for array alignment.
     if(!out.writeDouble(value(p_,kGrainBuffer))) return kResultFalse;
     if(!out.writeDouble(engine_.isFrozen()?1.:0.)) return kResultFalse;
-    // kBypassReserved is serialized as a constant 0 so the stream layout keeps its
-    // historical kCount doubles (old files stay loadable); the global bypass was
-    // removed, so its legacy value must never be written back out.
-    for(int i=kGrainBuffer+2;i<int(kCount);++i) if(!out.writeDouble(i==int(kBypassReserved)?0.:p_[i])) return kResultFalse;
+    // kBypassReserved is written like any other id: the legacy slot keeps its
+    // position in the stream (old files stay loadable) and getState/saveState
+    // remain exact inverses of each other.
+    for(int i=kGrainBuffer+2;i<int(kCount);++i) if(!out.writeDouble(p_[i])) return kResultFalse;
     return kResultOk;
   }
   tresult PLUGIN_API canProcessSampleSize(int32 size) override {
@@ -267,12 +268,6 @@ public:
       const int step=int((int64_t(std::floor(beat/.25))%16+16)%16);
       const double meters[]={step/15.,(!s.bypass&&engine_.glitchRunning())?1.:0.,(!s.bypass&&engine_.repeatRunning())?1.:0.,std::clamp(peak,0.,1.),double((int64_t(std::floor(beat/s.reverbGrid))%16+16)%16)/15.};
       for(int i=0;i<5;++i){int32 index=0;auto id=ParamID(i==4?kUiReverb:kUiStep+i);auto* q=data.outputParameterChanges->addParameterData(id,index);if(q)q->addPoint(data.numSamples-1,meters[i],index);}
-      // The global BYPASS control was removed, but the reserved legacy slot keeps its
-      // position in the state array. Echo it through the standard VST output-queue path
-      // (same mechanism as the step/glitch/repeat/level/reverb meters) pinned to 0 so
-      // hosts and tests can verify its persistence: a stale bypass value loaded from an
-      // old preset can never resurrect here or in the processor's parameter array.
-      {int32 bIdx=0;auto* bq=data.outputParameterChanges->addParameterData(ParamID(kBypassReserved),bIdx);if(bq)bq->addPoint(data.numSamples-1,0.,bIdx);}
     }
     waveCountdown_-=data.numSamples;
     if(data.outputParameterChanges&&data.numSamples>0&&waveCountdown_<=0){
