@@ -268,13 +268,8 @@ static constexpr double slotX[3]={16.,452.,888.};
   [self panel:NSMakeRect(8,8,1304,73)];
   label(@"GRAINS",NSMakeRect(29,23,165,44),31,AZSKIN(kTitle));label(@"DOSAGE",NSMakeRect(196,23,194,44),31,AZSKIN(kTitle));
   box(NSMakeRect(420,22,462,30),dark(),green(),5);label(presetName,NSMakeRect(432,30,438,18),12,cream());
-  box(NSMakeRect(900,22,96,28),AZSKIN(kPanelRaised),AZSKIN(kFiligree),5);label(@"SAVE",NSMakeRect(900,30,96,16),10,cream(),true);
-  box(NSMakeRect(1004,22,96,28),AZSKIN(kPanelRaised),AZSKIN(kFiligree),5);label(@"LOAD",NSMakeRect(1004,30,96,16),10,cream(),true);
-  box(NSMakeRect(1108,22,34,28),AZSKIN(kPanelRaised),AZSKIN(kFiligree),5);label(@"<",NSMakeRect(1108,28,34,18),12,cream(),true);
-  box(NSMakeRect(1146,22,34,28),AZSKIN(kPanelRaised),AZSKIN(kFiligree),5);label(@">",NSMakeRect(1146,28,34,18),12,cream(),true);
-  label(@".gdspreset",NSMakeRect(900,56,200,16),10,muted(),true);
-  [self art:NSMakeRect(1850,12,136,104) in:NSMakeRect(1118,10,78,60) opacity:1.];
-  [self art:NSMakeRect(1726,15,95,104) in:NSMakeRect(1220,10,55,60) opacity:.85];
+  box(NSMakeRect(420,56,227,28),AZSKIN(kPanelRaised),AZSKIN(kFiligree),5);label(@"LOAD",NSMakeRect(420,64,227,16),10,cream(),true);
+  box(NSMakeRect(653,56,229,28),AZSKIN(kPanelRaised),AZSKIN(kFiligree),5);label(@"SAVE",NSMakeRect(653,64,229,16),10,cream(),true);
   for(int slot=0;slot<3;++slot){
     int stage=[self stage:slot];double x=slotX[slot];
     [self panel:NSMakeRect(x,98,416,404)];
@@ -465,10 +460,8 @@ static constexpr double slotX[3]={16.,452.,888.};
   if(!owner)return;[self.window makeFirstResponder:self];NSPoint p=[self logical:event];[self layoutControls];
   if(NSPointInRect(p,NSMakeRect(420,22,462,30))){[self presetMenu:event];return;}
   if(NSPointInRect(p,NSMakeRect(982,1312,144,26))){[self skinMenu:event];return;}
-  if(NSPointInRect(p,NSMakeRect(900,22,96,28))){[self preset:YES];return;}
-  if(NSPointInRect(p,NSMakeRect(1004,22,96,28))){[self preset:NO];return;}
-  if(NSPointInRect(p,NSMakeRect(1108,22,34,28))){[self stepPreset:-1];return;}
-  if(NSPointInRect(p,NSMakeRect(1146,22,34,28))){[self stepPreset:1];return;}
+  if(NSPointInRect(p,NSMakeRect(420,56,227,28))){[self preset:NO];return;}// LOAD
+  if(NSPointInRect(p,NSMakeRect(653,56,229,28))){[self preset:YES];return;}// SAVE
   if(NSPointInRect(p,NSMakeRect(1140,1312,144,26))){
     NSMenu* menu=[[NSMenu alloc] initWithTitle:@"UI size"];
     for(int percent:{50,60,70,75,80,90,100}){NSMenuItem* item=[[NSMenuItem alloc] initWithTitle:[NSString stringWithFormat:@"%d%%",percent] action:@selector(chooseZoom:) keyEquivalent:@""];item.target=self;item.tag=percent;[menu addItem:item];}
