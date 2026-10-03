@@ -81,6 +81,8 @@ smtg_add_vst3plugin(GrainsDosage
   src/editor.h
 )
 target_link_libraries(GrainsDosage PRIVATE sdk)
+# Built against the SDK: parameters.h must use the real Steinberg::Vst::ParamID.
+target_compile_definitions(GrainsDosage PRIVATE GRAINS_HAVE_VST3_SDK)
 smtg_target_configure_version_file(GrainsDosage)
 if(APPLE)
   enable_language(OBJCXX)
@@ -146,7 +148,10 @@ if(GRAINS_BUILD_TESTS)
     else()
       target_compile_options(grains_test_${suite} PRIVATE -UNDEBUG)
     endif()
+    # parameters.h uses Steinberg::Vst::ParamID only when built against the SDK;
+    # standalone DSP tests get a binary-identical uint32 fallback instead.
     if(suite STREQUAL "state")
+      target_compile_definitions(grains_test_${suite} PRIVATE GRAINS_HAVE_VST3_SDK)
       target_sources(grains_test_${suite} PRIVATE
         "${VST3_SDK_ROOT}/public.sdk/source/common/memorystream.cpp"
         "${VST3_SDK_ROOT}/public.sdk/source/vst/hosting/parameterchanges.cpp")
@@ -164,6 +169,10 @@ if(GRAINS_BUILD_TESTS)
           src/editor_win.cpp "${CMAKE_CURRENT_BINARY_DIR}/grains_skin.rc")
         target_link_libraries(grains_test_${suite} PRIVATE
           user32 gdi32 comdlg32 shell32 gdiplus ole32)
+      else()
+        # Linux CI runner: no native editor exists, but the state test never
+        # opens a view (it checks the guard returns null). Provide a stub.
+        target_sources(grains_test_${suite} PRIVATE src/editor_stub.cpp)
       endif()
     endif()
     add_test(NAME ${suite} COMMAND grains_test_${suite})
