@@ -180,8 +180,17 @@ class WinEditor final:public CPluginView{
   void box(double x,double y,double w,double h,COLORREF fill,COLORREF stroke){HBRUSH b=CreateSolidBrush(fill);HPEN p=CreatePen(PS_SOLID,1,stroke);auto ob=SelectObject(dc,b),op=SelectObject(dc,p);RoundRect(dc,int(x),int(y),int(x+w),int(y+h),8,8);SelectObject(dc,ob);SelectObject(dc,op);DeleteObject(b);DeleteObject(p);}
   void text(std::wstring s,double x,double y,double w,double h,int size,COLORREF color,bool center=false,int minimumSize=14){HFONT f=CreateFontW(-std::max(minimumSize,size),0,0,0,FW_SEMIBOLD,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,ANTIALIASED_QUALITY,DEFAULT_PITCH,L"Segoe UI");auto old=SelectObject(dc,f);SetTextColor(dc,color);SetBkMode(dc,TRANSPARENT);int extra=std::max(0,minimumSize-size);RECT r{int(x),int(y)-extra/2,int(x+w),int(y+h)+extra/2};DrawTextW(dc,s.c_str(),-1,&r,DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS|(center?DT_CENTER:DT_LEFT));SelectObject(dc,old);DeleteObject(f);}
   void line(double x,double y,double xx,double yy,COLORREF color,int width=1){auto p=CreatePen(PS_SOLID,width,color);auto old=SelectObject(dc,p);MoveToEx(dc,int(x),int(y),nullptr);LineTo(dc,int(xx),int(yy));SelectObject(dc,old);DeleteObject(p);}
-  void draw(){layout();box(0,0,1320,1360,dark(),dark());panel(8,8,1304,73);text(L"GRAINS",28,20,165,45,31,AZSKIN(kTitle));text(L"DOSAGE",196,20,194,45,31,AZSKIN(kTitle));box(420,22,462,30,dark(),green());text(L"<",420,22,24,30,13,cream(),true);text(L">",858,22,24,30,13,cream(),true);text(presetName,448,22,406,30,12,cream(),true);
-    box(420,56,462,28,AZSKIN(kPanelRaised),AZSKIN(kFiligree));text(L"LOAD",420,56,227,28,10,cream(),true);text(L"SAVE",651,56,227,28,10,cream(),true);
+  void draw(){layout();box(0,0,1320,1360,dark(),dark());panel(8,8,1304,73);text(L"GRAINS",28,20,165,45,31,AZSKIN(kTitle));text(L"DOSAGE",196,20,194,45,31,AZSKIN(kTitle));
+    // Row 1: preset menu, previous, next. Row 2: input de-click + sensitivity, load, save.
+    box(420,22,380,30,dark(),green());text(presetName+L" ▾",432,22,356,30,12,cream(),true);
+    box(806,22,38,30,AZSKIN(kPanelRaised),AZSKIN(kFiligree));text(L"<",806,22,38,30,13,cream(),true);
+    box(848,22,38,30,AZSKIN(kPanelRaised),AZSKIN(kFiligree));text(L">",848,22,38,30,13,cream(),true);
+    text(L"INPUT DE-CLICK",420,59,124,22,10,cream());
+    box(548,56,130,28,dark(),AZSKIN(kBorderDark));text(display(kDeclickSensitivity,value(kDeclickSensitivity)),553,62,120,16,10,cream(),true);
+    bool declickOn=value(kInputDeclick)>=.5;
+    box(684,56,56,28,declickOn?AZSKIN(kAccentGlow):AZSKIN(kPanelRaised),declickOn?green():AZSKIN(kFiligreeDim));text(declickOn?L"ON":L"OFF",684,56,56,28,10,declickOn?ONTEXT():cream(),true);
+    box(748,56,46,28,AZSKIN(kPanelRaised),AZSKIN(kFiligree));text(L"LOAD",748,56,46,28,10,cream(),true);
+    box(800,56,46,28,AZSKIN(kPanelRaised),AZSKIN(kFiligree));text(L"SAVE",800,56,46,28,10,cream(),true);
     const wchar_t* names[]={L"GRANULIZER",L"PRESLICER",L"BEAT REPEATER"};int play=int(std::round(value(kUiStep)*15));
     for(int i=0;i<3;++i){double x=slotX[i];int st=stage(i);panel(x,98,416,404);if(dropSlot==i){line(x+10,100,x+406,100,green(),2);}text(std::wstring(L"↔  ")+names[st],x+15,105,210,29,15,cream());box(x+316,106,87,28,AZSKIN(kPanelRaised),AZSKIN(kFiligree));text(L"RANDOM",x+319,109,81,23,11,cream(),true);
       bool active=st==0?(value(kGrainEnabled)>.5&&value(kGrainMix)>.001):value(st==1?kUiGlitch:kUiRepeat)>.5;for(int j=0;j<12;++j)box(x+19+j*32,486,23,4,active?green():AZSKIN(kAccentTrack),dark());
@@ -227,7 +236,7 @@ class WinEditor final:public CPluginView{
     if(value(kFilterSeqMode)>.5)text(L"SAMPLE & GLIDE - smooth random cutoff",32,1230,704,24,14,green(),true);
     else for(int i=0;i<32;++i){double x=32+i*22.,v=qg::filterPattern(int(std::round(value(kFilterSeqPattern)*63.)),i);bool active=value(kFilterSeqOn)>.5&&i==int(std::round(value(kUiFilterSeqStep)*31.));box(x,1223,18,37,dark(),active?green():AZSKIN(kAccentTrack));box(x+3,1255-25*(v+1)*.5,12,3+25*(v+1)*.5,active?green():AZSKIN(kAccentTrack),dark());}
     panel(16,1294,1288,56);text(L"MASTER",32,1312,78,22,13,cream());text(L"OUTPUT",994,1304,106,16,10,cream());for(int j=0;j<24;++j)box(994+j*4,1326,2,12,value(kUiLevel)>j/24.?(j>20?AZSKIN(kHot):AZSKIN(kMeter)):AZSKIN(kMeterOff),dark());
-    for(const auto& c:controls){double v=value(c.id);std::wstring title(c.label,c.label+std::strlen(c.label));
+    for(const auto& c:controls){if(c.id==kInputDeclick||c.id==kDeclickSensitivity)continue;double v=value(c.id);std::wstring title(c.label,c.label+std::strlen(c.label));
       if(c.kind==PanMode){const wchar_t* modes[]={L"MANUAL",L"ALTERNATE",L"RANDOM"};int mode=int(std::round(v*2));for(int i=0;i<3;++i){double x=c.x+i*c.w/3;box(x,c.y,c.w/3-3,c.h,mode==i?AZSKIN(kPanelRaised):dark(),mode==i?green():cream());text(modes[i],x,c.y,c.w/3-3,c.h,9,mode==i?ONTEXT():cream(),true);}}
       else if(c.kind==Pan){text(L"L",c.x,c.y,16,16,10,cream());text(L"C",c.x+c.w/2-8,c.y,16,16,10,cream(),true);text(L"R",c.x+c.w-16,c.y,16,16,10,cream());box(c.x+4,c.y+23,c.w-8,3,AZSKIN(kHairline),dark());box(c.x+v*(c.w-8),c.y+18,8,13,green(),green());}
       else if(c.kind==Knob){text(title,c.x,c.y,c.w,17,11,cream(),true);double cx=c.x+c.w/2,cy=c.y+43;box(cx-22,cy-22,44,44,AZSKIN(kViolet),AZSKIN(kFiligreeDim));for(int j=0;j<21;++j){double a=(135+j*13.5)*qg::tau/360.;box(cx+30*std::cos(a)-2,cy+30*std::sin(a)-2,4,4,j/20.<=v?green():AZSKIN(kAccentTrack),dark());}knobCap(cx,cy,v);double a=(135+270*v)*qg::tau/360.;line(cx+6*std::cos(a),cy+6*std::sin(a),cx+22*std::cos(a),cy+22*std::sin(a),cream(),3);box(c.x+4,c.y+74,c.w-8,19,dark(),AZSKIN(kHairline));text(display(c.id,v),c.x+5,c.y+75,c.w-10,18,12,AZSKIN(kReadout),true);}
@@ -240,11 +249,13 @@ class WinEditor final:public CPluginView{
   }
   void end(){if(dragID>=0)controller->endEdit(ParamID(dragID));if(dragXY){controller->endEdit(kXYX);controller->endEdit(kXYY);}dragID=dragSlot=dropSlot=-1;dragXY=false;}
   void down(double x,double y,bool dbl){layout();SetFocus(window);
-    if(inside(x,y,420,22,24,30)){stepPreset(-1);return;}// PRESET <
-    if(inside(x,y,858,22,24,30)){stepPreset(1);return;}// PRESET >
-    if(inside(x,y,444,22,414,30)){presetMenu();return;}
-    if(inside(x,y,420,56,227,28)){preset(false);return;}// LOAD
-    if(inside(x,y,651,56,227,28)){preset(true);return;}// SAVE
+    if(inside(x,y,806,22,38,30)){stepPreset(-1);return;}// PRESET <
+    if(inside(x,y,848,22,38,30)){stepPreset(1);return;}// PRESET >
+    if(inside(x,y,420,22,380,30)){presetMenu();return;}
+    if(inside(x,y,548,56,130,28)){edit(kDeclickSensitivity,std::clamp((x-552.)/122.,0.,1.));return;}// SENSITIVITY
+    if(inside(x,y,684,56,56,28)){edit(kInputDeclick,value(kInputDeclick)>=.5?0.:1.);return;}// DE-CLICK ON/OFF
+    if(inside(x,y,748,56,46,28)){preset(false);return;}// LOAD
+    if(inside(x,y,800,56,46,28)){preset(true);return;}// SAVE
     if(inside(x,y,1140,1312,144,26)){HMENU m=CreatePopupMenu();int n=1;for(int size:{50,60,70,75,80,90,100})AppendMenuW(m,MF_STRING,n++,(std::to_wstring(size)+L"%").c_str());POINT p;GetCursorPos(&p);int pick=TrackPopupMenu(m,TPM_RETURNCMD,p.x,p.y,0,window,nullptr);DestroyMenu(m);if(pick&&plugFrame){int sizes[]={50,60,70,75,80,90,100};double f=sizes[pick-1]/100.;ViewRect r(0,0,int(1320*f),int(1360*f));plugFrame->resizeView(this,&r);}return;}
     if(inside(x,y,1052,778,216,28)){randomizeReslice(seed,[&](ParamID id){return value(id);},[&](ParamID id,double v){edit(id,v);});return;}
     for(int i=0;i<16;++i)if(inside(x,y,32+i*78,823,70,40)){selectedReslice=i;if(dbl)edit(kResliceStep0+i,value(kResliceStep0+i)>.5?0.:1.);InvalidateRect(window,nullptr,FALSE);return;}

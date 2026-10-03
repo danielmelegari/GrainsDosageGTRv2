@@ -62,8 +62,10 @@
   // TIE removed from the Gater (LATCH kept); LATCH moved into the freed slot.
   ADD(kGaterLatch,1166,898,70,27,Toggle,"LATCH");
 
-  ADD(kInputDeclick,884,55,166,24,Toggle,"INPUT DE-CLICK");
-  ADD(kDeclickSensitivity,1056,53,252,28,Slider,"SENSITIVITY");
+  // INPUT DE-CLICK / SENSITIVITY are drawn in the header (row 2, next to LOAD/SAVE);
+  // they are registered here for hit-testing and value display only.
+  ADD(kInputDeclick,684,56,56,28,Toggle,"");
+  ADD(kDeclickSensitivity,548,56,130,28,Slider,"");
 
   ADD(kResliceEnabled,148,778,72,27,Toggle,"ON");
   ADD(kResliceLength,232,773,132,40,Select,"WINDOW");

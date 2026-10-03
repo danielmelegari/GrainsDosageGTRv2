@@ -204,6 +204,8 @@ static constexpr double slotX[3]={16.,452.,888.};
 - (void)drawControl:(const aztec::Control&)c {
   using namespace aztec;NSRect r=c.rect;double v=std::clamp(owner->value(c.id),0.,1.);
   NSString* title=[NSString stringWithUTF8String:c.label.c_str()];
+  // INPUT DE-CLICK / SENSITIVITY are drawn manually in the header rows.
+  if(c.id==kInputDeclick||c.id==kDeclickSensitivity)return;
   if(c.kind==PanMode){const char* modes[]={"MANUAL","ALTERNATE","RANDOM"};int mode=int(std::round(v*2.));for(int i=0;i<3;++i){NSRect b=NSMakeRect(r.origin.x+i*r.size.width/3.,r.origin.y,r.size.width/3.-3,r.size.height);box(b,mode==i?AZSKIN(kAccentGlow):dark(),mode==i?green():muted(),4);label([NSString stringWithUTF8String:modes[i]],NSInsetRect(b,2,6),9,mode==i?onText():cream(),true);}return;}
   if(c.kind==Pan){label(@"L",NSMakeRect(r.origin.x,r.origin.y,16,16),10,cream());label(@"C",NSMakeRect(NSMidX(r)-8,r.origin.y,16,16),10,cream(),true);label(@"R",NSMakeRect(NSMaxX(r)-16,r.origin.y,16,16),10,cream());box(NSMakeRect(r.origin.x+4,r.origin.y+23,r.size.width-8,3),muted(),nil,1);box(NSMakeRect(r.origin.x+v*(r.size.width-8),r.origin.y+18,8,13),green(),nil,3);return;}
   if(c.kind==Knob){
@@ -267,9 +269,18 @@ static constexpr double slotX[3]={16.,452.,888.};
   [t scaleXBy:self.bounds.size.width/aztec::canvasW yBy:self.bounds.size.height/aztec::canvasH];[t concat];
   [self panel:NSMakeRect(8,8,1304,73)];
   label(@"GRAINS",NSMakeRect(29,23,165,44),31,AZSKIN(kTitle));label(@"DOSAGE",NSMakeRect(196,23,194,44),31,AZSKIN(kTitle));
-  box(NSMakeRect(420,22,462,30),dark(),green(),5);label(@"<",NSMakeRect(420,30,24,18),13,cream(),true);label(@">",NSMakeRect(858,30,24,18),13,cream(),true);label(presetName,NSMakeRect(448,30,406,18),12,cream(),true);
-  box(NSMakeRect(420,56,227,28),AZSKIN(kPanelRaised),AZSKIN(kFiligree),5);label(@"LOAD",NSMakeRect(420,64,227,16),10,cream(),true);
-  box(NSMakeRect(653,56,229,28),AZSKIN(kPanelRaised),AZSKIN(kFiligree),5);label(@"SAVE",NSMakeRect(653,64,229,16),10,cream(),true);
+  // Row 1: preset menu, previous, next. Row 2: input de-click + sensitivity, load, save.
+  box(NSMakeRect(420,22,380,30),dark(),green(),5);label([presetName stringByAppendingString:@" ▾"],NSMakeRect(432,30,356,18),12,cream(),true);
+  box(NSMakeRect(806,22,38,30),AZSKIN(kPanelRaised),AZSKIN(kFiligree),5);label(@"<",NSMakeRect(806,30,38,18),13,cream(),true);
+  box(NSMakeRect(848,22,38,30),AZSKIN(kPanelRaised),AZSKIN(kFiligree),5);label(@">",NSMakeRect(848,30,38,18),13,cream(),true);
+  label(@"INPUT DE-CLICK",NSMakeRect(420,63,124,16),10,cream());
+  {BOOL declickOn=owner->value(aztec::kInputDeclick)>=.5;
+  box(NSMakeRect(548,56,130,28),dark(),AZSKIN(kBorderDark),5);
+  label(owner->display(aztec::kDeclickSensitivity,owner->value(aztec::kDeclickSensitivity)),NSMakeRect(553,62,120,16),10,cream(),true);
+  box(NSMakeRect(684,56,56,28),declickOn?AZSKIN(kAccentGlow):AZSKIN(kPanelRaised),declickOn?green():AZSKIN(kFiligreeDim),5);
+  label(declickOn?@"ON":@"OFF",NSMakeRect(684,63,56,16),10,declickOn?onText():cream(),true);}
+  box(NSMakeRect(748,56,46,28),AZSKIN(kPanelRaised),AZSKIN(kFiligree),5);label(@"LOAD",NSMakeRect(748,63,46,16),10,cream(),true);
+  box(NSMakeRect(800,56,46,28),AZSKIN(kPanelRaised),AZSKIN(kFiligree),5);label(@"SAVE",NSMakeRect(800,63,46,16),10,cream(),true);
   for(int slot=0;slot<3;++slot){
     int stage=[self stage:slot];double x=slotX[slot];
     [self panel:NSMakeRect(x,98,416,404)];
@@ -458,12 +469,15 @@ static constexpr double slotX[3]={16.,452.,888.};
 }
 - (void)mouseDown:(NSEvent*)event {
   if(!owner)return;[self.window makeFirstResponder:self];NSPoint p=[self logical:event];[self layoutControls];
-  if(NSPointInRect(p,NSMakeRect(420,22,24,30))){[self stepPreset:-1];return;}// PRESET <
-  if(NSPointInRect(p,NSMakeRect(858,22,24,30))){[self stepPreset:1];return;}// PRESET >
-  if(NSPointInRect(p,NSMakeRect(444,22,414,30))){[self presetMenu:event];return;}
+  if(NSPointInRect(p,NSMakeRect(806,22,38,30))){[self stepPreset:-1];return;}// PRESET <
+  if(NSPointInRect(p,NSMakeRect(848,22,38,30))){[self stepPreset:1];return;}// PRESET >
+  if(NSPointInRect(p,NSMakeRect(420,22,380,30))){[self presetMenu:event];return;}
+  if(NSPointInRect(p,NSMakeRect(548,56,130,28))){// SENSITIVITY drag
+    owner->edit(aztec::kDeclickSensitivity,std::clamp((p.x-552.)/122.,0.,1.));[self setNeedsDisplay:YES];return;}
+  if(NSPointInRect(p,NSMakeRect(684,56,56,28))){owner->edit(aztec::kInputDeclick,owner->value(aztec::kInputDeclick)>=.5?0.:1.);[self setNeedsDisplay:YES];return;}// DE-CLICK ON/OFF
   if(NSPointInRect(p,NSMakeRect(982,1312,144,26))){[self skinMenu:event];return;}
-  if(NSPointInRect(p,NSMakeRect(420,56,227,28))){[self preset:NO];return;}// LOAD
-  if(NSPointInRect(p,NSMakeRect(653,56,229,28))){[self preset:YES];return;}// SAVE
+  if(NSPointInRect(p,NSMakeRect(748,56,46,28))){[self preset:NO];return;}// LOAD
+  if(NSPointInRect(p,NSMakeRect(800,56,46,28))){[self preset:YES];return;}// SAVE
   if(NSPointInRect(p,NSMakeRect(1140,1312,144,26))){
     NSMenu* menu=[[NSMenu alloc] initWithTitle:@"UI size"];
     for(int percent:{50,60,70,75,80,90,100}){NSMenuItem* item=[[NSMenuItem alloc] initWithTitle:[NSString stringWithFormat:@"%d%%",percent] action:@selector(chooseZoom:) keyEquivalent:@""];item.target=self;item.tag=percent;[menu addItem:item];}
