@@ -114,6 +114,7 @@ static constexpr double slotX[3]={16.,452.,888.};
 }
 - (BOOL)skinLoaded;
 - (void)preset:(BOOL)save;
+- (void)stepPreset:(int)direction;
 - (NSURL*)presetFolder;
 - (BOOL)loadPresetURL:(NSURL*)url;
 - (void)presetMenu:(NSEvent*)event;
@@ -269,6 +270,8 @@ static constexpr double slotX[3]={16.,452.,888.};
   box(NSMakeRect(420,22,462,30),dark(),green(),5);label(presetName,NSMakeRect(432,30,438,18),12,cream());
   box(NSMakeRect(900,22,96,28),AZSKIN(kPanelRaised),AZSKIN(kFiligree),5);label(@"SAVE",NSMakeRect(900,30,96,16),10,cream(),true);
   box(NSMakeRect(1004,22,96,28),AZSKIN(kPanelRaised),AZSKIN(kFiligree),5);label(@"LOAD",NSMakeRect(1004,30,96,16),10,cream(),true);
+  box(NSMakeRect(1108,22,34,28),AZSKIN(kPanelRaised),AZSKIN(kFiligree),5);label(@"<",NSMakeRect(1108,28,34,18),12,cream(),true);
+  box(NSMakeRect(1146,22,34,28),AZSKIN(kPanelRaised),AZSKIN(kFiligree),5);label(@">",NSMakeRect(1146,28,34,18),12,cream(),true);
   label(@".gdspreset",NSMakeRect(900,56,200,16),10,muted(),true);
   [self art:NSMakeRect(1850,12,136,104) in:NSMakeRect(1118,10,78,60) opacity:1.];
   [self art:NSMakeRect(1726,15,95,104) in:NSMakeRect(1220,10,55,60) opacity:.85];
@@ -441,12 +444,24 @@ static constexpr double slotX[3]={16.,452.,888.};
   if(!ok){NSAlert* alert=[[NSAlert alloc] init];alert.messageText=save?@"Preset could not be saved":@"Preset could not be loaded";alert.informativeText=error?error.localizedDescription:@"Invalid or incompatible GrainsDosage preset. No settings changed.";[alert runModal];}
   [self setNeedsDisplay:YES];
 }
+// PRESET < / > buttons: cycle through the sorted preset folder (factory + user files).
+- (void)stepPreset:(int)direction {
+  if(!owner)return;NSURL* folder=[self presetFolder];if(!folder)return;
+  std::filesystem::path directory=[folder fileSystemRepresentation]?[folder fileSystemRepresentation]:"";
+  auto name=aztec::nextPresetFile(directory,direction,[presetName UTF8String]);
+  if(name.empty())return;
+  NSString* file=[NSString stringWithUTF8String:std::filesystem::path(name).u8string().c_str()];
+  NSURL* url=[folder URLByAppendingPathComponent:file];
+  if(![self loadPresetURL:url]){NSAlert* alert=[[NSAlert alloc] init];alert.messageText=@"Cannot load this preset";alert.informativeText=@"Invalid or incompatible preset. No settings changed.";[alert runModal];}
+}
 - (void)mouseDown:(NSEvent*)event {
   if(!owner)return;[self.window makeFirstResponder:self];NSPoint p=[self logical:event];[self layoutControls];
   if(NSPointInRect(p,NSMakeRect(420,22,462,30))){[self presetMenu:event];return;}
   if(NSPointInRect(p,NSMakeRect(982,1312,144,26))){[self skinMenu:event];return;}
   if(NSPointInRect(p,NSMakeRect(900,22,96,28))){[self preset:YES];return;}
   if(NSPointInRect(p,NSMakeRect(1004,22,96,28))){[self preset:NO];return;}
+  if(NSPointInRect(p,NSMakeRect(1108,22,34,28))){[self stepPreset:-1];return;}
+  if(NSPointInRect(p,NSMakeRect(1146,22,34,28))){[self stepPreset:1];return;}
   if(NSPointInRect(p,NSMakeRect(1140,1312,144,26))){
     NSMenu* menu=[[NSMenu alloc] initWithTitle:@"UI size"];
     for(int percent:{50,60,70,75,80,90,100}){NSMenuItem* item=[[NSMenuItem alloc] initWithTitle:[NSString stringWithFormat:@"%d%%",percent] action:@selector(chooseZoom:) keyEquivalent:@""];item.target=self;item.tag=percent;[menu addItem:item];}

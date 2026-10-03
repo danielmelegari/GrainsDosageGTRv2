@@ -124,6 +124,12 @@ class WinEditor final:public CPluginView{
     }return folder;
   }
   void setPresetName(const std::wstring& path){auto pos=path.find_last_of(L"\\/");presetName=path.substr(pos==std::wstring::npos?0:pos+1);auto dot=presetName.find_last_of(L'.');if(dot!=std::wstring::npos)presetName.resize(dot);}
+  // PRESET < / > buttons: cycle through the sorted preset folder (factory + user files).
+  void stepPreset(int direction){
+    auto folder=presetFolder();if(folder.empty()){MessageBoxW(window,L"Cannot create or populate the preset folder.",L"GrainsDosage",MB_OK|MB_ICONERROR);return;}
+    auto name=nextPresetFile(folder,direction,presetName+L".gdspreset");if(name.empty())return;
+    if(!loadPresetPath(folder+L"\\"+name))MessageBoxW(window,L"Invalid or incompatible preset. No settings changed.",L"GrainsDosage",MB_OK|MB_ICONERROR);
+  }
   bool loadPresetPath(const std::wstring& path){
     HANDLE file=CreateFileW(path.c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);if(file==INVALID_HANDLE_VALUE)return false;
     std::array<double,kCount> p{};LARGE_INTEGER size{};bool ok=false;
@@ -176,6 +182,7 @@ class WinEditor final:public CPluginView{
   void line(double x,double y,double xx,double yy,COLORREF color,int width=1){auto p=CreatePen(PS_SOLID,width,color);auto old=SelectObject(dc,p);MoveToEx(dc,int(x),int(y),nullptr);LineTo(dc,int(xx),int(yy));SelectObject(dc,old);DeleteObject(p);}
   void draw(){layout();box(0,0,1320,1360,dark(),dark());panel(8,8,1304,73);text(L"GRAINS",28,20,165,45,31,AZSKIN(kTitle));text(L"DOSAGE",196,20,194,45,31,AZSKIN(kTitle));art(1850,12,136,104,1118,10,78,60);art(1726,15,95,104,1220,10,55,60);box(420,22,462,30,dark(),green());text(presetName,432,22,438,30,12,cream());
     box(900,22,96,28,AZSKIN(kPanelRaised),AZSKIN(kFiligree));text(L"SAVE",900,22,96,28,10,cream(),true);box(1004,22,96,28,AZSKIN(kPanelRaised),AZSKIN(kFiligree));text(L"LOAD",1004,22,96,28,10,cream(),true);text(L".gdspreset",900,55,200,17,10,cream(),true);
+    box(1108,22,34,28,AZSKIN(kPanelRaised),AZSKIN(kFiligree));text(L"<",1108,22,34,28,12,cream(),true);box(1146,22,34,28,AZSKIN(kPanelRaised),AZSKIN(kFiligree));text(L">",1146,22,34,28,12,cream(),true);
     const wchar_t* names[]={L"GRANULIZER",L"PRESLICER",L"BEAT REPEATER"};int play=int(std::round(value(kUiStep)*15));
     for(int i=0;i<3;++i){double x=slotX[i];int st=stage(i);panel(x,98,416,404);if(dropSlot==i){line(x+10,100,x+406,100,green(),2);}text(std::wstring(L"↔  ")+names[st],x+15,105,210,29,15,cream());box(x+316,106,87,28,AZSKIN(kPanelRaised),AZSKIN(kFiligree));text(L"RANDOM",x+319,109,81,23,11,cream(),true);
       bool active=st==0?(value(kGrainEnabled)>.5&&value(kGrainMix)>.001):value(st==1?kUiGlitch:kUiRepeat)>.5;for(int j=0;j<12;++j)box(x+19+j*32,486,23,4,active?green():AZSKIN(kAccentTrack),dark());
@@ -237,6 +244,8 @@ class WinEditor final:public CPluginView{
     if(inside(x,y,420,22,462,30)){presetMenu();return;}
     if(inside(x,y,900,22,96,28)){preset(true);return;}
     if(inside(x,y,1004,22,96,28)){preset(false);return;}
+    if(inside(x,y,1108,22,34,28)){stepPreset(-1);return;}
+    if(inside(x,y,1146,22,34,28)){stepPreset(+1);return;}
     if(inside(x,y,1140,1312,144,26)){HMENU m=CreatePopupMenu();int n=1;for(int size:{50,60,70,75,80,90,100})AppendMenuW(m,MF_STRING,n++,(std::to_wstring(size)+L"%").c_str());POINT p;GetCursorPos(&p);int pick=TrackPopupMenu(m,TPM_RETURNCMD,p.x,p.y,0,window,nullptr);DestroyMenu(m);if(pick&&plugFrame){int sizes[]={50,60,70,75,80,90,100};double f=sizes[pick-1]/100.;ViewRect r(0,0,int(1320*f),int(1360*f));plugFrame->resizeView(this,&r);}return;}
     if(inside(x,y,1052,778,216,28)){randomizeReslice(seed,[&](ParamID id){return value(id);},[&](ParamID id,double v){edit(id,v);});return;}
     for(int i=0;i<16;++i)if(inside(x,y,32+i*78,823,70,40)){selectedReslice=i;if(dbl)edit(kResliceStep0+i,value(kResliceStep0+i)>.5?0.:1.);InvalidateRect(window,nullptr,FALSE);return;}

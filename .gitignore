@@ -1,19 +1,21 @@
 # Build directories
 build/
 build-local/
+
+# CMake artifacts
+CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
 CTestTestfile.cmake
+Testing/
 compile_commands.json
 
-# Compiled objects and binaries
+# Compiled binaries and object files
 *.o
+*.obj
 *.a
 *.so
 *.dll
 *.exe
 *.out
 *.bin
-
-# Logs
-*.log
