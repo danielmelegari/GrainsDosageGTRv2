@@ -36,7 +36,7 @@ int main(){try{
   send(WM_LBUTTONDOWN,182,912);send(WM_LBUTTONUP,182,912);check(c->getParamNormalized(aztec::kGaterEnabled)==1.,"gater on");
   send(WM_LBUTTONDOWN,1200,912);send(WM_LBUTTONUP,1200,912);check(c->getParamNormalized(aztec::kGaterLatch)==1.,"gater latch");
   send(WM_LBUTTONDOWN,67,963);send(WM_LBUTTONUP,67,963);check(c->getParamNormalized(aztec::kGaterState0)==0.,"Wet/Off step toggle");
-  send(WM_LBUTTONDOWN,500,67);send(WM_LBUTTONUP,500,67);check(c->getParamNormalized(aztec::kInputDeclick)==0.,"input de-click toggle");
+  send(WM_LBUTTONDOWN,952,67);send(WM_LBUTTONUP,952,67);check(c->getParamNormalized(aztec::kInputDeclick)==0.,"input de-click toggle");
   view->removed();check(GetWindow(parent,GW_CHILD)==nullptr,"detach");view->release();c->terminate();c->release();DestroyWindow(parent);
   std::cout<<"PASS: Windows native GUI attach, knob, random isolation, module drag, resize, detach\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

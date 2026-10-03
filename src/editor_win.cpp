@@ -180,7 +180,7 @@ class WinEditor final:public CPluginView{
   void box(double x,double y,double w,double h,COLORREF fill,COLORREF stroke){HBRUSH b=CreateSolidBrush(fill);HPEN p=CreatePen(PS_SOLID,1,stroke);auto ob=SelectObject(dc,b),op=SelectObject(dc,p);RoundRect(dc,int(x),int(y),int(x+w),int(y+h),8,8);SelectObject(dc,ob);SelectObject(dc,op);DeleteObject(b);DeleteObject(p);}
   void text(std::wstring s,double x,double y,double w,double h,int size,COLORREF color,bool center=false,int minimumSize=14){HFONT f=CreateFontW(-std::max(minimumSize,size),0,0,0,FW_SEMIBOLD,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,ANTIALIASED_QUALITY,DEFAULT_PITCH,L"Segoe UI");auto old=SelectObject(dc,f);SetTextColor(dc,color);SetBkMode(dc,TRANSPARENT);int extra=std::max(0,minimumSize-size);RECT r{int(x),int(y)-extra/2,int(x+w),int(y+h)+extra/2};DrawTextW(dc,s.c_str(),-1,&r,DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS|(center?DT_CENTER:DT_LEFT));SelectObject(dc,old);DeleteObject(f);}
   void line(double x,double y,double xx,double yy,COLORREF color,int width=1){auto p=CreatePen(PS_SOLID,width,color);auto old=SelectObject(dc,p);MoveToEx(dc,int(x),int(y),nullptr);LineTo(dc,int(xx),int(yy));SelectObject(dc,old);DeleteObject(p);}
-  void draw(){layout();box(0,0,1320,1360,dark(),dark());panel(8,8,1304,73);text(L"GRAINS",28,20,165,45,31,AZSKIN(kTitle));text(L"DOSAGE",196,20,194,45,31,AZSKIN(kTitle));box(420,22,462,30,dark(),green());text(presetName,432,22,438,30,12,cream());
+  void draw(){layout();box(0,0,1320,1360,dark(),dark());panel(8,8,1304,73);text(L"GRAINS",28,20,165,45,31,AZSKIN(kTitle));text(L"DOSAGE",196,20,194,45,31,AZSKIN(kTitle));box(420,22,462,30,dark(),green());text(L"<",420,22,24,30,13,cream(),true);text(L">",858,22,24,30,13,cream(),true);text(presetName,448,22,406,30,12,cream(),true);
     box(420,56,462,28,AZSKIN(kPanelRaised),AZSKIN(kFiligree));text(L"LOAD",420,56,227,28,10,cream(),true);text(L"SAVE",651,56,227,28,10,cream(),true);
     const wchar_t* names[]={L"GRANULIZER",L"PRESLICER",L"BEAT REPEATER"};int play=int(std::round(value(kUiStep)*15));
     for(int i=0;i<3;++i){double x=slotX[i];int st=stage(i);panel(x,98,416,404);if(dropSlot==i){line(x+10,100,x+406,100,green(),2);}text(std::wstring(L"↔  ")+names[st],x+15,105,210,29,15,cream());box(x+316,106,87,28,AZSKIN(kPanelRaised),AZSKIN(kFiligree));text(L"RANDOM",x+319,109,81,23,11,cream(),true);
@@ -240,7 +240,9 @@ class WinEditor final:public CPluginView{
   }
   void end(){if(dragID>=0)controller->endEdit(ParamID(dragID));if(dragXY){controller->endEdit(kXYX);controller->endEdit(kXYY);}dragID=dragSlot=dropSlot=-1;dragXY=false;}
   void down(double x,double y,bool dbl){layout();SetFocus(window);
-    if(inside(x,y,420,22,462,30)){presetMenu();return;}
+    if(inside(x,y,420,22,24,30)){stepPreset(-1);return;}// PRESET <
+    if(inside(x,y,858,22,24,30)){stepPreset(1);return;}// PRESET >
+    if(inside(x,y,444,22,414,30)){presetMenu();return;}
     if(inside(x,y,420,56,227,28)){preset(false);return;}// LOAD
     if(inside(x,y,651,56,227,28)){preset(true);return;}// SAVE
     if(inside(x,y,1140,1312,144,26)){HMENU m=CreatePopupMenu();int n=1;for(int size:{50,60,70,75,80,90,100})AppendMenuW(m,MF_STRING,n++,(std::to_wstring(size)+L"%").c_str());POINT p;GetCursorPos(&p);int pick=TrackPopupMenu(m,TPM_RETURNCMD,p.x,p.y,0,window,nullptr);DestroyMenu(m);if(pick&&plugFrame){int sizes[]={50,60,70,75,80,90,100};double f=sizes[pick-1]/100.;ViewRect r(0,0,int(1320*f),int(1360*f));plugFrame->resizeView(this,&r);}return;}

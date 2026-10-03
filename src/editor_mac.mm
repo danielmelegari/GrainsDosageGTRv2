@@ -267,7 +267,7 @@ static constexpr double slotX[3]={16.,452.,888.};
   [t scaleXBy:self.bounds.size.width/aztec::canvasW yBy:self.bounds.size.height/aztec::canvasH];[t concat];
   [self panel:NSMakeRect(8,8,1304,73)];
   label(@"GRAINS",NSMakeRect(29,23,165,44),31,AZSKIN(kTitle));label(@"DOSAGE",NSMakeRect(196,23,194,44),31,AZSKIN(kTitle));
-  box(NSMakeRect(420,22,462,30),dark(),green(),5);label(presetName,NSMakeRect(432,30,438,18),12,cream());
+  box(NSMakeRect(420,22,462,30),dark(),green(),5);label(@"<",NSMakeRect(420,30,24,18),13,cream(),true);label(@">",NSMakeRect(858,30,24,18),13,cream(),true);label(presetName,NSMakeRect(448,30,406,18),12,cream(),true);
   box(NSMakeRect(420,56,227,28),AZSKIN(kPanelRaised),AZSKIN(kFiligree),5);label(@"LOAD",NSMakeRect(420,64,227,16),10,cream(),true);
   box(NSMakeRect(653,56,229,28),AZSKIN(kPanelRaised),AZSKIN(kFiligree),5);label(@"SAVE",NSMakeRect(653,64,229,16),10,cream(),true);
   for(int slot=0;slot<3;++slot){
@@ -458,7 +458,9 @@ static constexpr double slotX[3]={16.,452.,888.};
 }
 - (void)mouseDown:(NSEvent*)event {
   if(!owner)return;[self.window makeFirstResponder:self];NSPoint p=[self logical:event];[self layoutControls];
-  if(NSPointInRect(p,NSMakeRect(420,22,462,30))){[self presetMenu:event];return;}
+  if(NSPointInRect(p,NSMakeRect(420,22,24,30))){[self stepPreset:-1];return;}// PRESET <
+  if(NSPointInRect(p,NSMakeRect(858,22,24,30))){[self stepPreset:1];return;}// PRESET >
+  if(NSPointInRect(p,NSMakeRect(444,22,414,30))){[self presetMenu:event];return;}
   if(NSPointInRect(p,NSMakeRect(982,1312,144,26))){[self skinMenu:event];return;}
   if(NSPointInRect(p,NSMakeRect(420,56,227,28))){[self preset:NO];return;}// LOAD
   if(NSPointInRect(p,NSMakeRect(653,56,229,28))){[self preset:YES];return;}// SAVE
