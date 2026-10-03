@@ -88,6 +88,11 @@ if(APPLE)
   enable_language(OBJCXX)
   set_property(TARGET GrainsDosage PROPERTY OBJCXX_STANDARD 17)
   set_property(TARGET GrainsDosage PROPERTY OBJCXX_STANDARD_REQUIRED ON)
+  # knobOK.png is the user-supplied knob face: copy it over the shipped knob
+  # sprite so both the macOS bundle and the Windows RC resource pick it up.
+  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/workspace/assets/knobOK.png")
+    configure_file(workspace/assets/knobOK.png assets/sprites/knob.png COPYONLY)
+  endif()
   file(GLOB GRAINS_SPRITES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/sprites/*.png")
   set_source_files_properties(${GRAINS_SPRITES} PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
   target_sources(GrainsDosage PRIVATE ${GRAINS_SPRITES})

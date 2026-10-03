@@ -98,6 +98,7 @@ static constexpr double slotX[3]={16.,452.,888.};
   aztec::Editor* owner;
 @private
   NSImage* artwork;
+  NSImage* knobFace;   // user-supplied knobOK.png face (assets/sprites/knob.png)
   NSMutableDictionary<NSString*,NSImage*>* sprites;
   NSString* presetName;
   std::vector<aztec::Control> controls;
@@ -141,6 +142,12 @@ static constexpr double slotX[3]={16.,452.,888.};
     NSArray<NSString*>* spriteNames=@[@"knob",@"slider",@"step",@"header-left",@"header-right",@"xy-nebula"];
     NSArray<NSString*>* spriteKeys=@[@"385,260,76,76",@"453,636,24,32",@"734,456,54,48",@"1850,12,136,104",@"1726,15,95,104",@"nebula"];
     for(NSUInteger i=0;i<spriteNames.count;++i){NSString* file=[[NSBundle bundleForClass:[GrainsSurface class]] pathForResource:spriteNames[i] ofType:@"png"];if(!file)file=[@"assets/sprites/" stringByAppendingFormat:@"%@.png",spriteNames[i]];if(![[NSFileManager defaultManager] fileExistsAtPath:file])file=[@"GrainsDosage/" stringByAppendingString:file];NSImage* sprite=[[NSImage alloc] initWithContentsOfFile:file];if(sprite)sprites[spriteKeys[i]]=sprite;}
+    // Knob face from the user's knobOK.png (shipped as assets/sprites/knob.png).
+    {NSString* kf=[[NSBundle bundleForClass:[GrainsSurface class]] pathForResource:@"knob" ofType:@"png"];
+     if(kf){NSImage* probe=[[NSImage alloc] initWithContentsOfFile:kf];if(!probe)kf=nil;}
+     if(!kf||![[NSFileManager defaultManager] fileExistsAtPath:kf])kf=@"workspace/assets/knobOK.png";
+     if(![[NSFileManager defaultManager] fileExistsAtPath:kf])kf=@"GrainsDosage/workspace/assets/knobOK.png";
+     knobFace=[[NSImage alloc] initWithContentsOfFile:kf];}
     self.toolTip=@"Drag a knob vertically; Shift gives fine control. Double-click resets. Drag module headers to change audio order.";
     timer=[NSTimer timerWithTimeInterval:1./30. target:self selector:@selector(tick:) userInfo:nil repeats:YES];
     [[NSRunLoop mainRunLoop] addTimer:timer forMode:NSRunLoopCommonModes];
@@ -216,6 +223,38 @@ static constexpr double slotX[3]={16.,452.,888.};
   if(c.kind==Knob){
     label(title,NSMakeRect(r.origin.x,r.origin.y,r.size.width,16),11,cream(),true);
     const double cx=NSMidX(r),cy=r.origin.y+43.,radius=24.;
+    double zero=bipolar(c.id)?270.:135.;double angle=135.+270.*v;
+    double md=aztec::modDepth(c.id);
+    if(knobFace){
+      // User-supplied knobOK.png face: transparent background, green indicator
+      // bar baked in. We clip that bar to the current value and recolour it
+      // with the live skin accent, then overlay the pointer dot.
+      [NSGraphicsContext saveGraphicsState];
+      NSRect face=NSMakeRect(cx-radius,cy-radius,radius*2,radius*2);
+      [[NSBezierPath bezierPathWithOvalInRect:face] addClip];
+      [NSGraphicsContext currentContext].imageInterpolation=NSImageInterpolationHigh;
+      [knobFace drawInRect:face fromRect:NSZeroRect operation:NSCompositingOperationSourceOver fraction:1. respectFlipped:YES hints:nil];
+      // Mask the baked-in green bar beyond the current value (clockwise sweep
+      // from the bar's start at 135deg out to the value angle).
+      NSBezierPath* keep=[NSBezierPath bezierPath];
+      [keep moveToPoint:NSMakePoint(cx,cy)];
+      [keep appendBezierPathWithArcFromPoint:NSMakePoint(cx+64*std::cos(135.*qg::tau/360.),cy+64*std::sin(135.*qg::tau/360.))
+                                     toPoint:NSMakePoint(cx+64*std::cos(std::max(135.+1e-4,angle)*qg::tau/360.),cy+64*std::sin(std::max(135.+1e-4,angle)*qg::tau/360.))
+                                       radius:64.];
+      [keep closePath];
+      [NSGraphicsContext saveGraphicsState];
+      [keep setClip];
+      [[NSColor colorWithCalibratedRed:0 green:1 blue:0 alpha:1] set];
+      NSRectFillUsingOperation(face,NSCompositingOperationDestinationIn);
+      [NSGraphicsContext restoreGraphicsState];
+      // Recolour the surviving green pixels with the live accent colour.
+      [AZSKIN(kAccent) set];
+      NSRectFillUsingOperation(face,NSCompositingOperationSourceAtop);
+      [NSGraphicsContext restoreGraphicsState];
+      // Value dot on the face edge + live modulation arc outside the face.
+      {double a=angle*qg::tau/360.;box(NSMakeRect(cx+(radius-2)*std::cos(a)-2.5,cy+(radius-2)*std::sin(a)-2.5,5,5),cream(),nil,2.5);}
+      if(md>.004){arc(cx,cy,radius+9,135.,135.+270.*md,green(),2.5);}
+    }else{
     box(NSMakeRect(cx-radius-2,cy-radius+2,radius*2+4,radius*2+4),AZSKIN(kWell),nil,radius+2);
     NSBezierPath* cap=[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(cx-radius,cy-radius,radius*2,radius*2)];
     // Knob metal + ring groove resolve against the live palette so every
@@ -229,17 +268,16 @@ static constexpr double slotX[3]={16.,452.,888.};
     skin::Rgb grooveS=skin::mix(AZCOL(kBorderDark),AZCOL(kViolet),.5);
     arc(cx,cy,radius+4,135,405,rgb(grooveS.r/255.,grooveS.g/255.,grooveS.b/255.),3.);
     for(int j=0;j<21;++j){double a=(135.+270.*j/20.)*qg::tau/360.;box(NSMakeRect(cx+33*std::cos(a)-1.5,cy+33*std::sin(a)-1.5,3,3),j/20.<=v?green():AZSKIN(kAccentTrack),nil,1.5);}
-    double zero=bipolar(c.id)?270.:135.;double angle=135.+270.*v;
     arc(cx,cy,radius+4,std::min(zero,angle),std::max(zero,angle),green(),3.5);
     // Live modulation bar: an accent-coloured arc just outside the groove whose
     // length tracks how strongly LFOs/XY are modulating this parameter right now.
-    double md=aztec::modDepth(c.id);
     if(md>.004){arc(cx,cy,radius+9,135.,135.+270.*md,green(),2.5);}
     double a=angle*qg::tau/360.;NSBezierPath* pointer=[NSBezierPath bezierPath];
     [pointer moveToPoint:NSMakePoint(cx+8*std::cos(a),cy+8*std::sin(a))];
     [pointer lineToPoint:NSMakePoint(cx+22*std::cos(a),cy+22*std::sin(a))];
     [cream() setStroke];pointer.lineWidth=3.;pointer.lineCapStyle=NSRoundLineCapStyle;[pointer stroke];
     box(NSMakeRect(cx+28*std::cos(a)-2.5,cy+28*std::sin(a)-2.5,5,5),cream(),nil,2.5);
+    }
     box(NSMakeRect(r.origin.x+4,r.origin.y+74,r.size.width-8,19),dark(),AZSKIN(kHairline),4);
     label(owner->display(c.id,v),NSMakeRect(r.origin.x+5,r.origin.y+76,r.size.width-10,16),12,AZSKIN(kReadout),true);
   }else if(c.kind==Slider){

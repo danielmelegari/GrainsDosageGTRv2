@@ -239,8 +239,24 @@ class WinEditor final:public CPluginView{
     for(const auto& c:controls){if(c.id==kInputDeclick||c.id==kDeclickSensitivity)continue;double v=value(c.id);std::wstring title(c.label,c.label+std::strlen(c.label));
       if(c.kind==PanMode){const wchar_t* modes[]={L"MANUAL",L"ALTERNATE",L"RANDOM"};int mode=int(std::round(v*2));for(int i=0;i<3;++i){double x=c.x+i*c.w/3;box(x,c.y,c.w/3-3,c.h,mode==i?AZSKIN(kPanelRaised):dark(),mode==i?green():cream());text(modes[i],x,c.y,c.w/3-3,c.h,9,mode==i?ONTEXT():cream(),true);}}
       else if(c.kind==Pan){text(L"L",c.x,c.y,16,16,10,cream());text(L"C",c.x+c.w/2-8,c.y,16,16,10,cream(),true);text(L"R",c.x+c.w-16,c.y,16,16,10,cream());box(c.x+4,c.y+23,c.w-8,3,AZSKIN(kHairline),dark());box(c.x+v*(c.w-8),c.y+18,8,13,green(),green());}
-      else if(c.kind==Knob){text(title,c.x,c.y,c.w,17,11,cream(),true);double cx=c.x+c.w/2,cy=c.y+43;box(cx-22,cy-22,44,44,AZSKIN(kViolet),AZSKIN(kFiligreeDim));for(int j=0;j<21;++j){double a=(135+j*13.5)*qg::tau/360.;box(cx+30*std::cos(a)-2,cy+30*std::sin(a)-2,4,4,j/20.<=v?green():AZSKIN(kAccentTrack),dark());}
-      {double md=aztec::modDepth(c.id);if(md>.004)for(int j=0;j<21;++j){if(j/20.>=md)break;double a=(135+j*13.5)*qg::tau/360.;box(cx+38*std::cos(a)-1.5,cy+38*std::sin(a)-1.5,3,3,green(),green());}}knobCap(cx,cy,v);double a=(135+270*v)*qg::tau/360.;line(cx+6*std::cos(a),cy+6*std::sin(a),cx+22*std::cos(a),cy+22*std::sin(a),cream(),3);box(c.x+4,c.y+74,c.w-8,19,dark(),AZSKIN(kHairline));text(display(c.id,v),c.x+5,c.y+75,c.w-10,18,12,AZSKIN(kReadout),true);}
+      else if(c.kind==Knob){text(title,c.x,c.y,c.w,17,11,cream(),true);double cx=c.x+c.w/2,cy=c.y+43;
+      double radius=24.,angle=135.+270*v;bool faceDrawn=false;
+      if(sprites[0]){ // user knobOK.png face: clip the baked-in green bar to the value and recolour it with the live accent
+        Gdiplus::Bitmap* face=nullptr;if(Gdiplus::Bitmap::FromHBITMAP(sprites[0],nullptr,&face)==Gdiplus::Ok&&face){
+          {Gdiplus::Graphics g(dc);g.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
+           Gdiplus::GraphicsPath wedge;wedge.AddPie((REAL)(cx-radius),(REAL)(cy-radius),(REAL)(radius*2),(REAL)(radius*2),135.f,(REAL)std::max(.1,270.*v));
+           g.SetClip(&wedge,Gdiplus::CombineModeReplace);
+           g.DrawImage(face,Gdiplus::RectF((REAL)(cx-radius),(REAL)(cy-radius),(REAL)(radius*2),(REAL)(radius*2)));}
+          Gdiplus::Graphics overlay(dc);
+          overlay.SetCompositingMode(Gdiplus::CompositingModeSourceAtop);
+          Gdiplus::SolidBrush accent(C(aztec::skin::kAccent));
+          overlay.FillEllipse(&accent,(REAL)(cx-radius),(REAL)(cy-radius),(REAL)(radius*2),(REAL)(radius*2));
+          delete face;faceDrawn=true;
+          double a=angle*qg::tau/360.;disc(cx+(radius-2)*std::cos(a),cy+(radius-2)*std::sin(a),2.5,cream(),cream());
+          {double md=aztec::modDepth(c.id);if(md>.004)for(int j=0;j<21;++j){if(j/20.>=md)break;double b=(135+j*13.5)*qg::tau/360.;box(cx+38*std::cos(b)-1.5,cy+38*std::sin(b)-1.5,3,3,green(),green());}}
+        }}
+      if(!faceDrawn){box(cx-22,cy-22,44,44,AZSKIN(kViolet),AZSKIN(kFiligreeDim));for(int j=0;j<21;++j){double a=(135+j*13.5)*qg::tau/360.;box(cx+30*std::cos(a)-2,cy+30*std::sin(a)-2,4,4,j/20.<=v?green():AZSKIN(kAccentTrack),dark());}
+      {double md=aztec::modDepth(c.id);if(md>.004)for(int j=0;j<21;++j){if(j/20.>=md)break;double a=(135+j*13.5)*qg::tau/360.;box(cx+38*std::cos(a)-1.5,cy+38*std::sin(a)-1.5,3,3,green(),green());}}knobCap(cx,cy,v);double a=(135+270*v)*qg::tau/360.;line(cx+6*std::cos(a),cy+6*std::sin(a),cx+22*std::cos(a),cy+22*std::sin(a),cream(),3);}box(c.x+4,c.y+74,c.w-8,19,dark(),AZSKIN(kHairline));text(display(c.id,v),c.x+5,c.y+75,c.w-10,18,12,AZSKIN(kReadout),true);}
       else if(c.kind==Slider){text(title,c.x,c.y,c.w,14,9,cream());box(c.x+4,c.y+20,c.w-8,4,AZSKIN(kHairline),dark());box(c.x+4,c.y+20,(c.w-8)*v,4,green(),green());art(453,636,24,32,c.x+v*(c.w-8)-2,c.y+13,12,16);if(c.h>=33)text(display(c.id,v),c.x,c.y+28,c.w,13,10,cream(),true);else text(display(c.id,v),c.x+100,c.y,c.w-100,13,9,cream(),true);}
       else if(c.kind==Select){box(c.x,c.y,c.w,c.h,dark(),AZSKIN(kBorderDark));if(c.h>=38)text(title,c.x+7,c.y+3,c.w-20,12,8,cream());text(display(c.id,c.id==lfoID(selectedLfo,lWave)&&value(kModWaveRnd0+selectedLfo)>0.?value(kUiModWave0+selectedLfo):v)+L" ▾",c.x+7,c.y+(c.h>=38?17:5),c.w-14,21,11,cream());}
       else{bool on=v>=.5;if(c.id>=kGrainEnabled&&c.id<=kRepeatEnabled)title=on?L"ON":L"OFF";box(c.x,c.y,c.w,c.h,on?AZSKIN(kAccentGlow):AZSKIN(kPanelRaised),on?green():AZSKIN(kFiligreeDim));if(c.kind==Pad){int step=int(c.id-(c.id>=kReverbStep0?kReverbStep0:kGlitchStep0));art(734,456,54,48,c.x+c.w/2-10,c.y+1,20,18);text(std::to_wstring(step+1),c.x,c.y+c.h-15,c.w,14,10,on?ONTEXT():cream(),true);if(step==(c.id>=kReverbStep0?int(std::round(value(kUiReverb)*15)):play))line(c.x+4,c.y+c.h-3,c.x+c.w-4,c.y+c.h-3,cream(),2);}else{text(title,c.x+18,c.y,c.w-21,c.h,10,on?ONTEXT():cream(),true);if(on)disc(c.x+10,c.y+c.h/2,6,AZSKIN(kAccent),AZSKIN(kAccent));disc(c.x+10,c.y+c.h/2,3,on?green():AZSKIN(kMuted),on?green():dark());}}
