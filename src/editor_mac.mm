@@ -447,7 +447,8 @@ static constexpr double slotX[3]={16.,452.,888.};
 // PRESET < / > buttons: cycle through the sorted preset folder (factory + user files).
 - (void)stepPreset:(int)direction {
   if(!owner)return;NSURL* folder=[self presetFolder];if(!folder)return;
-  std::filesystem::path directory=[folder fileSystemRepresentation]?[folder fileSystemRepresentation]:"";
+  const char* rep=[folder fileSystemRepresentation];if(!rep)return;
+  std::filesystem::path directory=std::filesystem::u8path(rep);
   auto name=aztec::nextPresetFile(directory,direction,[presetName UTF8String]);
   if(name.empty())return;
   NSString* file=[NSString stringWithUTF8String:std::filesystem::path(name).u8string().c_str()];
