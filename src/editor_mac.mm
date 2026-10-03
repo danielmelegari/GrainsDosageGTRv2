@@ -449,7 +449,12 @@ static constexpr double slotX[3]={16.,452.,888.};
   if(!owner)return;NSURL* folder=[self presetFolder];if(!folder)return;
   const char* rep=[folder fileSystemRepresentation];if(!rep)return;
   std::wstring directory;for(const char* s=rep;*s;++s)directory+=wchar_t(static_cast<unsigned char>(*s));// UTF-8 bytes as wchar units; nextPresetFile decodes via dirent
-  auto name=aztec::nextPresetFile(directory,direction.empty()?std::wstring():[presetName UTF8String]?std::wstring([presetName UTF8String],[](char c){return wchar_t(static_cast<unsigned char>(c));}):std::wstring());
+  // Build the current-name wstring first: inside a message-send expression the
+  // selector keyword `direction:` resolves to the ObjC selector namespace, not
+  // the method's int parameter, so passing `direction` inline fails to compile.
+  std::wstring current;const char* cur=[presetName UTF8String];if(cur)for(const char* s=cur;*s;++s)current+=wchar_t(static_cast<unsigned char>(*s));
+  const int dir=direction;
+  auto name=aztec::nextPresetFile(directory,dir,current);
   if(name.empty())return;
   std::string utf8name;for(wchar_t c:name)utf8name+=static_cast<char>(c);
   NSString* file=[NSString stringWithUTF8String:utf8name.c_str()];

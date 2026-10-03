@@ -9,6 +9,7 @@
 #include <vector>
 #include <cwctype>
 #ifdef _WIN32
+#define NOMINMAX // must precede <windows.h>: its min/max macros break std::min/std::max in other headers (MSVC C2589/C2059)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #else
