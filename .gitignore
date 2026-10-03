@@ -1,14 +1,3 @@
-# Build artifacts
-build-local/
-
-# Compiled/Binary files
-*.o
-*.out
-*.a
-*.so
-*.dll
-*.exe
-
-# Compressed files
-*.zipbuild-local/
+# Logs and temp files
+*.logbuild*/
 *.zip

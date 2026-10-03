@@ -1,4 +1,5 @@
 #pragma once
+#include "parameters.h"
 #include "modulation.h"
 #include "stretch.h"
 #include "transpose.h"
@@ -12,6 +13,7 @@
 #include "filter_bank.h"
 #include "filter_sequencer.h"
 #include "space_reverb.h"
+#include <atomic>
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -422,6 +424,8 @@ public:
   int resliceStep()const{return reslice_.step();}bool resliceActive()const{return reslice_.active();}
   int gaterStep()const{return gater_.step();}int gaterState(int i)const{return gater_.state(i);}double gaterLength(int i)const{return gater_.length(i);}
   bool reverbGate()const{return reverb_.gateOpen();}
+  std::atomic<uint64_t> lastModPacked_{0}; // live Size/Density/Pitch/Chaos magnitudes (aztec-packed) for the UI knob bars
+public:
   int lfoWave(int i)const{return modulation_.wave(i);}
   double lfoPhase(int i)const{return modulation_.phase(i);}
   int64_t lfoCycle(int i)const{return modulation_.cycle(i);}
@@ -433,8 +437,9 @@ public:
     if(buffer_[0].empty()) { outL = inL; outR = inR; return; }
     const int64_t step = int64_t(std::floor(beat / std::max(.015625, settings_.division) + 1e-8));
     const bool activeStep = (settings_.pattern & (1u << ((step % steps + steps) % steps))) != 0;
-    const auto values=modulation_.process(settings_.lfos,modBase_,beat,settings_.sampleRate,
+    ModValues values;values=modulation_.process(settings_.lfos,modBase_,beat,settings_.sampleRate,
                                           step!=lastStep_ && activeStep,step);
+    lastModPacked_.store(aztec::packModMagnitudes(values),std::memory_order_relaxed);
     applyExtended(values);
     grainSize_=.015+values[0]*.235; grainDensity_=1.+values[1]*31.;
     grainPitch_=-48.+values[2]*96.; grainPosition_=.015+values[3]*1.985; grainChaos_=values[4];
@@ -572,7 +577,8 @@ public:
     const bool gateTrigger=step!=lastStep_,rhythmTrigger=rhythm!=lastRhythm_;
     bool glitchOpen=settings_.glitchSequence ? (settings_.glitchPattern&(1u<<slot))!=0 : activeStep;
     const bool repeatOpen=settings_.repeatSequence ? (settings_.repeatPattern&(1u<<slot))!=0 : activeStep;
-    const auto values=modulation_.process(settings_.lfos,modBase_,beat,settings_.sampleRate,gateTrigger&&activeStep,step);
+    ModValues values;values=modulation_.process(settings_.lfos,modBase_,beat,settings_.sampleRate,gateTrigger&&activeStep,step);
+    lastModPacked_.store(aztec::packModMagnitudes(values),std::memory_order_relaxed);
     applyExtended(values);
     grainSize_=.015+values[0]*.235; grainDensity_=1.+values[1]*31.;
     grainPitch_=-48.+values[2]*96.; grainPosition_=.015+values[3]*1.985; grainChaos_=values[4];

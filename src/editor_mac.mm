@@ -157,6 +157,11 @@ static constexpr double slotX[3]={16.,452.,888.};
 }
 - (void)tick:(NSTimer*)tick {
   (void)tick;if(!owner)return;bool changed=false;
+  // Pull the audio thread's live modulation magnitudes and rebuild the per-knob
+  // bar depths before deciding whether the surface needs a repaint.
+  auto mods=aztec::unpackModMagnitudes(aztec::modCell().packed.load(std::memory_order_relaxed));
+  auto depths=aztec::modulationDepths(mods);
+  for(int id=0;id<aztec::kCount;++id){if(depths[id]!=aztec::modDepthMap()[id]){aztec::updateModDepths(mods);changed=true;break;}}
   for(int id=0;id<aztec::kCount;++id){double v=owner->value(id);if(v!=cached[id]){cached[id]=v;changed=true;}}
   if(changed)[self setNeedsDisplay:YES];
 }
@@ -226,6 +231,10 @@ static constexpr double slotX[3]={16.,452.,888.};
     for(int j=0;j<21;++j){double a=(135.+270.*j/20.)*qg::tau/360.;box(NSMakeRect(cx+33*std::cos(a)-1.5,cy+33*std::sin(a)-1.5,3,3),j/20.<=v?green():AZSKIN(kAccentTrack),nil,1.5);}
     double zero=bipolar(c.id)?270.:135.;double angle=135.+270.*v;
     arc(cx,cy,radius+4,std::min(zero,angle),std::max(zero,angle),green(),3.5);
+    // Live modulation bar: an accent-coloured arc just outside the groove whose
+    // length tracks how strongly LFOs/XY are modulating this parameter right now.
+    double md=aztec::modDepth(c.id);
+    if(md>.004){arc(cx,cy,radius+9,135.,135.+270.*md,green(),2.5);}
     double a=angle*qg::tau/360.;NSBezierPath* pointer=[NSBezierPath bezierPath];
     [pointer moveToPoint:NSMakePoint(cx+8*std::cos(a),cy+8*std::sin(a))];
     [pointer lineToPoint:NSMakePoint(cx+22*std::cos(a),cy+22*std::sin(a))];
