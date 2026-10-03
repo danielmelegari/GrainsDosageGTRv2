@@ -448,11 +448,11 @@ static constexpr double slotX[3]={16.,452.,888.};
 - (void)stepPreset:(int)direction {
   if(!owner)return;NSURL* folder=[self presetFolder];if(!folder)return;
   const char* rep=[folder fileSystemRepresentation];if(!rep)return;
-  std::filesystem::path directory=std::filesystem::u8path(rep);
-  std::wstring current;auto utf8=[presetName UTF8String];if(utf8)for(const unsigned char* s=reinterpret_cast<const unsigned char*>(utf8);*s;++s)current+=wchar_t(*s);
-  auto name=aztec::nextPresetFile(directory,direction,current);
+  std::wstring directory;for(const char* s=rep;*s;++s)directory+=wchar_t(static_cast<unsigned char>(*s));// UTF-8 bytes as wchar units; nextPresetFile decodes via dirent
+  auto name=aztec::nextPresetFile(directory,direction.empty()?std::wstring():[presetName UTF8String]?std::wstring([presetName UTF8String],[](char c){return wchar_t(static_cast<unsigned char>(c));}):std::wstring());
   if(name.empty())return;
-  NSString* file=[NSString stringWithUTF8String:std::filesystem::path(name).u8string().c_str()];
+  std::string utf8name;for(wchar_t c:name)utf8name+=static_cast<char>(c);
+  NSString* file=[NSString stringWithUTF8String:utf8name.c_str()];
   NSURL* url=[folder URLByAppendingPathComponent:file];
   if(![self loadPresetURL:url]){NSAlert* alert=[[NSAlert alloc] init];alert.messageText=@"Cannot load this preset";alert.informativeText=@"Invalid or incompatible preset. No settings changed.";[alert runModal];}
 }

@@ -7,8 +7,13 @@
 #include <string>
 #include <algorithm>
 #include <vector>
-#include <filesystem>
 #include <cwctype>
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#else
+#include <dirent.h>
+#endif
 namespace aztec {
 inline bool presetParameter(int id){return id>=0&&id<presetCount&&!isMonitor(id);}
 template<class Getter> std::string encodePreset(Getter get){
@@ -28,13 +33,41 @@ inline bool decodePreset(const std::string& text,std::array<double,kCount>& valu
 }
 // PRESET < / > buttons: cycle through every .gdspreset file in the user's preset
 // folder (same sorted order both editors show in their menus). direction is -1 or +1.
-inline std::wstring nextPresetFile(const std::filesystem::path& directory,int direction,const std::wstring& current){
+// Directory scanning uses native APIs (Win32 FindFileW / POSIX dirent) instead of
+// std::filesystem, which is unavailable when targeting macOS x86_64 with a
+// pre-10.15 deployment target. Names are returned as std::wstring.
+// Extension ".gdspreset" is 10 wide units on every platform (Windows: UTF-16,
+// macOS/Linux: wchar_t==char32_t). Length checks use >=presetExtLen before a
+// substr of presetExtLen; the old code used >11/size()-11 (an off-by-one that
+// also dropped names whose stem is shorter than one character).
+constexpr size_t presetExtLen=10;
+inline std::vector<std::wstring> presetFilesIn(const std::wstring& utf16directory){
  auto lower=[](std::wstring s){for(auto& c:s)c=wchar_t(towlower(c));return s;};
- std::vector<std::wstring> names;std::error_code ec;
- for(auto& e:std::filesystem::directory_iterator(directory,ec))if(!e.is_directory()){auto p=e.path().filename().wstring();if(p.size()>11&&lower(p.substr(p.size()-11))==L".gdspreset")names.push_back(std::move(p));}
+ std::vector<std::wstring> names;
+#ifdef _WIN32
+ std::wstring pattern=utf16directory+L"\\*.gdspreset";WIN32_FIND_DATAW fd{};
+ HANDLE h=FindFirstFileW(pattern.c_str(),&fd);
+ if(h!=INVALID_HANDLE_VALUE){do{if(!(fd.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY))names.push_back(fd.cFileName);}while(FindNextFileW(h,&fd));FindClose(h);}
+#else
+ auto fromUtf8=[](const std::string& s){std::wstring w;// minimal UTF-8 -> wchar_t decoder (BMP + astral)
+   for(size_t i=0;i<s.size();){unsigned char c=static_cast<unsigned char>(s[i]);unsigned cp=c;size_t extra=0;
+     if(c>=0xF0&&i+3<s.size()){cp=(c&7)<<18;extra=3;}else if(c>=0xE0&&i+2<s.size()){cp=(c&15)<<12;extra=2;}else if(c>=0xC0&&i+1<s.size()){cp=(c&31)<<6;extra=1;}
+     if(extra){for(size_t k=1;k<=extra;++k)cp|=(static_cast<unsigned char>(s[i+k])&63)<<(6*(extra-k));if(cp>0xFFFF){cp-=0x10000;w+=wchar_t(0xD800+(cp>>10));w+=wchar_t(0xDC00+(cp&1023));}else w+=wchar_t(cp);i+=extra+1;}
+     else{w+=wchar_t(c);++i;}}
+   return w;};
+ // On POSIX platforms the directory arrives as UTF-8 encoded into wchar_t units; decode it back.
+ std::string native;for(wchar_t c:utf16directory)native+=static_cast<char>(c);
+ if(!native.empty())if(DIR* d=opendir(native.c_str())){while(dirent* e=readdir(d)){const std::string n=e->d_name;if(n=="."||n=="..")continue;auto w=fromUtf8(n);if(w.size()>=presetExtLen&&lower(w.substr(w.size()-presetExtLen))==L".gdspreset")names.push_back(std::move(w));}closedir(d);}
+#endif
+ return names;
+}
+inline std::wstring nextPresetFile(const std::wstring& utf16directory,int direction,const std::wstring& current){
+ auto lower=[](std::wstring s){for(auto& c:s)c=wchar_t(towlower(c));return s;};
+ auto names=presetFilesIn(utf16directory);
  std::sort(names.begin(),names.end(),[&](const std::wstring&a,const std::wstring&b){return lower(a)<lower(b);});
  if(names.empty())return {};
- const wchar_t* ext=L".gdspreset";auto stem=[&](std::wstring n){if(n.size()>11&&lower(n.substr(n.size()-11))==ext)n.resize(n.size()-11);return lower(n);};
+ auto hasExt=[&](const std::wstring&n){return n.size()>=presetExtLen&&lower(n.substr(n.size()-presetExtLen))==L".gdspreset";};
+ auto stem=[&](std::wstring n){if(hasExt(n))n.resize(n.size()-presetExtLen);return lower(n);};
  auto pos=std::find_if(names.begin(),names.end(),[&](const std::wstring&n){return stem(n)==stem(current);});
  size_t index=pos==names.end()?size_t(direction>0?int(names.size())-1:0):size_t(pos-names.begin());
  index=(index+(direction>0?names.size()+1:names.size()-1))%names.size();
