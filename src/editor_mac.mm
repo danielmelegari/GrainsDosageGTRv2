@@ -44,10 +44,12 @@ public:
     // lights immediately; performEdit carries it to the processor, which
     // consumes the request and mirrors 0 back on the next audio block.
     controller_->setParamNormalized(id,v);controller_->performEdit(id,v);
-    // GrainsSurface is only forward-declared at this point, so cached[]
-    // cannot be touched here; instead force the next tick/draw pass to notice
-    // the new value and repaint the button immediately.
-    if(id==kRandomAll&&surface_)dispatch_async(dispatch_get_main_queue(),^{[surface_ setNeedsDisplay:YES];});
+    // GrainsSurface is only forward-declared at this point, so no message
+    // sends to surface_ are allowed here. setNeedsDisplay: lives on NSView,
+    // so up-casting the pointer lets us request a repaint (immediate button
+    // feedback for momentary triggers like RANDOM ALL) without the full
+    // @interface.
+    if(id==kRandomAll&&surface_)dispatch_async(dispatch_get_main_queue(),^{[(NSView*)surface_ setNeedsDisplay:YES];});
   }
   void edit(ParamID id,double v) {begin(id);change(id,v);end(id);}
   void zoom(double scale);
