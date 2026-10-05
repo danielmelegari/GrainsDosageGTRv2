@@ -88,6 +88,7 @@ class Engine {
   double glitchStart_ = 0., glitchLength_ = 16., repeatStart_ = 0., repeatLength_ = 16.;
   double glitchBeat_ = 0., repeatBeat_ = 0., heldRepeatBeats_ = .25;
   bool glitchActive_ = false, repeating_ = false;
+  std::atomic<bool> freezeRequest_{false}, freezeTarget_{false}; // UI->audio freeze restore (see requestFrozen)
   int64_t lastRhythm_=INT64_MIN;
   double repeatPhase_=0., repeatLastBeat_=0., repeatPitch_=0.;
   double repeatGate_=0., glitchGate_=0.;
@@ -291,6 +292,12 @@ public:
   bool isFrozen() const { return settings_.freeze; }
   void toggleFreeze() { settings_.freeze = baseSettings_.freeze = !settings_.freeze; }
   void setFrozen(bool on) { settings_.freeze = baseSettings_.freeze = on; }
+  // Cross-thread freeze request: the UI thread (setComponentState / host edit)
+  // only raises this flag; process() applies it on the audio thread, where
+  // touching settings_ is safe. A restored session that saved frozen=1 therefore
+  // actually freezes instead of being silently unfrozen by the next engine.set().
+  void requestFrozen(bool on) { freezeRequest_.store(true, std::memory_order_release); freezeTarget_.store(on, std::memory_order_release); }
+  bool takeFreezeRestore(bool& on) { if(!freezeRequest_.exchange(false, std::memory_order_acq_rel)) return false; on = freezeTarget_.load(std::memory_order_acquire); return true; }
   void prepare(double sampleRate) {
     settings_.sampleRate = std::max(8000., sampleRate);
     filterSequencer_.reset();gater_.prepare(settings_.sampleRate);reslice_.prepare(settings_.sampleRate);filter_.prepare(settings_.sampleRate);match_.prepare(settings_.sampleRate);reverb_.prepare(settings_.sampleRate);panRight_=false;for(int i=0;i<3;++i)moduleBlend_[i]=settings_.moduleOn[i]?1.:0.;

@@ -2,6 +2,7 @@
 #include "declick.h"
 #include "master_fx.h"
 #include "parameters.h"
+#include "randomize.h"
 #include "factory_presets.h"
 #include "editor.h"
 #include <cstring>
@@ -83,6 +84,12 @@ qg::Settings settings(const std::array<double, kCount>& saved, double tempo, dou
   // legacy state/preset IDs keep their positions, but it is never read anymore.
   s.bypass=false; s.densityFlow=value(p,kDensityFlow)>=.5; s.transpose=value(p,kTranspose)*96.-48.;
   s.stretchOn=value(p,kStretchOn)>=.5; s.stretchSpeed=.25+value(p,kStretchSpeed)*3.75;
+  // BUFFER SIZE: kGrainBuffer selects one of 1/2/4/8/16 s (live resize keeps the audible tail).
+  {const double bufferSeconds[]={1.,2.,4.,8.,16.};int bucket=int(std::clamp(value(p,kGrainBuffer)*4.,0.,4.));s.bufferSeconds=bufferSeconds[bucket];}
+  // FREEZE is momentary on screen: p_[kFreeze] carries a one-shot request that
+  // process() consumes below; the sustained state lives in the engine and is
+  // mirrored back into p_ so getState/save always capture the true frozen flag.
+  s.freeze=false; // never carried through settings(): toggled directly on the engine
   for(int i=0;i<qg::lfoCount;++i) {
     auto& l=s.lfos[i]; const int base=lfoID(i,0);
     l.enabled=value(p,base+lEnabled)>=.5; l.wave=int(std::round(value(p,base+lWave)*129.));
@@ -123,11 +130,14 @@ bool loadState(IBStream* stream, std::array<double,kCount>& p) {
     if(!in.readDouble(bufferValue) || !std::isfinite(bufferValue)) return false;
     if(!in.readDouble(frozen) || !std::isfinite(frozen)) return false;
     result[kGrainBuffer]=std::clamp(bufferValue,0.,1.);
+    // FREEZE is a sustained state (the engine keeps recording stopped while it
+    // holds); RANDOM ALL and the PRESET < / > slots stay momentary/inert.
     result[kFreeze]=frozen>=.5?1.:0.;
-    for(int i=kGrainBuffer+2;i<int(kCount);++i) {
+    for(int i=kFreeze+1;i<int(kCount);++i) {
       double v=0.; if(!in.readDouble(v) || !std::isfinite(v)) return false;
       result[i]=std::clamp(v,0.,1.);
     }
+    result[kRandomAll]=0.; // one-shot: never restored as a pending trigger
   }
   if(magic==0x51473133) result[kModuleOrder]=1.; // Preserve version 0.5 parallel routing.
   if(magic<0x51473133) {
@@ -166,7 +176,27 @@ class Processor final : public AudioEffect {
   int waveCountdown_=0;
   double rate_ = 44100., tempo_ = 120., fallbackBeat_ = 0.;
   // The parameter array covers every legacy + monitor ID; the VST parameter list stops before the new UI controls.
-  bool freezePending_ = false; // FREEZE is a momentary button: consumed by the next process() call
+  bool freezePending_ = false; // queued FREEZE toggle (from editor click or automation): consumed by the next process() call
+  uint32_t randomSeed_ = 0x9E3779B9u; // xorshift seed for RANDOM ALL one-shots
+  bool randomAllPending_ = false;    // RANDOM ALL is a momentary button, like a trigger pulse
+  // FREEZE is a sustained toggle: when the incoming value differs from the
+  // engine's current frozen state we queue one toggle, consumed in process().
+  // This keeps editor clicks AND DAW automation in sync with the audio thread.
+  // RANDOM ALL stays momentary: any pulse >= .5 queues a single re-roll.
+  void handleTrigger(ParamID id,double v) {
+    if(id==kFreeze){if((v>=.5)!=engine_.isFrozen())freezePending_=true;return;}
+    if(id==kRandomAll&&v>=.5){randomAllPending_=true;p_[id]=0.;return;}
+  }
+  void applyRandomAll() {
+    // Re-roll every control of all three modules (the same ranges the per-module
+    // RANDOM buttons use), plus master trim: dry/wet, normalize, limiter, order.
+    auto set=[&](ParamID pid,double v){p_[pid]=std::clamp(v,0.,1.);};
+    const int selected=int(std::round(p_[kUiRepeat]*15.));
+    for(int module=0;module<3;++module) aztec::randomizeModule(module,selected,randomSeed_,set);
+    set(kMix,.6+.4*nextRandom()); set(kNormalize,nextRandom()>=.5?1.:0.);
+    set(kMasterLimiter,nextRandom()>=.5?1.:0.); set(kModuleOrder,std::floor(nextRandom()*7.)/6.);
+  }
+  double nextRandom() { randomSeed_^=randomSeed_<<13; randomSeed_^=randomSeed_>>17; randomSeed_^=randomSeed_<<5; return double(randomSeed_&0xffffff)/16777215.; }
 public:
   Processor() {
     setControllerClass(controllerID);
@@ -186,19 +216,26 @@ public:
   }
   uint32 PLUGIN_API getLatencySamples() override { return qg::InputDeclick::latency; }
   tresult PLUGIN_API setState(IBStream* stream) override {
-    return loadState(stream,p_) ? kResultOk : kResultFalse;
+    if(!loadState(stream,p_)) return kResultFalse;
+    // FREEZE survives save/load as a sustained flag (engine_.isFrozen() is what
+    // getState writes). Queue it so the next process() block applies it on the
+    // audio thread, where touching settings_ is safe. engine_.set() below copies
+    // s.freeze=false into settings_, which would otherwise silently unfreeze.
+    if(p_[kFreeze]>=.5) freezePending_=true;
+    return kResultOk;
   }
   tresult PLUGIN_API getState(IBStream* stream) override {
     IBStreamer out(stream,kLittleEndian);
     if(!out.writeInt32(0x51473145)) return kResultFalse;
     for(int i=0;i<kParamEnd;++i) if(!out.writeDouble(p_[i])) return kResultFalse;
-    // v0.14 additions: buffer size, freeze state, then RANDOM/PRESET ids kept for array alignment.
+    // v0.14 additions: buffer size, freeze state, then the remaining tail ids
+    // (RANDOM/PRESET slots) written like any other array entry.
     if(!out.writeDouble(value(p_,kGrainBuffer))) return kResultFalse;
     if(!out.writeDouble(engine_.isFrozen()?1.:0.)) return kResultFalse;
     // kBypassReserved is written like any other id: the legacy slot keeps its
     // position in the stream (old files stay loadable) and getState/saveState
     // remain exact inverses of each other.
-    for(int i=kGrainBuffer+2;i<int(kCount);++i) if(!out.writeDouble(p_[i])) return kResultFalse;
+    for(int i=kFreeze+1;i<int(kCount);++i) if(!out.writeDouble(p_[i])) return kResultFalse;
     return kResultOk;
   }
   tresult PLUGIN_API canProcessSampleSize(int32 size) override {
@@ -231,7 +268,13 @@ public:
       for(int qi=0;qi<queueCount;++qi) {int id=queueIDs[qi];
         auto* q=queues[id]; int32 offset=0; ParamValue v=0.;
         while(cursors[id]<q->getPointCount() && q->getPoint(cursors[id],offset,v)==kResultOk && offset<=sample) {
-          if(std::isfinite(v)) { p_[id]=std::clamp(v,0.,1.); changed=true; }
+          if(std::isfinite(v)) {
+            // FREEZE / RANDOM ALL arrive as momentary triggers (>= .5): consume
+            // them here instead of storing, so p_ only ever holds 0 for those ids.
+            if(id==int(kFreeze)||id==int(kRandomAll)) handleTrigger(ParamID(id),v);
+            else p_[id]=std::clamp(v,0.,1.);
+            changed=true;
+          }
           ++cursors[id];
         }
       }
@@ -251,6 +294,11 @@ public:
     auto s = settings(p_, tempo_, rate_);s.playing=!data.processContext||(data.processContext->state & ProcessContext::kPlaying); engine_.set(s);
     auto setMaster=[&](){const double ceilings[]={0.,-6.,-10.};master_.set(false,0,1000.,0.,value(p_,kMasterLimiter)>=.5,0,0.,ceilings[int(std::round(value(p_,kLimiterCeiling)*2.))]);};
     setMaster();
+    // Momentary UI triggers consumed once per block (before the engine receives
+    // this block's settings, so a freeze toggle takes effect on the first sample).
+    if(freezePending_) { engine_.toggleFreeze(); freezePending_=false; p_[kFreeze]=0.; }
+    if(randomAllPending_) { applyRandomAll(); randomAllPending_=false; p_[kRandomAll]=0.; }
+    p_[kFreeze]=engine_.isFrozen()?1.:0.; // mirror the sustained state for save/load + readback
     const double beatIncrement = tempo_ / (60. * rate_);
     double peak=0.;
     for(int32 n=0;n<data.numSamples;++n) {
@@ -510,6 +558,25 @@ public:
     list(STR16("Comb Root"),kCombRoot,{STR16("C"),STR16("C#"),STR16("D"),STR16("D#"),STR16("E"),STR16("F"),STR16("F#"),STR16("G"),STR16("G#"),STR16("A"),STR16("A#"),STR16("B")});
     range(STR16("Comb Octave"),kCombOctave,nullptr,0,6,2,6);
     list(STR16("Comb Notes"),kCombScale,{STR16("Minor chord"),STR16("Natural minor")});
+    // On-screen tail controls (register BEFORE the monitor loops below so their
+    // documented defaults are not overwritten by initialParameters()).
+    {auto* buffer=new StringListParameter(STR16("Buffer Size"),kGrainBuffer);
+     for(auto label:{STR16("1 s"),STR16("2 s"),STR16("4 s"),STR16("8 s"),STR16("16 s")})buffer->appendString(label);
+     buffer->getInfo().defaultNormalizedValue=1.;buffer->setNormalized(1.);parameters.addParameter(buffer);}
+    // FREEZE is a sustained toggle on screen: the editor flips it like any other
+    // button and automation can ride it. The processor mirrors the engine's true
+    // frozen flag back into p_ every block, so the lamp follows the audio thread
+    // even when a DAW host swallows one-shot writes.
+    {auto* freeze=new StringListParameter(STR16("Freeze"),kFreeze);
+     freeze->appendString(STR16("Off"));freeze->appendString(STR16("On"));
+     freeze->getInfo().defaultNormalizedValue=0.;freeze->setNormalized(0.);parameters.addParameter(freeze);}
+    // RANDOM ALL stays a momentary trigger: pulse >= .5 is consumed once by
+    // process(), which re-rolls all module parameters through the normal path.
+    // (No special flag exists in this SDK for one-shots; kCanAutomate stays on so
+    // hosts can still send trigger events — the processor mirrors 0 back itself.)
+    {auto* randomAll=new StringListParameter(STR16("Randomize All"),kRandomAll);
+     randomAll->appendString(STR16("Off"));randomAll->appendString(STR16("Trigger"));
+     randomAll->getInfo().defaultNormalizedValue=0.;randomAll->setNormalized(0.);parameters.addParameter(randomAll);}
     for(int id=kUiResliceSource0;id<=kUiFilterSeqStep;++id){auto* monitor=new RangeParameter(STR16("Sequencer Display"),id,nullptr,0,1,0);monitor->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(monitor);}
     for(int l=0;l<4;++l)for(int t=0;t<8;++t)getParameterObject(routeID(l,t))->getInfo().flags=ParameterInfo::kIsHidden;
     getParameterObject(kFeedback)->getInfo().flags=ParameterInfo::kIsHidden;

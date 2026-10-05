@@ -1,3 +1,11 @@
-# Logs and temp files
-*.logbuild*/
-*.zip
+# Build artifacts
+build/
+dist/
+
+# IDE and editor files
+.vscode/
+.idea/
+
+# System files
+.DS_Store
+Thumbs.db

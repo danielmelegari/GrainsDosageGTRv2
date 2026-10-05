@@ -137,6 +137,15 @@ if(WIN32)
   configure_file(src/skin.rc.in "${CMAKE_CURRENT_BINARY_DIR}/grains_skin.rc" @ONLY)
   target_sources(GrainsDosage PRIVATE src/editor_win.cpp "${CMAKE_CURRENT_BINARY_DIR}/grains_skin.rc")
   target_link_libraries(GrainsDosage PRIVATE user32 gdi32 comdlg32 shell32 gdiplus ole32)
+  # Post-build: drop the editable skin folder next to the built bundle
+  # (build/VST3/<cfg>/GrainsDosage.vst3/Contents/x86_64-win/GrainsDosage-skin/).
+  # The Windows editor loads <name>.png from that folder before falling back to
+  # the RC-baked factory images, so users can reskin by swapping PNGs only.
+  add_custom_command(TARGET GrainsDosage POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+      "${CMAKE_CURRENT_SOURCE_DIR}/assets/GrainsDosage-skin"
+      "$<TARGET_FILE_DIR:GrainsDosage>/GrainsDosage-skin"
+    COMMENT "Copying replaceable skin PNGs next to GrainsDosage.vst3")
   add_executable(aztec_gui_smoke_win src/gui_smoke_win.cpp src/editor_win.cpp "${CMAKE_CURRENT_BINARY_DIR}/grains_skin.rc")
   target_link_libraries(aztec_gui_smoke_win PRIVATE sdk user32 gdi32 comdlg32 shell32 gdiplus ole32)
   set_target_properties(aztec_gui_smoke_win PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gui-test/$<CONFIG>")

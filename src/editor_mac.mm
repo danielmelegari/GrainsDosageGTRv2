@@ -40,6 +40,10 @@ public:
   void end(ParamID id) {controller_->endEdit(id);}
   void change(ParamID id,double v) {
     v=std::clamp(v,0.,1.);int n=info(id).stepCount;if(n>0)v=std::round(v*n)/n;
+    // Momentary triggers (RANDOM ALL): pulse the value locally so the button
+    // lights immediately; performEdit carries it to the processor, which
+    // consumes the request and mirrors 0 back on the next audio block.
+    if(id==kRandomAll)surface_->cached[id]=v;
     controller_->setParamNormalized(id,v);controller_->performEdit(id,v);
   }
   void edit(ParamID id,double v) {begin(id);change(id,v);end(id);}
@@ -79,11 +83,7 @@ static void label(NSString* s,NSRect r,double size,NSColor* color,bool center=fa
   double extra=std::max(0.,minimumSize-size);r=NSInsetRect(r,0,-extra*.5);
   [s drawInRect:r withAttributes:@{NSFontAttributeName:[NSFont systemFontOfSize:std::max(minimumSize,size) weight:NSFontWeightSemibold],NSForegroundColorAttributeName:color,NSParagraphStyleAttributeName:p}];
 }
-static void arc(double cx,double cy,double radius,double from,double to,NSColor* color,double width=3.) {
-  NSBezierPath* p=[NSBezierPath bezierPath];
-  for(int i=0;i<=80;++i){double a=(from+(to-from)*i/80.)*qg::tau/360.;NSPoint pt=NSMakePoint(cx+radius*std::cos(a),cy+radius*std::sin(a));if(i==0)[p moveToPoint:pt];else[p lineToPoint:pt];}
-  [color setStroke];p.lineWidth=width;p.lineCapStyle=NSRoundLineCapStyle;[p stroke];
-}
+// arc() helper removed along with the knob modulation/value arcs.
 static bool bipolar(aztec::ParamID id) {
   using namespace aztec;
   return (id>=kExtraRoutes0&&id<kGlitchMove)||id==kPitch||id==kTranspose||id==kXAmount||id==kYAmount||
@@ -99,6 +99,9 @@ static constexpr double slotX[3]={16.,452.,888.};
 @private
   NSImage* artwork;
   NSImage* knobFace;   // user-supplied knobOK.png face (assets/sprites/knob.png)
+  NSString* skinDir;   // runtime skin folder: <bundle Resources>/GrainsDosage-skin
+                       // (or ./GrainsDosage-skin next to the binary). Drop your
+                       // own PNGs there to reskin without recompiling.
   NSMutableDictionary<NSString*,NSImage*>* sprites;
   NSString* presetName;
   std::vector<aztec::Control> controls;
@@ -134,20 +137,65 @@ static constexpr double slotX[3]={16.,452.,888.};
     presetName=@"PRESETS ▾";
     selectedGate=selectedReslice=0;
     randomSeed=arc4random()|1;selectedLfo=selectedRepeat=0;dragID=dragSlot=dropSlot=-1;dragXY=false;cached.fill(-1.);
-    NSString* path=[[NSBundle bundleForClass:[GrainsSurface class]] pathForResource:@"GrainsDosage-skin" ofType:@"png"];
-    if(!path)path=@"assets/GrainsDosage-skin.png";
-    if(![[NSFileManager defaultManager] fileExistsAtPath:path])path=@"GrainsDosage/assets/GrainsDosage-skin.png";
-    artwork=[[NSImage alloc] initWithContentsOfFile:path];if(artwork)artwork.size=NSMakeSize(2048,1520);
+    // ---- Runtime skin folder -------------------------------------------------
+    // Everything graphic is resolved from one replaceable folder so swapping a
+    // single PNG reskins the plugin with no rebuild. Search order per image:
+    //   1. <bundle Resources>/GrainsDosage-skin/<name>.png  (installed drop-in)
+    //   2. ./GrainsDosage-skin/<name>.png                   (dev layout, repo root)
+    //   3. bundled resource / factory fallback              (default skin)
+    // On first run the factory PNGs are auto-copied into the writable app-support
+    // copy of the folder, so users always have real files to edit/replace.
+    auto exists=[](NSString* p){return p&&[[NSFileManager defaultManager] fileExistsAtPath:p];};
+    {NSString* res=[[NSBundle bundleForClass:[GrainsSurface class]] resourcePath];
+     skinDir=res?[res stringByAppendingPathComponent:@"GrainsDosage-skin"]:@"GrainsDosage-skin";
+     if(!exists(skinDir)){
+       NSString* local=@"GrainsDosage-skin";
+       if(exists(local))skinDir=local;}}
+    auto skinFile=[&](NSString* name){
+      NSString* f=[skinDir stringByAppendingFormat:@"/%@.png",name];
+      return exists(f)?f:nil;};
+    // Seed a writable copy of the skin folder (Application Support) once.
+    auto seedSkin=[&](NSString* name,NSString* fallback){
+      NSString* dst=[skinDir stringByAppendingFormat:@"/%@.png",name];
+      if(exists(dst)||!exists(fallback))return;
+      NSString* dir=[dst stringByDeletingLastPathComponent];
+      [[NSFileManager defaultManager] createDirectoryAtPath:dir
+                                withIntermediateDirectories:YES attributes:nil error:nil];
+      [[NSFileManager defaultManager] copyPath:fallback toPath:dst handler:nil];};
+    // Artwork background: skin folder first, bundled PNG as fallback.
+    {NSString* bg=skinFile(@"background");
+     if(!bg){NSString* path=[[NSBundle bundleForClass:[GrainsSurface class]] pathForResource:@"GrainsDosage-skin" ofType:@"png"];
+       if(!path)path=@"assets/GrainsDosage-skin.png";
+       if(!exists(path))path=@"GrainsDosage/assets/GrainsDosage-skin.png";
+       if(exists(path)){bg=path;seedSkin(@"background",path);}}
+     artwork=bg?[[NSImage alloc] initWithContentsOfFile:bg]:nil;
+     if(artwork)artwork.size=NSMakeSize(2048,1520);}
     sprites=[NSMutableDictionary dictionary];
     NSArray<NSString*>* spriteNames=@[@"knob",@"slider",@"step",@"header-left",@"header-right",@"xy-nebula"];
     NSArray<NSString*>* spriteKeys=@[@"385,260,76,76",@"453,636,24,32",@"734,456,54,48",@"1850,12,136,104",@"1726,15,95,104",@"nebula"];
-    for(NSUInteger i=0;i<spriteNames.count;++i){NSString* file=[[NSBundle bundleForClass:[GrainsSurface class]] pathForResource:spriteNames[i] ofType:@"png"];if(!file)file=[@"assets/sprites/" stringByAppendingFormat:@"%@.png",spriteNames[i]];if(![[NSFileManager defaultManager] fileExistsAtPath:file])file=[@"GrainsDosage/" stringByAppendingString:file];NSImage* sprite=[[NSImage alloc] initWithContentsOfFile:file];if(sprite)sprites[spriteKeys[i]]=sprite;}
-    // Knob face from the user's knobOK.png (shipped as assets/sprites/knob.png).
-    {NSString* kf=[[NSBundle bundleForClass:[GrainsSurface class]] pathForResource:@"knob" ofType:@"png"];
-     if(kf){NSImage* probe=[[NSImage alloc] initWithContentsOfFile:kf];if(!probe)kf=nil;}
-     if(!kf||![[NSFileManager defaultManager] fileExistsAtPath:kf])kf=@"workspace/assets/knobOK.png";
-     if(![[NSFileManager defaultManager] fileExistsAtPath:kf])kf=@"GrainsDosage/workspace/assets/knobOK.png";
-     knobFace=[[NSImage alloc] initWithContentsOfFile:kf];}
+    for(NSUInteger i=0;i<spriteNames.count;++i){
+      NSImage* sprite=nil;
+      NSString* runtimeFile=skinFile(spriteNames[i]);
+      if(runtimeFile)sprite=[[NSImage alloc] initWithContentsOfFile:runtimeFile];
+      if(!sprite||!sprite.representations.count){
+        NSString* file=[[NSBundle bundleForClass:[GrainsSurface class]] pathForResource:spriteNames[i] ofType:@"png"];
+        if(!file)file=[@"assets/sprites/" stringByAppendingFormat:@"%@.png",spriteNames[i]];
+        if(!exists(file))file=[@"GrainsDosage/" stringByAppendingString:file];
+        if(exists(file)){
+          sprite=[[NSImage alloc] initWithContentsOfFile:file];
+          seedSkin(spriteNames[i],file);}}
+      if(sprite)sprites[spriteKeys[i]]=sprite;}
+    // Knob face (user-supplied knobOK.png shipped as assets/sprites/knob.png).
+    {NSString* kf=skinFile(@"knob");
+     knobFace=kf?[[NSImage alloc] initWithContentsOfFile:kf]:nil;
+     if(!knobFace||!knobFace.representations.count){
+       NSString* probe=[[NSBundle bundleForClass:[GrainsSurface class]] pathForResource:@"knob" ofType:@"png"];
+       if(!exists(probe))probe=@"assets/sprites/knob.png";
+       if(!exists(probe))probe=@"workspace/assets/knobOK.png";
+       if(!exists(probe))probe=@"GrainsDosage/workspace/assets/knobOK.png";
+       if(exists(probe)){
+         knobFace=[[NSImage alloc] initWithContentsOfFile:probe];
+         seedSkin(@"knob",probe);}}}
     self.toolTip=@"Drag a knob vertically; Shift gives fine control. Double-click resets. Drag module headers to change audio order.";
     timer=[NSTimer timerWithTimeInterval:1./30. target:self selector:@selector(tick:) userInfo:nil repeats:YES];
     [[NSRunLoop mainRunLoop] addTimer:timer forMode:NSRunLoopCommonModes];
@@ -164,11 +212,8 @@ static constexpr double slotX[3]={16.,452.,888.};
 }
 - (void)tick:(NSTimer*)tick {
   (void)tick;if(!owner)return;bool changed=false;
-  // Pull the audio thread's live modulation magnitudes and rebuild the per-knob
-  // bar depths before deciding whether the surface needs a repaint.
-  auto mods=aztec::unpackModMagnitudes(aztec::modCell().packed.load(std::memory_order_relaxed));
-  auto depths=aztec::modulationDepths(mods);
-  for(int id=0;id<aztec::kCount;++id){if(depths[id]!=aztec::modDepthMap()[id]){aztec::updateModDepths(mods);changed=true;break;}}
+  // Modulation arcs around the knobs were removed, so live mod depths no
+  // longer drive repaints — only parameter value changes do.
   for(int id=0;id<aztec::kCount;++id){double v=owner->value(id);if(v!=cached[id]){cached[id]=v;changed=true;}}
   if(changed)[self setNeedsDisplay:YES];
 }
@@ -219,41 +264,29 @@ static constexpr double slotX[3]={16.,452.,888.};
   // INPUT DE-CLICK / SENSITIVITY are drawn manually in the header rows.
   if(c.id==kInputDeclick||c.id==kDeclickSensitivity)return;
   if(c.kind==PanMode){const char* modes[]={"MANUAL","ALTERNATE","RANDOM"};int mode=int(std::round(v*2.));for(int i=0;i<3;++i){NSRect b=NSMakeRect(r.origin.x+i*r.size.width/3.,r.origin.y,r.size.width/3.-3,r.size.height);box(b,mode==i?AZSKIN(kAccentGlow):dark(),mode==i?green():muted(),4);label([NSString stringWithUTF8String:modes[i]],NSInsetRect(b,2,6),9,mode==i?onText():cream(),true);}return;}
+  if(c.id==kRandomAll){
+    // Momentary trigger: the processor consumes the pulse and mirrors 0 back,
+    // so the lamp lights only while the re-roll request is in flight. The label
+    // stays "RANDOM ALL" even though the shared layout string is shortened to
+    // fit the Win32 toggle renderer.
+    bool pending=v>=.5;box(r,pending?AZSKIN(kAccentGlow):AZSKIN(kPanelRaised),pending?green():AZSKIN(kFiligreeDim),6);
+    if(pending)box(NSMakeRect(r.origin.x+6,NSMidY(r)-6,12,12),AZSKIN(kAccentBright),nil,6);
+    box(NSMakeRect(r.origin.x+9,NSMidY(r)-3,6,6),pending?green():muted(),nil,3);
+    label(@"RANDOM ALL",NSMakeRect(r.origin.x+20,r.origin.y+(r.size.height-14)/2.,r.size.width-25,16),10,pending?onText():muted(),true);return;}
   if(c.kind==Pan){label(@"L",NSMakeRect(r.origin.x,r.origin.y,16,16),10,cream());label(@"C",NSMakeRect(NSMidX(r)-8,r.origin.y,16,16),10,cream(),true);label(@"R",NSMakeRect(NSMaxX(r)-16,r.origin.y,16,16),10,cream());box(NSMakeRect(r.origin.x+4,r.origin.y+23,r.size.width-8,3),muted(),nil,1);box(NSMakeRect(r.origin.x+v*(r.size.width-8),r.origin.y+18,8,13),green(),nil,3);return;}
   if(c.kind==Knob){
     label(title,NSMakeRect(r.origin.x,r.origin.y,r.size.width,16),11,cream(),true);
     const double cx=NSMidX(r),cy=r.origin.y+43.,radius=24.;
-    double zero=bipolar(c.id)?270.:135.;double angle=135.+270.*v;
-    double md=aztec::modDepth(c.id);
+    double angle=135.+270.*v;
     if(knobFace){
-      // User-supplied knobOK.png face: transparent background, green indicator
-      // bar baked in. We clip that bar to the current value and recolour it
-      // with the live skin accent, then overlay the pointer dot.
-      [NSGraphicsContext saveGraphicsState];
-      NSRect face=NSMakeRect(cx-radius,cy-radius,radius*2,radius*2);
-      [[NSBezierPath bezierPathWithOvalInRect:face] addClip];
+      // User-supplied knob PNG face from the replaceable skin folder
+      // (assets/sprites/knob.png → GrainsDosage-skin/knob.png). Drawn AS-IS:
+      // no clipping, no recolouring, no arcs, no dots — swap the PNG and the
+      // knobs change appearance with zero rebuild.
       [NSGraphicsContext currentContext].imageInterpolation=NSImageInterpolationHigh;
-      [knobFace drawInRect:face fromRect:NSZeroRect operation:NSCompositingOperationSourceOver fraction:1. respectFlipped:YES hints:nil];
-      // Mask the baked-in green bar beyond the current value (clockwise sweep
-      // from the bar's start at 135deg out to the value angle).
-      NSBezierPath* keep=[NSBezierPath bezierPath];
-      [keep moveToPoint:NSMakePoint(cx,cy)];
-      [keep appendBezierPathWithArcFromPoint:NSMakePoint(cx+64*std::cos(135.*qg::tau/360.),cy+64*std::sin(135.*qg::tau/360.))
-                                     toPoint:NSMakePoint(cx+64*std::cos(std::max(135.+1e-4,angle)*qg::tau/360.),cy+64*std::sin(std::max(135.+1e-4,angle)*qg::tau/360.))
-                                       radius:64.];
-      [keep closePath];
-      [NSGraphicsContext saveGraphicsState];
-      [keep setClip];
-      [[NSColor colorWithCalibratedRed:0 green:1 blue:0 alpha:1] set];
-      NSRectFillUsingOperation(face,NSCompositingOperationDestinationIn);
-      [NSGraphicsContext restoreGraphicsState];
-      // Recolour the surviving green pixels with the live accent colour.
-      [AZSKIN(kAccent) set];
-      NSRectFillUsingOperation(face,NSCompositingOperationSourceAtop);
-      [NSGraphicsContext restoreGraphicsState];
-      // Value dot on the face edge + live modulation arc outside the face.
-      {double a=angle*qg::tau/360.;box(NSMakeRect(cx+(radius-2)*std::cos(a)-2.5,cy+(radius-2)*std::sin(a)-2.5,5,5),cream(),nil,2.5);}
-      if(md>.004){arc(cx,cy,radius+9,135.,135.+270.*md,green(),2.5);}
+      [knobFace drawInRect:NSMakeRect(cx-radius,cy-radius,radius*2,radius*2)
+                  fromRect:NSZeroRect operation:NSCompositingOperationSourceOver
+                   fraction:1. respectFlipped:YES hints:nil];
     }else{
     box(NSMakeRect(cx-radius-2,cy-radius+2,radius*2+4,radius*2+4),AZSKIN(kWell),nil,radius+2);
     NSBezierPath* cap=[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(cx-radius,cy-radius,radius*2,radius*2)];
@@ -264,14 +297,9 @@ static constexpr double slotX[3]={16.,452.,888.};
     NSColor* capBot=rgb(capBotS.r/255.,capBotS.g/255.,capBotS.b/255.);
     NSGradient* metal=[[NSGradient alloc] initWithStartingColor:capTop endingColor:capBot];
     [metal drawInBezierPath:cap angle:90.];[AZSKIN(kFiligreeDim) setStroke];cap.lineWidth=1.;[cap stroke];
-    arc(cx,cy,radius-3,155,335,AZSKIN(kBorderDark),1.);
-    skin::Rgb grooveS=skin::mix(AZCOL(kBorderDark),AZCOL(kViolet),.5);
-    arc(cx,cy,radius+4,135,405,rgb(grooveS.r/255.,grooveS.g/255.,grooveS.b/255.),3.);
-    for(int j=0;j<21;++j){double a=(135.+270.*j/20.)*qg::tau/360.;box(NSMakeRect(cx+33*std::cos(a)-1.5,cy+33*std::sin(a)-1.5,3,3),j/20.<=v?green():AZSKIN(kAccentTrack),nil,1.5);}
-    arc(cx,cy,radius+4,std::min(zero,angle),std::max(zero,angle),green(),3.5);
-    // Live modulation bar: an accent-coloured arc just outside the groove whose
-    // length tracks how strongly LFOs/XY are modulating this parameter right now.
-    if(md>.004){arc(cx,cy,radius+9,135.,135.+270.*md,green(),2.5);}
+    // No arcs / groove / tick ring around the knob (removed by request).
+    // The PNG face below is now the canonical look; this vector fallback only
+    // draws a clean cap + pointer if the skin folder is missing knob.png.
     double a=angle*qg::tau/360.;NSBezierPath* pointer=[NSBezierPath bezierPath];
     [pointer moveToPoint:NSMakePoint(cx+8*std::cos(a),cy+8*std::sin(a))];
     [pointer lineToPoint:NSMakePoint(cx+22*std::cos(a),cy+22*std::sin(a))];

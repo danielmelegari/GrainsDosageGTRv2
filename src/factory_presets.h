@@ -14,6 +14,7 @@ inline std::array<double,kCount> initialParameters() {
   p[kMasterLimiter]=1.;p[kFilterCutoff]=std::log(50.)/std::log(1000.);
   p[kGlitchMove]=.5;p[kGlitchVariation]=.3;p[kGlitchRefresh]=2./7.;p[kRepeatInterval]=4./7.;p[kRepeatDuration]=3./31.;p[kRepeatChance]=1.;
   p[kDensityFlow]=1.; p[kTranspose]=p[kXYX]=p[kXYY]=.5; p[kXAmount]=p[kYAmount]=.75;
+  p[kGrainBuffer]=1.; // BUFFER SIZE default: 16 s (0=1 s, .25=2 s, .5=4 s, .75=8 s, 1=16 s)
   p[kXTarget]=double(kSize+1)/kXYX; p[kYTarget]=double(kPitch+1)/kXYX;
   p[kDensity]=3./31.; p[kDivision]=.25; p[kSize]=.25; p[kPosition]=.05; p[kPitch]=.5;
   p[kMix]=1.; p[kAttack]=.1; p[kRelease]=.15; p[kGrainMix]=1.;

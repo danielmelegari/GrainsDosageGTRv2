@@ -87,6 +87,18 @@ jobs:
           lipo "$binary" -verify_arch x86_64
           codesign --force --sign - --timestamp=none "$plugin"
           codesign --verify --strict "$plugin"
+          # Replaceable skin folder: shipped next to the .vst3 bundle. Copying
+          # these PNGs and editing them reskins the plugin with no rebuild
+          # (the editor loads <bundle Resources>/GrainsDosage-skin first).
+          resources="$plugin/Contents/Resources"
+          mkdir -p "$resources/GrainsDosage-skin"
+          # Ship every GUI element as its own editable PNG (regenerated from
+          # the master sheet by tools/split_skin.py, incl. @2x Retina variants).
+          cp assets/GrainsDosage-skin/*.png "$resources/GrainsDosage-skin/"
+          mkdir -p "$resources/GrainsDosage-skin/@2x"
+          cp assets/GrainsDosage-skin/@2x/*.png "$resources/GrainsDosage-skin/@2x/"
+          codesign --force --sign - --timestamp=none "$plugin"
+          codesign --verify --strict "$plugin"
           mkdir -p "$GITHUB_WORKSPACE/dist"
           ditto -c -k --sequesterRsrc --keepParent "$plugin" "$GITHUB_WORKSPACE/dist/GrainsDosage-macOS-x64.vst3.zip"
 

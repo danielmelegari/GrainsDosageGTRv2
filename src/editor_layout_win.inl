@@ -4,7 +4,18 @@
   const char* grainNames[]={"SIZE","DENSITY","PITCH","LOOKBACK","CHAOS","MIX","SPEED","TRANSPOSE"};
   for(int i=0;i<8;++i)ADD(granular[i],x+14+(i%4)*99,i<4?151:(i<6?257:274),90,92,Knob,grainNames[i]);
   ADD(kDensityFlow,x+14,368,184,25,Toggle,"DENSITY FLOW");
-  ADD(kStretchOn,x+218,369,180,24,Toggle,"FREE STRETCH");
+
+  // BUFFER SIZE / FREEZE / RANDOM ALL live inside the GRANULIZER "MASTER OPTIONS"
+  // box (drawn at x+208,248 size 196x147 by both editors; it ends at y=395).
+  // They were previously registered as VST parameters but had no hit area, so
+  // nothing appeared on screen. The old FREE STRETCH row (y=340..364) was
+  // reclaimed for these three controls — FREE STRETCH itself now lives in the
+  // empty strip under the knobs at y=274 (right of SPEED/TRANSPOSE, which end
+  // at y=273), clear of DENSITY FLOW and PAN MODE below.
+  ADD(kStretchOn,x+218,248,180,22,Toggle,"FREE STRETCH");
+  ADD(kGrainBuffer,x+218,302,176,28,Select,"BUFFER SIZE");
+  ADD(kFreeze,x+218,334,84,28,Toggle,"FREEZE");
+  ADD(kRandomAll,x+310,334,84,28,Toggle,"RANDOM");
 
   ADD(kPanMode,x+14,398,144,30,Select,"PAN MODE");
   if(value(kPanMode)<.25)ADD(kGrainPan,x+170,396,228,30,Pan,"POSITION");

@@ -8,6 +8,8 @@
 #include <shellapi.h>
 #include <gdiplus.h>
 #include <objidl.h>
+#include <shlwapi.h>
+#include <filesystem>
 #include "editor.h"
 #include "parameters.h"
 #include "skin_spec.h"
@@ -40,18 +42,73 @@ class WinEditor final:public CPluginView{
   uint32_t seed=0;HDC dc=nullptr;
   ULONG_PTR imaging=0;HBITMAP skin=nullptr;HDC skinDC=nullptr;HGDIOBJ oldSkin=nullptr;std::array<HBITMAP,6> sprites{};std::array<HDC,6> spriteDC{};std::array<HGDIOBJ,6> oldSprite{};
   void loadSprite(int id,int index){
+    // Runtime skin folder first: <plugin dir>\GrainsDosage-spriteNN.png lets
+    // users reskin by swapping PNGs only, no rebuild. Bundled RC resource is
+    // the factory fallback (and seeds the folder on first run).
+    std::wstring file=skinPath(id);
+    if(!file.empty()&&loadSpriteFile(file,index))return;
     HMODULE module=nullptr;GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,reinterpret_cast<LPCWSTR>(&proc),&module);
     HRSRC resource=FindResourceW(module,MAKEINTRESOURCEW(id),MAKEINTRESOURCEW(10));if(!resource)return;DWORD bytes=SizeofResource(module,resource);auto loaded=LoadResource(module,resource);const void* data=LockResource(loaded);if(!data||!bytes)return;
+    seedSkinFile(id,data,bytes);
     HGLOBAL memory=GlobalAlloc(GMEM_MOVEABLE,bytes);if(!memory)return;void* dest=GlobalLock(memory);if(!dest){GlobalFree(memory);return;}std::memcpy(dest,data,bytes);GlobalUnlock(memory);IStream* stream=nullptr;if(FAILED(CreateStreamOnHGlobal(memory,TRUE,&stream))){GlobalFree(memory);return;}
     {Gdiplus::Bitmap bitmap(stream);if(bitmap.GetLastStatus()==Gdiplus::Ok)bitmap.GetHBITMAP(Gdiplus::Color(255,12,9,20),&sprites[size_t(index)]);}stream->Release();if(sprites[size_t(index)]){spriteDC[size_t(index)]=CreateCompatibleDC(nullptr);if(spriteDC[size_t(index)])oldSprite[size_t(index)]=SelectObject(spriteDC[size_t(index)],sprites[size_t(index)]);}
   }
+  // ---- Replaceable skin folder ------------------------------------------------
+  // All graphics resolve from one folder next to the plugin binary:
+  //   <dir of GrainsDosage.vst3>\GrainsDosage-skin\background.png
+  //   ...\GrainsDosage-skin\knob.png slider.png step.png header-left.png
+  //   header-right.png xy-nebula.png — same names as the macOS loader and the
+  //   repo's assets/sprites/, so one skin works on both platforms.
+  // Drop your own PNGs there to change the look. Missing files fall back to the
+  // factory images baked into the binary, which are also seeded into the folder
+  // on first run so there is always something to edit.
+  static const wchar_t* skinName(int resourceId){
+    switch(resourceId){
+      case 201:return L"background";
+      case 202:return L"knob";
+      case 203:return L"slider";
+      case 204:return L"step";
+      case 205:return L"header-left";
+      case 206:return L"header-right";
+      default: return L"xy-nebula";}}
+  static std::wstring skinDir(){
+    wchar_t path[4096]{};DWORD n=GetModuleFileNameW(nullptr,path,4096);
+    if(!n||n>=4096)return L"";
+    std::filesystem::path p(path);p.remove_filename();
+    return (p/"GrainsDosage-skin").wstring();}
+  static std::wstring skinPath(int resourceId){
+    std::wstring dir=skinDir();if(dir.empty())return L"";
+    std::wstring f=dir+L"\\"+skinName(resourceId)+L".png";
+    DWORD a=GetFileAttributesW(f.c_str());
+    return(a!=INVALID_FILE_ATTRIBUTES&&!(a&FILE_ATTRIBUTE_DIRECTORY))?f:std::wstring();}
+  static void seedSkinFile(int resourceId,const void* data,DWORD bytes){
+    std::wstring dir=skinDir();if(dir.empty())return;
+    std::error_code ec;std::filesystem::create_directories(dir,ec);
+    std::wstring f=dir+L"\\"+skinName(resourceId)+L".png";
+    if(GetFileAttributesW(f.c_str())!=INVALID_FILE_ATTRIBUTES)return;
+    HANDLE h=CreateFileW(f.c_str(),GENERIC_WRITE,0,nullptr,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
+    if(h==INVALID_HANDLE_VALUE)return;DWORD written=0;WriteFile(h,data,bytes,&written,nullptr);CloseHandle(h);}
+  bool loadSpriteFile(const std::wstring& file,int index){
+    Gdiplus::Bitmap* bitmap=Gdiplus::Bitmap::FromFile(file.c_str());if(!bitmap)return false;
+    bool ok=bitmap->GetLastStatus()==Gdiplus::Ok;
+    if(ok)bitmap->GetHBITMAP(Gdiplus::Color(255,12,9,20),&sprites[size_t(index)]);
+    delete bitmap;
+    if(ok&&sprites[size_t(index)]){spriteDC[size_t(index)]=CreateCompatibleDC(nullptr);if(spriteDC[size_t(index)])oldSprite[size_t(index)]=SelectObject(spriteDC[size_t(index)],sprites[size_t(index)]);}
+    return ok&&sprites[size_t(index)];}
   void loadSkin(){
     Gdiplus::GdiplusStartupInput startup;
     if(Gdiplus::GdiplusStartup(&imaging,&startup,nullptr)!=Gdiplus::Ok){imaging=0;return;}
     HMODULE module=nullptr;
     GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,reinterpret_cast<LPCWSTR>(&proc),&module);
+    // Skin-folder background.png wins over the bundled artwork.
+    if(std::wstring bg=skinPath(201);!bg.empty()){
+      Gdiplus::Bitmap* bitmap=Gdiplus::Bitmap::FromFile(bg.c_str());
+      if(bitmap){if(bitmap->GetLastStatus()==Gdiplus::Ok)bitmap->GetHBITMAP(Gdiplus::Color(255,12,9,20),&skin);delete bitmap;}
+      if(skin){skinDC=CreateCompatibleDC(nullptr);if(skinDC)oldSkin=SelectObject(skinDC,skin);}}
+    if(skinDC){for(int i=0;i<6;++i)loadSprite(202+i,i);return;}
     HRSRC resource=FindResourceW(module,MAKEINTRESOURCEW(201),MAKEINTRESOURCEW(10));
     if(!resource)return;DWORD bytes=SizeofResource(module,resource);auto loaded=LoadResource(module,resource);const void* data=LockResource(loaded);if(!data||!bytes)return;
+    seedSkinFile(201,data,bytes);
     HGLOBAL memory=GlobalAlloc(GMEM_MOVEABLE,bytes);if(!memory)return;
     void* dest=GlobalLock(memory);if(!dest){GlobalFree(memory);return;}std::memcpy(dest,data,bytes);GlobalUnlock(memory);
     IStream* stream=nullptr;if(FAILED(CreateStreamOnHGlobal(memory,TRUE,&stream))){GlobalFree(memory);return;}
@@ -238,25 +295,21 @@ class WinEditor final:public CPluginView{
     panel(16,1294,1288,56);text(L"MASTER",32,1312,78,22,13,cream());text(L"OUTPUT",994,1304,106,16,10,cream());for(int j=0;j<24;++j)box(994+j*4,1326,2,12,value(kUiLevel)>j/24.?(j>20?AZSKIN(kHot):AZSKIN(kMeter)):AZSKIN(kMeterOff),dark());
     for(const auto& c:controls){if(c.id==kInputDeclick||c.id==kDeclickSensitivity)continue;double v=value(c.id);std::wstring title(c.label,c.label+std::strlen(c.label));
       if(c.kind==PanMode){const wchar_t* modes[]={L"MANUAL",L"ALTERNATE",L"RANDOM"};int mode=int(std::round(v*2));for(int i=0;i<3;++i){double x=c.x+i*c.w/3;box(x,c.y,c.w/3-3,c.h,mode==i?AZSKIN(kPanelRaised):dark(),mode==i?green():cream());text(modes[i],x,c.y,c.w/3-3,c.h,9,mode==i?ONTEXT():cream(),true);}}
+      else if(c.id==kRandomAll){// momentary trigger: lit only while the re-roll request is in flight
+        bool pending=v>=.5;box(c.x,c.y,c.w,c.h,pending?AZSKIN(kAccentGlow):AZSKIN(kPanelRaised),pending?green():AZSKIN(kFiligreeDim));text(L"RANDOM ALL",c.x+18,c.y,c.w-21,c.h,10,pending?ONTEXT():cream(),true);if(pending)disc(c.x+10,c.y+c.h/2,6,AZSKIN(kAccent),AZSKIN(kAccent));disc(c.x+10,c.y+c.h/2,3,pending?green():AZSKIN(kMuted),pending?green():dark());}
       else if(c.kind==Pan){text(L"L",c.x,c.y,16,16,10,cream());text(L"C",c.x+c.w/2-8,c.y,16,16,10,cream(),true);text(L"R",c.x+c.w-16,c.y,16,16,10,cream());box(c.x+4,c.y+23,c.w-8,3,AZSKIN(kHairline),dark());box(c.x+v*(c.w-8),c.y+18,8,13,green(),green());}
       else if(c.kind==Knob){text(title,c.x,c.y,c.w,17,11,cream(),true);double cx=c.x+c.w/2,cy=c.y+43;
       double radius=24.,angle=135.+270*v;bool faceDrawn=false;
-      if(sprites[0]){ // user knobOK.png face: clip the baked-in green bar to the value and recolour it with the live accent
+      if(sprites[0]){ // user knob PNG face from the replaceable skin folder
+        // (...\GrainsDosage-skin\knob.png). Drawn AS-IS: no clipping of the
+        // baked-in bar, no recolouring, no arcs/dots. Swap the PNG → new look.
         Gdiplus::Bitmap* face=nullptr;if(Gdiplus::Bitmap::FromHBITMAP(sprites[0],nullptr,&face)==Gdiplus::Ok&&face){
           {Gdiplus::Graphics g(dc);g.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
-           Gdiplus::GraphicsPath wedge;wedge.AddPie((REAL)(cx-radius),(REAL)(cy-radius),(REAL)(radius*2),(REAL)(radius*2),135.f,(REAL)std::max(.1,270.*v));
-           g.SetClip(&wedge,Gdiplus::CombineModeReplace);
            g.DrawImage(face,Gdiplus::RectF((REAL)(cx-radius),(REAL)(cy-radius),(REAL)(radius*2),(REAL)(radius*2)));}
-          Gdiplus::Graphics overlay(dc);
-          overlay.SetCompositingMode(Gdiplus::CompositingModeSourceAtop);
-          Gdiplus::SolidBrush accent(C(aztec::skin::kAccent));
-          overlay.FillEllipse(&accent,(REAL)(cx-radius),(REAL)(cy-radius),(REAL)(radius*2),(REAL)(radius*2));
-          delete face;faceDrawn=true;
-          double a=angle*qg::tau/360.;disc(cx+(radius-2)*std::cos(a),cy+(radius-2)*std::sin(a),2.5,cream(),cream());
-          {double md=aztec::modDepth(c.id);if(md>.004)for(int j=0;j<21;++j){if(j/20.>=md)break;double b=(135+j*13.5)*qg::tau/360.;box(cx+38*std::cos(b)-1.5,cy+38*std::sin(b)-1.5,3,3,green(),green());}}
-        }}
-      if(!faceDrawn){box(cx-22,cy-22,44,44,AZSKIN(kViolet),AZSKIN(kFiligreeDim));for(int j=0;j<21;++j){double a=(135+j*13.5)*qg::tau/360.;box(cx+30*std::cos(a)-2,cy+30*std::sin(a)-2,4,4,j/20.<=v?green():AZSKIN(kAccentTrack),dark());}
-      {double md=aztec::modDepth(c.id);if(md>.004)for(int j=0;j<21;++j){if(j/20.>=md)break;double a=(135+j*13.5)*qg::tau/360.;box(cx+38*std::cos(a)-1.5,cy+38*std::sin(a)-1.5,3,3,green(),green());}}knobCap(cx,cy,v);double a=(135+270*v)*qg::tau/360.;line(cx+6*std::cos(a),cy+6*std::sin(a),cx+22*std::cos(a),cy+22*std::sin(a),cream(),3);}box(c.x+4,c.y+74,c.w-8,19,dark(),AZSKIN(kHairline));text(display(c.id,v),c.x+5,c.y+75,c.w-10,18,12,AZSKIN(kReadout),true);}
+          delete face;faceDrawn=true;}
+      }
+      if(!faceDrawn){knobCap(cx,cy,v);double a=(135+270*v)*qg::tau/360.;line(cx+6*std::cos(a),cy+6*std::sin(a),cx+22*std::cos(a),cy+22*std::sin(a),cream(),3);}// vector fallback: clean cap + pointer only
+      box(c.x+4,c.y+74,c.w-8,19,dark(),AZSKIN(kHairline));text(display(c.id,v),c.x+5,c.y+75,c.w-10,18,12,AZSKIN(kReadout),true);}
       else if(c.kind==Slider){text(title,c.x,c.y,c.w,14,9,cream());box(c.x+4,c.y+20,c.w-8,4,AZSKIN(kHairline),dark());box(c.x+4,c.y+20,(c.w-8)*v,4,green(),green());art(453,636,24,32,c.x+v*(c.w-8)-2,c.y+13,12,16);if(c.h>=33)text(display(c.id,v),c.x,c.y+28,c.w,13,10,cream(),true);else text(display(c.id,v),c.x+100,c.y,c.w-100,13,9,cream(),true);}
       else if(c.kind==Select){box(c.x,c.y,c.w,c.h,dark(),AZSKIN(kBorderDark));if(c.h>=38)text(title,c.x+7,c.y+3,c.w-20,12,8,cream());text(display(c.id,c.id==lfoID(selectedLfo,lWave)&&value(kModWaveRnd0+selectedLfo)>0.?value(kUiModWave0+selectedLfo):v)+L" ▾",c.x+7,c.y+(c.h>=38?17:5),c.w-14,21,11,cream());}
       else{bool on=v>=.5;if(c.id>=kGrainEnabled&&c.id<=kRepeatEnabled)title=on?L"ON":L"OFF";box(c.x,c.y,c.w,c.h,on?AZSKIN(kAccentGlow):AZSKIN(kPanelRaised),on?green():AZSKIN(kFiligreeDim));if(c.kind==Pad){int step=int(c.id-(c.id>=kReverbStep0?kReverbStep0:kGlitchStep0));art(734,456,54,48,c.x+c.w/2-10,c.y+1,20,18);text(std::to_wstring(step+1),c.x,c.y+c.h-15,c.w,14,10,on?ONTEXT():cream(),true);if(step==(c.id>=kReverbStep0?int(std::round(value(kUiReverb)*15)):play))line(c.x+4,c.y+c.h-3,c.x+c.w-4,c.y+c.h-3,cream(),2);}else{text(title,c.x+18,c.y,c.w-21,c.h,10,on?ONTEXT():cream(),true);if(on)disc(c.x+10,c.y+c.h/2,6,AZSKIN(kAccent),AZSKIN(kAccent));disc(c.x+10,c.y+c.h/2,3,on?green():AZSKIN(kMuted),on?green():dark());}}
@@ -294,8 +347,8 @@ class WinEditor final:public CPluginView{
     switch(msg){
       case WM_APP+71:return e->skinDC!=nullptr;
       case WM_ERASEBKGND:return 1;
-      case WM_TIMER:{auto* self=reinterpret_cast<WinEditor*>(GetWindowLongPtrW(hwnd,GWLP_USERDATA));
-        if(self){auto mods=aztec::unpackModMagnitudes(aztec::modCell().packed.load(std::memory_order_relaxed));aztec::updateModDepths(mods);}
+      case WM_TIMER:{// Modulation arcs removed: nothing per-frame to pull from
+        // the audio thread any more; the timer just keeps playhead/meter fresh.
         InvalidateRect(hwnd,nullptr,FALSE);return 0;}
       case WM_PAINT:{PAINTSTRUCT ps;HDC screen=BeginPaint(hwnd,&ps);RECT r;GetClientRect(hwnd,&r);HDC mem=CreateCompatibleDC(screen);auto bitmap=CreateCompatibleBitmap(screen,r.right*2,r.bottom*2);auto old=SelectObject(mem,bitmap);SetMapMode(mem,MM_ANISOTROPIC);SetWindowExtEx(mem,1320,1360,nullptr);SetViewportExtEx(mem,r.right*2,r.bottom*2,nullptr);e->dc=mem;e->draw();SetMapMode(mem,MM_TEXT);SetStretchBltMode(screen,HALFTONE);SetBrushOrgEx(screen,0,0,nullptr);StretchBlt(screen,0,0,r.right,r.bottom,mem,0,0,r.right*2,r.bottom*2,SRCCOPY);SelectObject(mem,old);DeleteObject(bitmap);DeleteDC(mem);EndPaint(hwnd,&ps);return 0;}
       case WM_LBUTTONDOWN:case WM_LBUTTONDBLCLK:e->point(lp,x,y);e->down(x,y,msg==WM_LBUTTONDBLCLK);return 0;
