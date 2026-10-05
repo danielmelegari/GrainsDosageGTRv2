@@ -1,6 +1,7 @@
 # Build artifacts
 build/
 dist/
+build-local/
 
 # IDE and editor files
 .vscode/

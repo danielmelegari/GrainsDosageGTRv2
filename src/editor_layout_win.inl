@@ -1,21 +1,32 @@
 // Shared control geometry from the Cocoa editor.
   double x=slotX[slot(0)];
-  const ParamID granular[]={kSize,kDensity,kPitch,kPosition,kChaos,kGrainMix,kStretchSpeed,kTranspose};
-  const char* grainNames[]={"SIZE","DENSITY","PITCH","LOOKBACK","CHAOS","MIX","SPEED","TRANSPOSE"};
-  for(int i=0;i<8;++i)ADD(granular[i],x+14+(i%4)*99,i<4?151:(i<6?257:274),90,92,Knob,grainNames[i]);
+  // The granular knob grid: SPEED used to sit here as a second, unlabeled
+  // kStretchSpeed knob. It moved into the MASTER OPTIONS area as the
+  // "STRETCH %" slider below, so the grid now has seven knobs and the
+  // y=274 strip holds only TRANSPOSE plus that free-stretch control.
+  const ParamID granular[]={kSize,kDensity,kPitch,kPosition,kChaos,kGrainMix,kTranspose};
+  const char* grainNames[]={"SIZE","DENSITY","PITCH","LOOKBACK","CHAOS","MIX","TRANSPOSE"};
+  for(int i=0;i<7;++i)ADD(granular[i],x+14+(i%4)*99,i<4?151:274,90,92,Knob,grainNames[i]);
   ADD(kDensityFlow,x+14,368,184,25,Toggle,"DENSITY FLOW");
 
-  // BUFFER SIZE / FREEZE / RANDOM ALL live inside the GRANULIZER "MASTER OPTIONS"
-  // box (drawn at x+208,248 size 196x147 by both editors; it ends at y=395).
-  // They were previously registered as VST parameters but had no hit area, so
-  // nothing appeared on screen. The old FREE STRETCH row (y=340..364) was
-  // reclaimed for these three controls — FREE STRETCH itself now lives in the
-  // empty strip under the knobs at y=274 (right of SPEED/TRANSPOSE, which end
-  // at y=273), clear of DENSITY FLOW and PAN MODE below.
-  ADD(kStretchOn,x+218,248,180,22,Toggle,"FREE STRETCH");
-  ADD(kGrainBuffer,x+218,302,176,28,Select,"BUFFER SIZE");
-  ADD(kFreeze,x+218,334,84,28,Toggle,"FREEZE");
-  ADD(kRandomAll,x+310,334,84,28,Toggle,"RANDOM");
+  // STRETCH SPEED / BUFFER SIZE / FREEZE / RANDOM ALL live inside the
+  // GRANULIZER "MASTER OPTIONS" box (drawn at x+208,248 size 196x147 by both
+  // editors; it ends at y=395). They were previously registered as VST
+  // parameters but had no hit area, so nothing appeared on screen. The old
+  // FREE STRETCH row was reclaimed for these controls — the whole stack now
+  // starts below the knob-grid readouts (last row ends at y=366) and stays
+  // clear of DENSITY FLOW and PAN MODE.
+  ADD(kStretchOn,x+218,368,180,18,Toggle,"FREE STRETCH");
+  // STRETCH SPEED (the free-stretch rate, % readout) lives here too: the
+  // granular grid used to carry a second, unlabeled kStretchSpeed knob that
+  // collided with the LFO SPEED selector in the layout test. The knob is
+  // gone; this slider owns the parameter now. It sits below the MASTER
+  // OPTIONS box (ends y=395) because the PAN MODE / POSITION row spans
+  // x+14..x+398 at y=396..428 and nothing may overlap it.
+  ADD(kStretchSpeed,x+218,432,180,18,Slider,"STRETCH %");
+  ADD(kGrainBuffer,x+218,452,176,24,Select,"BUFFER SIZE");
+  ADD(kFreeze,x+218,478,84,22,Toggle,"FREEZE");
+  ADD(kRandomAll,x+310,478,84,22,Toggle,"RANDOM");
 
   ADD(kPanMode,x+14,398,144,30,Select,"PAN MODE");
   if(value(kPanMode)<.25)ADD(kGrainPan,x+170,396,228,30,Pan,"POSITION");
