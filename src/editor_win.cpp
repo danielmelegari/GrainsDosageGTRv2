@@ -301,11 +301,20 @@ class WinEditor final:public CPluginView{
       else if(c.kind==Knob){text(title,c.x,c.y,c.w,17,11,cream(),true);double cx=c.x+c.w/2,cy=c.y+43;
       double radius=24.,angle=135.+270*v;bool faceDrawn=false;
       if(sprites[0]){ // user knob PNG face from the replaceable skin folder
-        // (...\GrainsDosage-skin\knob.png). Drawn AS-IS: no clipping of the
-        // baked-in bar, no recolouring, no arcs/dots. Swap the PNG → new look.
+        // (...\GrainsDosage-skin\knob.png). Drawn as-is but ROTATED so the
+        // printed indicator points to 135°+270°·value — same sweep as the
+        // vector fallback pointer. Swap the PNG → new look, rotation stays.
         Gdiplus::Bitmap* face=nullptr;if(Gdiplus::Bitmap::FromHBITMAP(sprites[0],nullptr,&face)==Gdiplus::Ok&&face){
           {Gdiplus::Graphics g(dc);g.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
-           g.DrawImage(face,Gdiplus::RectF((REAL)(cx-radius),(REAL)(cy-radius),(REAL)(radius*2),(REAL)(radius*2)));}
+           REAL oldTransform[3][2];g.GetTransform((Gdiplus::REAL(*)[2])oldTransform);
+           // GDI+ y-down: RotateTransform(t) applies [[c,-s],[s,c]]; the printed
+           // UP indicator (0,-1) maps to (-sin t, -cos t). We need it along the
+           // fallback pointer ray (cos angle, sin angle), so use t=-(angle+90):
+           // (-sin(-(a+90)),-cos(-(a+90))) = (cos a, sin a). Verified by
+           // test_knob_rotation.cpp.
+           g.TranslateTransform((REAL)cx,(REAL)cy);g.RotateTransform((REAL)-(angle+90.));g.TranslateTransform((REAL)-cx,(REAL)-cy);
+           g.DrawImage(face,Gdiplus::RectF((REAL)(cx-radius),(REAL)(cy-radius),(REAL)(radius*2),(REAL)(radius*2)));
+           g.SetTransform((const Gdiplus::REAL(*)[2])oldTransform);}
           delete face;faceDrawn=true;}
       }
       if(!faceDrawn){knobCap(cx,cy,v);double a=(135+270*v)*qg::tau/360.;line(cx+6*std::cos(a),cy+6*std::sin(a),cx+22*std::cos(a),cy+22*std::sin(a),cream(),3);}// vector fallback: clean cap + pointer only

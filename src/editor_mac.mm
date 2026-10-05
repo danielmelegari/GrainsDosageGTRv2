@@ -285,13 +285,29 @@ static constexpr double slotX[3]={16.,452.,888.};
     double angle=135.+270.*v;
     if(knobFace){
       // User-supplied knob PNG face from the replaceable skin folder
-      // (assets/sprites/knob.png → GrainsDosage-skin/knob.png). Drawn AS-IS:
-      // no clipping, no recolouring, no arcs, no dots — swap the PNG and the
-      // knobs change appearance with zero rebuild.
+      // (assets/sprites/knob.png → GrainsDosage-skin/knob.png). The face is
+      // drawn as-is (no clipping/recolouring), but ROTATED so the printed
+      // indicator points to 135°+270°·value — same sweep as the vector
+      // fallback pointer. Swap the PNG and the look changes with zero
+      // rebuild; rotation follows the value live.
       [NSGraphicsContext currentContext].imageInterpolation=NSImageInterpolationHigh;
-      [knobFace drawInRect:NSMakeRect(cx-radius,cy-radius,radius*2,radius*2)
+      NSRect face=NSMakeRect(cx-radius,cy-radius,radius*2,radius*2);
+      // rot = (90-angle) radians. The PNG's printed indicator points UP at
+      // rest. In this flipped view (isFlipped=YES) CTM rotations act as
+      // mirror images on screen: CGContextRotateCTM(+t) turns drawn content
+      // t° COUNTER-CLOCKWISE visually. angle=135+270·v is the fallback
+      // pointer ray in screen coords with y DOWN (up=90°, v=0 → down-left,
+      // v=1 → down-right), so rotating CCW by (90-angle) lands the up
+      // indicator exactly on that ray for every value.
+      double rot=(90.-angle)*qg::tau/360.;
+      CGContextRef ctx=[NSGraphicsContext currentContext].CGContext;
+      CGContextSaveGState(ctx);
+      CGContextTranslateCTM(ctx,NSMidX(face),NSMidY(face));
+      CGContextRotateCTM(ctx,rot);
+      [knobFace drawInRect:NSMakeRect(-radius,-radius,radius*2,radius*2)
                   fromRect:NSZeroRect operation:NSCompositingOperationSourceOver
                    fraction:1. respectFlipped:YES hints:nil];
+      CGContextRestoreGState(ctx);
     }else{
     box(NSMakeRect(cx-radius-2,cy-radius+2,radius*2+4,radius*2+4),AZSKIN(kWell),nil,radius+2);
     NSBezierPath* cap=[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(cx-radius,cy-radius,radius*2,radius*2)];
