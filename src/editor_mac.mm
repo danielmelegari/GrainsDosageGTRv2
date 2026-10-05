@@ -43,8 +43,11 @@ public:
     // Momentary triggers (RANDOM ALL): pulse the value locally so the button
     // lights immediately; performEdit carries it to the processor, which
     // consumes the request and mirrors 0 back on the next audio block.
-    if(id==kRandomAll)surface_->cached[id]=v;
     controller_->setParamNormalized(id,v);controller_->performEdit(id,v);
+    // GrainsSurface is only forward-declared at this point, so cached[]
+    // cannot be touched here; instead force the next tick/draw pass to notice
+    // the new value and repaint the button immediately.
+    if(id==kRandomAll&&surface_)dispatch_async(dispatch_get_main_queue(),^{[surface_ setNeedsDisplay:YES];});
   }
   void edit(ParamID id,double v) {begin(id);change(id,v);end(id);}
   void zoom(double scale);
