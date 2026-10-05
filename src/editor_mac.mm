@@ -292,21 +292,27 @@ static constexpr double slotX[3]={16.,452.,888.};
       // rebuild; rotation follows the value live.
       [NSGraphicsContext currentContext].imageInterpolation=NSImageInterpolationHigh;
       NSRect face=NSMakeRect(cx-radius,cy-radius,radius*2,radius*2);
-      // rot = (90-angle) radians. The PNG's printed indicator points UP at
-      // rest. In this flipped view (isFlipped=YES) CTM rotations act as
-      // mirror images on screen: CGContextRotateCTM(+t) turns drawn content
-      // t° COUNTER-CLOCKWISE visually. angle=135+270·v is the fallback
-      // pointer ray in screen coords with y DOWN (up=90°, v=0 → down-left,
-      // v=1 → down-right), so rotating CCW by (90-angle) lands the up
-      // indicator exactly on that ray for every value.
-      double rot=(90.-angle)*qg::tau/360.;
+      // rot = (angle-90) radians, applied via the raw CGContext so the
+      // on-screen rotation direction is unambiguous. NOTE: we deliberately
+      // use respectFlipped:NO here. In this flipped view, YES would make
+      // AppKit conjugate the image through CTM' = F·M·F, which MIRRORS the
+      // face vertically and turns a clockwise sweep into a counter-
+      // clockwise one (the "upside down" knob). With NO, NSImage draws the
+      // bitmap upright (top of file at top of rect, like every other sprite
+      // call in this view) and the content simply follows the CTM rotation:
+      // positive rot = CLOCKWISE on screen. The printed indicator points UP
+      // at rest, so rot=(angle-90) lands it on the fallback pointer ray
+      // (cos angle, sin angle): v=0 → 135° bottom-left, v=.5 → top,
+      // v=1 → 45° bottom-right, sweeping CLOCKWISE. Verified by
+      // test_knob_rotation.cpp + pixel analysis of assets/sprites/knob.png.
+      double rot=(angle-90.)*qg::tau/360.;
       CGContextRef ctx=[NSGraphicsContext currentContext].CGContext;
       CGContextSaveGState(ctx);
       CGContextTranslateCTM(ctx,NSMidX(face),NSMidY(face));
       CGContextRotateCTM(ctx,rot);
       [knobFace drawInRect:NSMakeRect(-radius,-radius,radius*2,radius*2)
                   fromRect:NSZeroRect operation:NSCompositingOperationSourceOver
-                   fraction:1. respectFlipped:YES hints:nil];
+                   fraction:1. respectFlipped:NO hints:nil];
       CGContextRestoreGState(ctx);
     }else{
     box(NSMakeRect(cx-radius-2,cy-radius+2,radius*2+4,radius*2+4),AZSKIN(kWell),nil,radius+2);
