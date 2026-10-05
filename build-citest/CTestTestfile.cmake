@@ -1,0 +1,35 @@
+# CMake generated Testfile for 
+# Source directory: /workspace
+# Build directory: /workspace/build-citest
+# 
+# This file includes the relevant testing commands required for 
+# testing this directory and lists subdirectories to be tested as well.
+add_test([=[engine]=] "/workspace/build-citest/grains_test_engine")
+set_tests_properties([=[engine]=] PROPERTIES  _BACKTRACE_TRIPLES "/workspace/CMakeLists.txt;192;add_test;/workspace/CMakeLists.txt;0;")
+add_test([=[modulation]=] "/workspace/build-citest/grains_test_modulation")
+set_tests_properties([=[modulation]=] PROPERTIES  _BACKTRACE_TRIPLES "/workspace/CMakeLists.txt;192;add_test;/workspace/CMakeLists.txt;0;")
+add_test([=[features]=] "/workspace/build-citest/grains_test_features")
+set_tests_properties([=[features]=] PROPERTIES  _BACKTRACE_TRIPLES "/workspace/CMakeLists.txt;192;add_test;/workspace/CMakeLists.txt;0;")
+add_test([=[rhythm]=] "/workspace/build-citest/grains_test_rhythm")
+set_tests_properties([=[rhythm]=] PROPERTIES  _BACKTRACE_TRIPLES "/workspace/CMakeLists.txt;192;add_test;/workspace/CMakeLists.txt;0;")
+add_test([=[random]=] "/workspace/build-citest/grains_test_random")
+set_tests_properties([=[random]=] PROPERTIES  _BACKTRACE_TRIPLES "/workspace/CMakeLists.txt;192;add_test;/workspace/CMakeLists.txt;0;")
+add_test([=[master]=] "/workspace/build-citest/grains_test_master")
+set_tests_properties([=[master]=] PROPERTIES  _BACKTRACE_TRIPLES "/workspace/CMakeLists.txt;192;add_test;/workspace/CMakeLists.txt;0;")
+add_test([=[upgrade]=] "/workspace/build-citest/grains_test_upgrade")
+set_tests_properties([=[upgrade]=] PROPERTIES  _BACKTRACE_TRIPLES "/workspace/CMakeLists.txt;192;add_test;/workspace/CMakeLists.txt;0;")
+add_test([=[gater]=] "/workspace/build-citest/grains_test_gater")
+set_tests_properties([=[gater]=] PROPERTIES  _BACKTRACE_TRIPLES "/workspace/CMakeLists.txt;192;add_test;/workspace/CMakeLists.txt;0;")
+add_test([=[declick]=] "/workspace/build-citest/grains_test_declick")
+set_tests_properties([=[declick]=] PROPERTIES  _BACKTRACE_TRIPLES "/workspace/CMakeLists.txt;192;add_test;/workspace/CMakeLists.txt;0;")
+add_test([=[expansion]=] "/workspace/build-citest/grains_test_expansion")
+set_tests_properties([=[expansion]=] PROPERTIES  _BACKTRACE_TRIPLES "/workspace/CMakeLists.txt;192;add_test;/workspace/CMakeLists.txt;0;")
+add_test([=[state]=] "/workspace/build-citest/grains_test_state")
+set_tests_properties([=[state]=] PROPERTIES  _BACKTRACE_TRIPLES "/workspace/CMakeLists.txt;192;add_test;/workspace/CMakeLists.txt;0;")
+add_test([=[glitch_trigger]=] "/workspace/build-citest/grains_test_glitch_trigger")
+set_tests_properties([=[glitch_trigger]=] PROPERTIES  _BACKTRACE_TRIPLES "/workspace/CMakeLists.txt;192;add_test;/workspace/CMakeLists.txt;0;")
+add_test([=[musical]=] "/workspace/build-citest/grains_test_musical")
+set_tests_properties([=[musical]=] PROPERTIES  _BACKTRACE_TRIPLES "/workspace/CMakeLists.txt;192;add_test;/workspace/CMakeLists.txt;0;")
+add_test([=[gui_layout]=] "/workspace/build-citest/grains_test_gui_layout")
+set_tests_properties([=[gui_layout]=] PROPERTIES  _BACKTRACE_TRIPLES "/workspace/CMakeLists.txt;192;add_test;/workspace/CMakeLists.txt;0;")
+subdirs("vst3sdk")

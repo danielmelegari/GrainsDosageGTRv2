@@ -1,12 +1,2 @@
-# Build artifacts
-build/
-dist/
+# Build directory
 build-local/
-
-# IDE and editor files
-.vscode/
-.idea/
-
-# System files
-.DS_Store
-Thumbs.db
