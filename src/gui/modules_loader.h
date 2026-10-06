@@ -52,15 +52,18 @@ static constexpr std::array<ModuleImage, 11> kModuleImages = {{
     {"masterout",  1288,  56, 16, 1294},
 }};
 
-// Helper: get module image metadata by index or name
-const ModuleImage* getModuleImage(int index) {
+// Helper: get module image metadata by index or name.
+// inline: this header is included by several translation units (editor_mac.mm
+// is compiled into multiple test executables), so every entity here needs
+// internal/inline linkage to avoid duplicate-symbol link errors.
+inline const ModuleImage* getModuleImage(int index) {
     if (index >= 0 && index < (int)kModuleImages.size()) {
         return &kModuleImages[index];
     }
     return nullptr;
 }
 
-const ModuleImage* getModuleImageByName(const char* name) {
+inline const ModuleImage* getModuleImageByName(const char* name) {
     for (const auto& img : kModuleImages) {
         if (img.name && std::string(img.name) == name) {
             return &img;
@@ -94,4 +97,4 @@ inline std::string moduleSkinPath(int index, bool retina = false) {
     return path;
 }
 
-}  // namespace aztec::gui
+}}  // namespace aztec::gui

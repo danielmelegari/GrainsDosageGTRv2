@@ -1,6 +1,13 @@
 #import <Cocoa/Cocoa.h>
 #include "editor.h"
+// Header order matters: every non-aztec dependency (qg DSP helpers in
+// filter_sequencer.h, the skin palette in skin_spec/skin_theme, the per-module
+// PNG registry in gui/modules_loader.h) is included at GLOBAL scope here. The
+// aztec::Editor block below must stay free of such includes: including them
+// inside namespace aztec silently re-opens nested namespaces (aztec::qg,
+// aztec::skin, aztec::gui) and breaks every qualified reference later on.
 #include "parameters.h"
+#include "modulation.h"
 #include "skin_spec.h"
 #include "skin_theme.h"
 #include "gui/modules_loader.h"
@@ -55,7 +62,10 @@ public:
   void edit(ParamID id,double v) {begin(id);change(id,v);end(id);}
   void zoom(double scale);
 };
-}
+}  // namespace aztec (closed before the Objective-C section; ObjC classes and
+   // categories may only live at global scope. Re-opened further down for the
+   // Editor member-function definitions.)
+
 static NSColor* rgb(double r,double g,double b,double a=1.) {return [NSColor colorWithSRGBRed:r green:g blue:b alpha:a];}
 // Astral/Filigree Green: resolve a shared skin colour to a native NSColor.
 static NSColor* C(aztec::skin::Rgb k,double a=1.) {return rgb(k.r/255.,k.g/255.,k.b/255.,a);}
@@ -378,7 +388,7 @@ static constexpr double slotX[3]={16.,452.,888.};
       // (cos angle, sin angle): v=0 → 135° bottom-left, v=.5 → top,
       // v=1 → 45° bottom-right, sweeping CLOCKWISE. Verified by
       // test_knob_rotation.cpp + pixel analysis of assets/sprites/knob.png.
-      double rot=(angle-90.)*qg::tau/360.;
+      double rot=(angle-90.)*::qg::tau/360.;
       CGContextRef ctx=[NSGraphicsContext currentContext].CGContext;
       CGContextSaveGState(ctx);
       CGContextTranslateCTM(ctx,NSMidX(face),NSMidY(face));
@@ -392,7 +402,7 @@ static constexpr double slotX[3]={16.,452.,888.};
     NSBezierPath* cap=[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(cx-radius,cy-radius,radius*2,radius*2)];
     // Knob metal + ring groove resolve against the live palette so every
     // theme (and the persisted one) recolours the caps too.
-    skin::Rgb capTopS=skin::scale(AZCOL(kPanelRaised),1.15),capBotS=AZCOL(kWell);
+    aztec::skin::Rgb capTopS=aztec::skin::scale(AZCOL(kPanelRaised),1.15),capBotS=AZCOL(kWell);
     NSColor* capTop=rgb(capTopS.r/255.,capTopS.g/255.,capTopS.b/255.);
     NSColor* capBot=rgb(capBotS.r/255.,capBotS.g/255.,capBotS.b/255.);
     NSGradient* metal=[[NSGradient alloc] initWithStartingColor:capTop endingColor:capBot];
@@ -400,7 +410,7 @@ static constexpr double slotX[3]={16.,452.,888.};
     // No arcs / groove / tick ring around the knob (removed by request).
     // The PNG face below is now the canonical look; this vector fallback only
     // draws a clean cap + pointer if the skin folder is missing knob.png.
-    double a=angle*qg::tau/360.;NSBezierPath* pointer=[NSBezierPath bezierPath];
+    double a=angle*::qg::tau/360.;NSBezierPath* pointer=[NSBezierPath bezierPath];
     [pointer moveToPoint:NSMakePoint(cx+8*std::cos(a),cy+8*std::sin(a))];
     [pointer lineToPoint:NSMakePoint(cx+22*std::cos(a),cy+22*std::sin(a))];
     [cream() setStroke];pointer.lineWidth=3.;pointer.lineCapStyle=NSRoundLineCapStyle;[pointer stroke];
@@ -509,8 +519,8 @@ static constexpr double slotX[3]={16.,452.,888.};
   NSRect scope=NSMakeRect(32,613,220,64);box(scope,dark(),AZSKIN(kHairline),6);
   double cycle=std::round(owner->value(aztec::kUiLfoCycle0+selectedLfo)*4294967295.-2147483648.);
   int64_t epoch=int64_t(std::round(owner->value(aztec::kUiLfoEpoch0+selectedLfo)*4294967295.-2147483648.));
-  qg::Lfo preview;preview.prepare(0x13579BDFULL+uint64_t(selectedLfo)*104729+(owner->value(aztec::lfoID(selectedLfo,aztec::lReset))>=.5?uint64_t(epoch)*0x9e3779b97f4a7c15ULL:0));
-  qg::LfoSettings shape;shape.enabled=true;shape.beats=1.;
+  ::qg::Lfo preview;preview.prepare(0x13579BDFULL+uint64_t(selectedLfo)*104729+(owner->value(aztec::lfoID(selectedLfo,aztec::lReset))>=.5?uint64_t(epoch)*0x9e3779b97f4a7c15ULL:0));
+  ::qg::LfoSettings shape;shape.enabled=true;shape.beats=1.;
   shape.wave=int(std::round(owner->value(owner->value(aztec::kModWaveRnd0+selectedLfo)>0.?aztec::kUiModWave0+selectedLfo:aztec::lfoID(selectedLfo,aztec::lWave))*129.));
   shape.randomSteps=1+int(std::round(owner->value(aztec::kRandomSteps0+selectedLfo)*63.));
   shape.depth=owner->value(aztec::lfoID(selectedLfo,aztec::lDepth));shape.phase=0.;
@@ -523,7 +533,7 @@ static constexpr double slotX[3]={16.,452.,888.};
   NSRect pad=NSMakeRect(880,566,168,166);box(pad,dark(),AZSKIN(kHairline),8);
   NSImage* nebula=sprites[@"nebula"];if(nebula)[nebula drawInRect:pad fromRect:NSMakeRect(0,0,nebula.size.width,nebula.size.height) operation:NSCompositingOperationSourceOver fraction:1. respectFlipped:YES hints:nil];
   NSBezierPath* geometry=[NSBezierPath bezierPath];
-  for(int i=0;i<8;++i){double a=i*qg::tau/8.;NSPoint pt=NSMakePoint(NSMidX(pad)+72*std::cos(a),NSMidY(pad)+71*std::sin(a));for(int j=i+1;j<8;++j){double b=j*qg::tau/8.;[geometry moveToPoint:pt];[geometry lineToPoint:NSMakePoint(NSMidX(pad)+72*std::cos(b),NSMidY(pad)+71*std::sin(b))];}}
+  for(int i=0;i<8;++i){double a=i*::qg::tau/8.;NSPoint pt=NSMakePoint(NSMidX(pad)+72*std::cos(a),NSMidY(pad)+71*std::sin(a));for(int j=i+1;j<8;++j){double b=j*::qg::tau/8.;[geometry moveToPoint:pt];[geometry lineToPoint:NSMakePoint(NSMidX(pad)+72*std::cos(b),NSMidY(pad)+71*std::sin(b))];}}
   [[AZSKIN(kViolet) colorWithAlphaComponent:.48] setStroke];geometry.lineWidth=.6;[geometry stroke];
   double px=pad.origin.x+owner->value(aztec::kXYX)*pad.size.width,py=NSMaxY(pad)-owner->value(aztec::kXYY)*pad.size.height;
   NSBezierPath* cross=[NSBezierPath bezierPath];[cross moveToPoint:NSMakePoint(px,pad.origin.y)];[cross lineToPoint:NSMakePoint(px,NSMaxY(pad))];[cross moveToPoint:NSMakePoint(pad.origin.x,py)];[cross lineToPoint:NSMakePoint(NSMaxX(pad),py)];[[AZSKIN(kAccent) colorWithAlphaComponent:.25] setStroke];cross.lineWidth=1.;[cross stroke];
@@ -551,7 +561,7 @@ static constexpr double slotX[3]={16.,452.,888.};
   [self panel:NSMakeRect(16,1154,1288,128)];
   label(@"FILTER SEQUENCER",NSMakeRect(32,1173,180,22),13,cream());
   if(owner->value(aztec::kFilterSeqMode)>.5)label(@"SAMPLE & GLIDE — smooth random cutoff",NSMakeRect(32,1230,704,24),14,green(),true);
-  else for(int i=0;i<32;++i){double x=32+i*22.;double v=qg::filterPattern(int(std::round(owner->value(aztec::kFilterSeqPattern)*63.)),i);bool active=owner->value(aztec::kFilterSeqOn)>.5&&i==int(std::round(owner->value(aztec::kUiFilterSeqStep)*31.));box(NSMakeRect(x,1223,18,37),dark(),active?green():muted(),3);box(NSMakeRect(x+3,1255-25*(v+1)*.5,12,3+25*(v+1)*.5),active?green():AZSKIN(kAccentTrack),nil,1);}
+  else for(int i=0;i<32;++i){double x=32+i*22.;double v=::qg::filterPattern(int(std::round(owner->value(aztec::kFilterSeqPattern)*63.)),i);bool active=owner->value(aztec::kFilterSeqOn)>.5&&i==int(std::round(owner->value(aztec::kUiFilterSeqStep)*31.));box(NSMakeRect(x,1223,18,37),dark(),active?green():muted(),3);box(NSMakeRect(x+3,1255-25*(v+1)*.5,12,3+25*(v+1)*.5),active?green():AZSKIN(kAccentTrack),nil,1);}
   [self panel:NSMakeRect(16,1294,1288,56)];
   label(@"MASTER",NSMakeRect(32,1312,78,22),13,cream());
   label(@"OUTPUT",NSMakeRect(994,1304,106,16),10,cream());
@@ -713,7 +723,9 @@ static constexpr double slotX[3]={16.,452.,888.};
 }
 @end
 namespace aztec {
-Editor::Editor(EditController* c):controller_(c){controller_->addRef();rect=ViewRect(0,0,792,816);(void)qg::waveBank();}
+// No "using namespace qg" here: inside this namespace an unqualified qg would
+// find aztec::qg first (shadowing), so global qg names must stay ::qg-qualified.
+Editor::Editor(EditController* c):controller_(c){controller_->addRef();rect=ViewRect(0,0,792,816);(void)::qg::waveBank();}
 Editor::~Editor(){removed();controller_->release();}
 NSString* Editor::display(ParamID id,double v,bool units) const {
   String128 text{};controller_->getParamStringByValue(id,v,text);
