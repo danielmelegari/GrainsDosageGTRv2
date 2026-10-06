@@ -430,17 +430,21 @@ static constexpr double slotX[3]={16.,452.,888.};
   }else if(c.kind==Select){
     box(r,dark(),AZSKIN(kBorderDark),6);
     bool stacked=r.size.height>=38;
+    bool compact=r.size.height<16; // thin stacked rows (e.g. MASTER OPTIONS BUFFER)
     if(stacked)label(title,NSMakeRect(r.origin.x+8,r.origin.y+4,r.size.width-24,11),8,muted());
     double shown=v;if(c.id==lfoID(selectedLfo,lWave)&&owner->value(kModWaveRnd0+selectedLfo)>0.)shown=owner->value(kUiModWave0+selectedLfo);
     NSString* value=owner->display(c.id,shown,c.id>=kRandomSteps0&&c.id<kDensityFlow);
-    label(value,NSMakeRect(r.origin.x+8,r.origin.y+(stacked?18:9),r.size.width-29,18),11,cream());
-    label(@"▾",NSMakeRect(NSMaxX(r)-21,r.origin.y+(stacked?17:8),16,18),12,green());
+    if(compact){ // horizontal micro row: "BUFFER ▾ 4 s" - click still opens the menu
+      label([title stringByAppendingString:@" ▾"],NSMakeRect(r.origin.x+6,r.origin.y,58,r.size.height),9,onText(),false);
+      label(value,NSMakeRect(r.origin.x+64,r.origin.y,r.size.width-70,r.size.height),9,cream(),true);
+    }
+    else{label(value,NSMakeRect(r.origin.x+8,r.origin.y+(stacked?18:9),r.size.width-29,18),11,cream());label(@"▾",NSMakeRect(NSMaxX(r)-21,r.origin.y+(stacked?17:8),16,18),12,green());}
   }else if(c.kind==Toggle){
     bool on=v>=.5;if(c.id>=kGrainEnabled&&c.id<=kRepeatEnabled)title=on?@"ON":@"OFF";if(c.id==kFreeze)title=on?@"FROZEN":@"FREEZE";// sustained toggle: label shows live status
+    bool compact=r.size.height<16; // thin stacked rows (MASTER OPTIONS FREE STRETCH / FREEZE)
     box(r,on?AZSKIN(kAccentGlow):AZSKIN(kPanelRaised),on?green():AZSKIN(kFiligreeDim),6);
-    if(on)box(NSMakeRect(r.origin.x+6,NSMidY(r)-6,12,12),AZSKIN(kAccentBright),nil,6);
-    box(NSMakeRect(r.origin.x+9,NSMidY(r)-3,6,6),on?green():muted(),nil,3);
-    label(title,NSMakeRect(r.origin.x+20,r.origin.y+(r.size.height-14)/2.,r.size.width-25,16),10,on?onText():muted(),true);
+    box(NSMakeRect(r.origin.x+6,NSMidY(r)-(compact?2:3),compact?4:6,compact?4:6),on?(compact?green():AZSKIN(kAccentBright)):muted(),nil,3);
+    label(title,NSMakeRect(r.origin.x+(compact?14:20),r.origin.y,r.size.width-(compact?18:25),r.size.height),compact?9:10,on?onText():muted(),!compact);
   }else{
     bool on=v>=.5;box(r,on?AZSKIN(kAccentGlow):AZSKIN(kPanelRaised),on?green():AZSKIN(kFiligreeDim),5);
     int step=c.id>=kReverbStep0?int(c.id-kReverbStep0)+1:c.id>=kGlitchStep0?int(c.id-kGlitchStep0)+1:int(c.id-kStep0)+1;
@@ -479,6 +483,13 @@ static constexpr double slotX[3]={16.,452.,888.};
     if(stage==0){
       box(NSMakeRect(x+208,248,196,147),AZSKIN(kPanelInset),AZSKIN(kFiligreeDim),8);
       label(@"MASTER OPTIONS",NSMakeRect(x+220,252,174,17),10,muted(),true);
+      // Option A: the two rows freed by moving STRETCH into the knob grid now
+      // hold FREEZE and BUFFER SELECTION. Their hit areas are registered in
+      // editor_layout_win.inl at exactly these rects; the widgets themselves
+      // are painted by the generic control pass (Toggle/Select kinds) which
+      // runs after this panel block - so nothing is drawn here beyond the
+      // inset box and its title. The old RANDOM-ALL hit area next to ON was
+      // removed (kRandomAll stays registered for automation/state only).
       if(owner->value(aztec::kPanMode)>=.25)label(owner->value(aztec::kPanMode)<.75?@"PAN: ALTERNATE L / R":@"PAN: RANDOM L / R",NSMakeRect(x+170,405,228,16),10,green(),true);
       NSRect screen=NSMakeRect(x+14,432,388,48);box(screen,dark(),AZSKIN(kHairline),4);
       double left=owner->value(aztec::kUiGrainStart),right=owner->value(aztec::kUiGrainEnd),head=owner->value(aztec::kUiGrainHead);bool active=owner->value(aztec::kUiGrainActive)>.5;

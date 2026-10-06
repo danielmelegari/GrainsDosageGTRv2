@@ -8,24 +8,44 @@
   for(int i=0;i<8;++i)ADD(granular[i],x+14+(i%4)*99,i<4?151:274,90,92,Knob,grainNames[i]);
   ADD(kDensityFlow,x+14,368,184,25,Toggle,"DENSITY FLOW");
 
-  // FREEZE + BUFFER SELECTION live directly below the GRANULIZER module's ON
-  // button (the shared layout registers kGrainEnabled+i at x+238,106 size
-  // 68x28 for every slot; the strip at y=140 is free across the whole panel
-  // width). FREEZE sits under ON and BUFFER immediately beside it - FREEZE
-  // captures audio according to the buffer selection (see Engine::setFrozen /
-  // applyFreezeSelection: 50 ms fade-in, 100 ms fade-out crossfades). The old
-  // RANDOM-ALL hit area next to FREEZE was removed per request (the parameter
-  // stays registered for automation/state compatibility but has no control on
-  // screen); the reclaimed MASTER OPTIONS rows now hold FREE STRETCH plus its
-  // STRETCH % slider. Only the Granulizer stage carries these controls, so
-  // they are added when the Granulizer stage occupies slot(0) (slot(i) answers
-  // "which panel holds stage i", so stage==0 <=> slot(0)==0).
+  // Option A: FREEZE + BUFFER SELECTION live inside the MASTER OPTIONS stack
+  // box (drawn at x+208..x+404 / y=248..395 whenever the Granulizer stage is
+  // slotted in the LEFT panel - see editor_mac.mm). They occupy the rows
+  // freed by moving STRETCH out of this stack into the knob grid (next to
+  // TRANSPOSE). Geometry notes (the layout test enforces strict rect
+  // non-overlap): the lower knob row spans x+14..x+413 at y=274..366 (STRETCH
+  // is its fourth knob), so the stacked controls must start at y>=367; PAN
+  // MODE starts at y=398 and POSITION at x+170. The two collision-free bands
+  // inside the box column are therefore:
+  //   y=367..379 : FREE STRETCH toggle (original row, shrunk from 18 px)
+  //   y=380..392 : FREEZE (left half) + BUFFER selection (right half), side
+  //                by side - freeze beside the buffer it captures from.
+  // The widgets themselves are painted by the generic control pass (see
+  // drawControl: in editor_mac.mm), which switches to a compact horizontal
+  // style for Toggle/Select rects shorter than 16 px tall - these three rows
+  // use that style.
+  // FREEZE captures audio according to the buffer selection (see
+  // Engine::setFrozen / applyFreezeSelection: 50 ms fade-in, 100 ms fade-out
+  // crossfades). The old RANDOM-ALL hit area next to the ON button was
+  // removed per request (the parameter stays registered for automation/state
+  // compatibility but has no control on screen). Only the Granulizer stage
+  // carries these controls, so they are added when the Granulizer stage
+  // occupies the left panel (slot(0)==0): that is exactly when the Cocoa
+  // paint pass draws the MASTER OPTIONS box there. When Granulizer sits in
+  // the middle/right slot, slot(0)!=0, the box is not drawn and no controls
+  // are registered either - same behaviour as before.
   if(slot(0)==0) {
-    ADD(kFreeze,x+238,140,68,26,Toggle,"FREEZE");
-    ADD(kGrainBuffer,x+312,140,88,26,Select,"BUFFER");
+    ADD(kFreeze,x+218,380,88,12,Toggle,"FREEZE");
+    ADD(kGrainBuffer,x+308,380,90,12,Select,"BUFFER");
   }
-  ADD(kStretchOn,x+218,368,180,18,Toggle,"FREE STRETCH");
-  ADD(kStretchSpeed,x+218,390,180,18,Slider,"STRETCH %");
+  // FREE STRETCH keeps its column (x+218..x+398) inside the MASTER OPTIONS
+  // box on the band above FREEZE/BUFFER. The old STRETCH % slider was
+  // removed: kStretchSpeed is now the STRETCH knob inside the grid next to
+  // TRANSPOSE - registering it twice would fail the unique-parameter-ID
+  // layout test. FREE STRETCH shrinks from 18 px to a 12 px band so the
+  // three stacked rows (FREE STRETCH / FREEZE+BUFFER) stay collision-free
+  // and everything fits inside the box, which ends at y=395.
+  ADD(kStretchOn,x+218,367,180,12,Toggle,"FREE STRETCH");
 
   ADD(kPanMode,x+14,398,144,30,Select,"PAN MODE");
   if(value(kPanMode)<.25)ADD(kGrainPan,x+170,396,228,30,Pan,"POSITION");
