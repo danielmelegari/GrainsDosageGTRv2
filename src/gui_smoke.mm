@@ -48,7 +48,7 @@ int main(int argc,char** argv){
       // Exercise new controls through native mouse dispatch, then restore defaults.
       auto toggleCheck=[&](int id,double x,double y,const char* message){double before=controller->getParamNormalized(id);send(NSEventTypeLeftMouseDown,x,y);send(NSEventTypeLeftMouseUp,x,y);checkGui(controller->getParamNormalized(id)==(before>=.5?0.:1.),message);controller->setParamNormalized(id,before);};
       toggleCheck(aztec::kXYEnable,1235,542,"XY Enable hit target");
-      toggleCheck(aztec::kResliceRndOn,817,791,"Reslice Step RND hit target");
+      toggleCheck(aztec::kResliceRndOn,687,791,"Reslice Step RND hit target");
       toggleCheck(aztec::kFilterSeqOn,270,1184,"Filter Sequencer hit target");
       NSData* initial=render();checkGui([initial writeToFile:path atomically:YES],"Initial screenshot");
       send(NSEventTypeLeftMouseDown,96,194);send(NSEventTypeLeftMouseDragged,96,149);send(NSEventTypeLeftMouseUp,96,149);

@@ -90,11 +90,14 @@
   ADD(kDeclickSensitivity,548,56,130,28,Slider,"");
 
   ADD(kResliceEnabled,148,778,72,27,Toggle,"ON");
-  ADD(kResliceLength,232,773,132,40,Select,"WINDOW");
-  ADD(kResliceMix,384,773,156,40,Slider,"MIX");
-  ADD(kResliceIndex0+selectedReslice,560,773,182,40,Select,"SOURCE SLICE");
-  ADD(kResliceRndOn,754,778,126,27,Toggle,"STEP RND");
-  ADD(kResliceRndRate,892,773,142,40,Select,"RND RATE");
+  // PRESLICER knobs: WINDOW and MIX are real knobs now (bigger than the old
+  // compact select/slider row), so they use the standard 92px knob strip.
+  // WINDOW is a stepped knob over the four lengths; MIX stays continuous.
+  ADD(kResliceLength,384,773,112,92,Knob,"WINDOW");
+  ADD(kResliceMix,504,773,112,92,Knob,"MIX");
+  ADD(kResliceRndOn,624,778,126,27,Toggle,"STEP RND");
+  ADD(kResliceRndRate,758,773,142,40,Select,"RND RATE");
+  ADD(kResliceIndex0+selectedReslice,908,773,132,40,Select,"SOURCE SLICE");
   ADD(kFilterModel,266,1016,270,24,Select,"MODEL");
 
   ADD(kFilterSeqOn,220,1170,100,28,Toggle,"ON");
