@@ -436,7 +436,8 @@ static constexpr double slotX[3]={16.,452.,888.};
     label(value,NSMakeRect(r.origin.x+8,r.origin.y+(stacked?18:9),r.size.width-29,18),11,cream());
     label(@"▾",NSMakeRect(NSMaxX(r)-21,r.origin.y+(stacked?17:8),16,18),12,green());
   }else if(c.kind==Toggle){
-    bool on=v>=.5;if(c.id>=kGrainEnabled&&c.id<=kRepeatEnabled)title=on?@"ON":@"OFF";box(r,on?AZSKIN(kAccentGlow):AZSKIN(kPanelRaised),on?green():AZSKIN(kFiligreeDim),6);
+    bool on=v>=.5;if(c.id>=kGrainEnabled&&c.id<=kRepeatEnabled)title=on?@"ON":@"OFF";if(c.id==kFreeze)title=on?@"FROZEN":@"FREEZE";// sustained toggle: label shows live status
+    box(r,on?AZSKIN(kAccentGlow):AZSKIN(kPanelRaised),on?green():AZSKIN(kFiligreeDim),6);
     if(on)box(NSMakeRect(r.origin.x+6,NSMidY(r)-6,12,12),AZSKIN(kAccentBright),nil,6);
     box(NSMakeRect(r.origin.x+9,NSMidY(r)-3,6,6),on?green():muted(),nil,3);
     label(title,NSMakeRect(r.origin.x+20,r.origin.y+(r.size.height-14)/2.,r.size.width-25,16),10,on?onText():muted(),true);

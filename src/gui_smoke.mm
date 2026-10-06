@@ -62,9 +62,13 @@ int main(int argc,char** argv){
       checkGui(![high isEqualToData:render()],"Opposite positions render differently");
       controller->setParamNormalized(aztec::kPitch,.5);
       [surface performSelector:@selector(tick:) withObject:nil];
-      send(NSEventTypeLeftMouseDown,273,300);send(NSEventTypeLeftMouseDragged,273,282);send(NSEventTypeLeftMouseUp,273,282);
-      checkGui(std::abs(controller->getParamNormalized(aztec::kStretchSpeed)-.3)<1e-9,"Speed knob in granular panel");
-      send(NSEventTypeLeftMouseDown,372,300);send(NSEventTypeLeftMouseDragged,372,282);send(NSEventTypeLeftMouseUp,372,282);
+      // STRETCH moved into the granular knob grid: it now sits right next to
+      // TRANSPOSE (row 2 = y 274..366; STRETCH center x=328.5, TRANSPOSE
+      // center x=223.5). A drag from y=300 up to y=282 maps v .5 -> .3 for
+      // both knobs (18 px over the full 0..1 range).
+      send(NSEventTypeLeftMouseDown,328,300);send(NSEventTypeLeftMouseDragged,328,282);send(NSEventTypeLeftMouseUp,328,282);
+      checkGui(std::abs(controller->getParamNormalized(aztec::kStretchSpeed)-.3)<1e-9,"STRETCH knob in granular panel");
+      send(NSEventTypeLeftMouseDown,223,300);send(NSEventTypeLeftMouseDragged,223,282);send(NSEventTypeLeftMouseUp,223,282);
       checkGui(std::abs(controller->getParamNormalized(aztec::kTranspose)-58./96.)<1e-9,"Transpose knob in granular panel");
       send(NSEventTypeLeftMouseDown,400,725);send(NSEventTypeLeftMouseDragged,415,725);send(NSEventTypeLeftMouseUp,415,725);
       checkGui(std::abs(controller->getParamNormalized(aztec::slotAmount(0,3))-.75)<1e-9,"LFO assignment amount slider");

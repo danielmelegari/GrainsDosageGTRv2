@@ -177,6 +177,7 @@ class Processor final : public AudioEffect {
   double rate_ = 44100., tempo_ = 120., fallbackBeat_ = 0.;
   // The parameter array covers every legacy + monitor ID; the VST parameter list stops before the new UI controls.
   bool freezePending_ = false; // queued FREEZE toggle (from editor click or automation): consumed by the next process() call
+  int8_t freezeApplied_ = -1;  // last freeze state pushed to the engine (-1 unknown): lets setState drive setFrozen() directly so a restored session fades in with the 50 ms crossfade instead of blind-toggling
   uint32_t randomSeed_ = 0x9E3779B9u; // xorshift seed for RANDOM ALL one-shots
   bool randomAllPending_ = false;    // RANDOM ALL is a momentary button, like a trigger pulse
   // FREEZE is a sustained toggle: when the incoming value differs from the
@@ -296,7 +297,10 @@ public:
     setMaster();
     // Momentary UI triggers consumed once per block (before the engine receives
     // this block's settings, so a freeze toggle takes effect on the first sample).
-    if(freezePending_) { engine_.toggleFreeze(); freezePending_=false; p_[kFreeze]=0.; }
+    // Toggle only when the engine actually disagrees with the queued request:
+    // a stale pending flag (e.g. an automation pulse that raced a preset load)
+    // must not double-toggle FREEZE back to its original state.
+    if(freezePending_) { const bool want=p_[kFreeze]>=.5; if(want!=engine_.isFrozen()) engine_.setFrozen(want); freezePending_=false; }
     if(randomAllPending_) { applyRandomAll(); randomAllPending_=false; p_[kRandomAll]=0.; }
     p_[kFreeze]=engine_.isFrozen()?1.:0.; // mirror the sustained state for save/load + readback
     const double beatIncrement = tempo_ / (60. * rate_);

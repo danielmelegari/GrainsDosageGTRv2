@@ -50,6 +50,7 @@ struct Settings {
   bool densityFlow=false, bypass=false;
   double bufferSeconds=16.; // selectable grain/recording buffer size (seconds)
   bool freeze=false;        // hold the input stream: grains keep reading the frozen audio
+  int freezeBucket=-1;      // BUFFER SIZE bucket captured when FREEZE engaged (-1 = none): a change re-freezes the new selection
   int order=6;
   uint16_t pattern = 0xAAAA;
   std::array<LfoSettings,lfoCount> lfos{};
@@ -89,6 +90,17 @@ class Engine {
   double glitchBeat_ = 0., repeatBeat_ = 0., heldRepeatBeats_ = .25;
   bool glitchActive_ = false, repeating_ = false;
   std::atomic<bool> freezeRequest_{false}, freezeTarget_{false}; // UI->audio freeze restore (see requestFrozen)
+  // FREEZE crossfade + snapshot state (see setFrozen/applyFreezeSelection):
+  // while frozen, grains read from the captured span instead of the live ring.
+  double freezeStart_=0., freezeLength_=0.;   // snapshot span inside buffer_[]
+  int64_t freezeRamp_=0;                       // samples remaining in the current fade
+  double freezeBlend_=0.;                      // 0 = live input, 1 = fully frozen
+  bool freezeFadingOut_=false;                 // true while the 100 ms release fade runs
+  double freezeRead(int ch, double pos) const { // wrapped read limited to the frozen span
+    if(freezeLength_<=0.) return read(ch,pos);
+    double p=std::fmod(pos-freezeStart_,freezeLength_); if(p<0) p+=freezeLength_;
+    return read(ch,freezeStart_+p);
+  }
   int64_t lastRhythm_=INT64_MIN;
   double repeatPhase_=0., repeatLastBeat_=0., repeatPitch_=0.;
   double repeatGate_=0., glitchGate_=0.;
@@ -287,17 +299,82 @@ public:
     write_ = keep; // oldest kept sample sits at index 0, newest at keep-1
     repeatWrite_ = std::min(write_, repeatWrite_); glitchWrite_ = std::min(write_, glitchWrite_);
     for(auto& v : voices_) if(v.active) v.read = std::fmod(v.read, double(capacity));
+    // The frozen snapshot lives inside the ring: re-anchor it to the rebuilt
+    // copy (newest sample now sits at write_-1) so FREEZE keeps sounding after
+    // a BUFFER SIZE switch. applyFreezeSelection() then re-captures the span
+    // around the newly selected size with its 50 ms fade-in.
+    if(freezeLength_>0.) { double a=double(write_)-freezeLength_; const double n=double(buffer_[0].size()); a=std::fmod(a,n); if(a<0) a+=n; freezeStart_=a; }
     bufferSeconds_ = seconds;
   }
   bool isFrozen() const { return settings_.freeze; }
-  void toggleFreeze() { settings_.freeze = baseSettings_.freeze = !settings_.freeze; }
-  void setFrozen(bool on) { settings_.freeze = baseSettings_.freeze = on; }
+  // FREEZE engages/disengages with a live crossfade between the incoming
+  // stream and the frozen snapshot: 50 ms fade-in when freezing (the held
+  // audio eases in over the input), 100 ms fade-out when unfreezing (the
+  // snapshot eases away as the input returns). The frozen span always covers
+  // the current BUFFER SIZE selection (see applyFreezeSelection): entering
+  // FREEZE captures that many seconds of history; changing BUFFER SIZE while
+  // frozen re-freezes around the new selection.
+  void toggleFreeze() { setFrozen(!settings_.freeze); }
+  void requestToggleFreeze() { requestFrozen(!settings_.freeze); } // cross-thread variant (automation-safe)
+  void setFrozen(bool on) {
+    if(on==settings_.freeze && !freezeFadingOut_) return;
+    const double sr = std::max(8000., settings_.sampleRate);
+    if(on) {
+      // Re-freezing while a release fade is still running: fold the remaining
+      // snapshot tail into the new 50 ms fade-in instead of stacking ramps.
+      freezeFadingOut_=false;
+      settings_.freeze = baseSettings_.freeze = true;
+      freezeRamp_ = int64_t(std::llround(0.050*sr));   // 50 ms fade-IN of the frozen span
+      freezeBlend_ = 0.;                               // start from the live stream
+      // Snapshot the last bufferSeconds of ring history: grains keep looping it.
+      const size_t cap = buffer_[0].empty()?0:buffer_[0].size();
+      if(cap) {
+        const int64_t keep = std::min<int64_t>(int64_t(cap), std::max(int64_t(1), int64_t(std::llround(std::clamp(bufferSeconds_,1.,64.)*sr))));
+        // Newest sample sits at write_%cap-1 in the ring; read() wraps modulo
+        // cap, so anchor the span to the wrapped head (not the raw counter).
+        freezeStart_ = double((write_-keep)%int64_t(cap)); freezeLength_ = double(keep);
+        settings_.freezeBucket = baseSettings_.freezeBucket = bucketForSeconds(bufferSeconds_);
+      }
+    } else {
+      settings_.freeze = baseSettings_.freeze = false;
+      settings_.freezeBucket = baseSettings_.freezeBucket = -1;
+      if(freezeLength_>0.) {
+        // Keep whatever blend was reached so far and ride the rest of the
+        // snapshot down to silence over a full 100 ms fade-OUT.
+        const double remain = std::clamp(freezeBlend_,0.,1.);
+        freezeRamp_ = std::max<int64_t>(1, int64_t(std::llround(0.100*sr)));
+        freezeBlend_ = remain; freezeFadingOut_ = remain>0.;
+        if(!freezeFadingOut_) freezeLength_=0.;
+      } else freezeRamp_=0;
+    }
+  }
   // Cross-thread freeze request: the UI thread (setComponentState / host edit)
   // only raises this flag; process() applies it on the audio thread, where
   // touching settings_ is safe. A restored session that saved frozen=1 therefore
   // actually freezes instead of being silently unfrozen by the next engine.set().
   void requestFrozen(bool on) { freezeRequest_.store(true, std::memory_order_release); freezeTarget_.store(on, std::memory_order_release); }
   bool takeFreezeRestore(bool& on) { if(!freezeRequest_.exchange(false, std::memory_order_acq_rel)) return false; on = freezeTarget_.load(std::memory_order_acquire); return true; }
+  // BUFFER SELECTION drives FREEZE: map a duration to its 1/2/4/8/16 s bucket.
+  static int bucketForSeconds(double seconds) {
+    const double sizes[]={1.,2.,4.,8.,16.}; int best=0;
+    for(int i=1;i<5;++i) if(std::abs(sizes[i]-seconds)<std::abs(sizes[best]-seconds)) best=i;
+    return best;
+  }
+  // Called after every live buffer-size switch: while frozen, FREEZE follows
+  // the selection — switching buckets re-captures the frozen span around the
+  // new BUFFER SIZE (with the same 50 ms fade-in).
+  void applyFreezeSelection(int bucket) {
+    if(!settings_.freeze) { settings_.freezeBucket = baseSettings_.freezeBucket = -1; return; }
+    if(bucket==settings_.freezeBucket) return;
+    const double sizes[]={1.,2.,4.,8.,16.};
+    const double sr = std::max(8000., settings_.sampleRate);
+    const size_t cap = buffer_[0].empty()?0:buffer_[0].size();
+    if(!cap) { settings_.freezeBucket = baseSettings_.freezeBucket = bucket; return; }
+    const int64_t keep = std::min<int64_t>(int64_t(cap), std::max(int64_t(1), int64_t(std::llround(sizes[std::clamp(bucket,0,4)]*sr))));
+    freezeStart_ = double((write_-keep)%int64_t(cap)); freezeLength_ = double(keep);
+    freezeRamp_ = int64_t(std::llround(0.050*sr)); freezeBlend_ = 0.; freezeFadingOut_=false;
+    settings_.freezeBucket = baseSettings_.freezeBucket = bucket;
+  }
   void prepare(double sampleRate) {
     settings_.sampleRate = std::max(8000., sampleRate);
     filterSequencer_.reset();gater_.prepare(settings_.sampleRate);reslice_.prepare(settings_.sampleRate);filter_.prepare(settings_.sampleRate);match_.prepare(settings_.sampleRate);reverb_.prepare(settings_.sampleRate);panRight_=false;for(int i=0;i<3;++i)moduleBlend_[i]=settings_.moduleOn[i]?1.:0.;
@@ -311,14 +388,26 @@ public:
     stretch_.prepare(settings_.sampleRate); transpose_.prepare(settings_.sampleRate); grainClock_=0.; lastRhythm_=INT64_MIN; repeatPhase_=0.; repeatGate_=glitchGate_=0.; transition_=0;
     serialRepeat_.prepare(settings_.sampleRate);serialGlitch_.prepare(settings_.sampleRate);glitchBlock_=false;glitchClock_.reset();glitchUntil_=-1e30;randomGlitchOpen_=false;nextGlitch_=-1e30;repeatCycle_=INT64_MIN;repeatUntil_=-1e30;previousHold_=false;
     modulation_.prepare(); grainLevel_=settings_.grainMix;
+    // Reset the FREEZE crossfade engine with the buffers (no stale snapshot).
+    freezeStart_=0.; freezeLength_=0.; freezeRamp_=0; freezeBlend_=0.;
+    settings_.freezeBucket = baseSettings_.freezeBucket = settings_.freeze ? bucketForSeconds(bufferSeconds_) : -1;
+    if(settings_.freeze) { const int64_t keep=std::min<int64_t>(int64_t(capacity),std::max(int64_t(1),int64_t(std::llround(std::clamp(bufferSeconds_,1.,64.)*settings_.sampleRate)))); freezeStart_=0.; freezeLength_=double(keep); freezeBlend_=1.; }
     levelSmoothing_=std::exp(-1./(.003*settings_.sampleRate));
   }
-  void set(const Settings& s) {
+  void set(Settings s) {
     if(s.order!=settings_.order) { orderFade_=128; lastOrder_=settings_.order; }
     if(s.order!=settings_.order){serialRepeat_.reset();serialGlitch_.reset();glitchBlock_=false;glitchClock_.reset();glitchUntil_=-1e30;}
     const size_t capacity = size_t(settings_.sampleRate * std::clamp(s.bufferSeconds,1.,64.));
     if(capacity != buffer_[0].size()) setBufferSeconds(std::clamp(s.bufferSeconds,1.,64.)); // live buffer-size switch
+    // FREEZE is engine-owned sustained state: settings() always carries
+    // freeze=false (toggled directly on the engine), so preserve it across the
+    // per-block copy instead of silently unfreezing mid-hold. (set() takes the
+    // Settings by value precisely so these two lines stay local to this frame.)
+    s.freeze=settings_.freeze; s.freezeBucket=settings_.freezeBucket;
     settings_ = baseSettings_ = s;modRouted_.fill(false);extendedMod_=false;
+    // BUFFER SELECTION drives FREEZE: switching buckets while frozen re-freezes
+    // around the newly selected span (50 ms fade-in).
+    applyFreezeSelection(bucketForSeconds(std::clamp(s.bufferSeconds,1.,64.)));
     for(const auto& mod:s.lfos)if(mod.enabled&&mod.depth>0.)for(int t=0;t<modTargetCount;++t)if(mod.amount[t]!=0.){modRouted_[t]=true;if(t>=11)extendedMod_=true;}
     gater_.set(s.gater);reslice_.set(s.reslice);
     reverb_.set(s.reverbOn,s.reverbType,s.reverbGrid,s.reverbPattern,s.reverbMix,s.reverbLength,s.reverbKill,s.reverbRandom,s.reverbRandomGrid,s.reverbModel);
@@ -526,7 +615,10 @@ public:
       if(!v.active) continue;
       const double phase = double(v.age) / v.length;
       const double window = .5 - .5 * std::cos(2. * pi * phase);
+      // FREEZE crossfade: blend the live ring read with the frozen-snapshot
+      // read (50 ms fade-in on freeze, 100 ms fade-out on unfreeze).
       double vl=read(0,v.read),vr=read(1,v.read);
+      if(freezeBlend_>0.) { vl+=(freezeRead(0,v.read)-vl)*freezeBlend_; vr+=(freezeRead(1,v.read)-vr)*freezeBlend_; }
       wetL+=(vl*(1.-std::max(0.,v.pan))+vr*std::max(0.,-v.pan))*window;
       wetR+=(vr*(1.+std::min(0.,v.pan))+vl*std::max(0.,v.pan))*window;
       weight+=window*window; ++playing; v.read += v.increment;
@@ -566,6 +658,20 @@ public:
   }
   void process(float inL,float inR,double beat,float& outL,float& outR) {
     if(extendedMod_)settings_=baseSettings_;
+    // Advance the FREEZE crossfade ramp (50 ms fade-in / 100 ms fade-out).
+    if(freezeRamp_>0) {
+      const double sr = std::max(8000., settings_.sampleRate);
+      const int64_t total = settings_.freeze ? int64_t(std::llround(0.050*sr)) : int64_t(std::llround(0.100*sr));
+      if(settings_.freeze) {
+        // Equal-power-ish linear rise toward the frozen snapshot over 50 ms.
+        freezeBlend_ = 1. - double(freezeRamp_-1)/double(std::max<int64_t>(1,total));
+        if(--freezeRamp_<=0) { freezeRamp_=0; freezeBlend_=1.; }
+      } else if(freezeFadingOut_) {
+        // Linear fall back to the live stream over a full 100 ms.
+        freezeBlend_ = double(freezeRamp_-1)/double(std::max<int64_t>(1,total));
+        if(--freezeRamp_<=0) { freezeRamp_=0; freezeBlend_=0.; freezeFadingOut_=false; freezeLength_=0.; } // snapshot released once faded out
+      } else { freezeRamp_=0; }
+    }
     if(settings_.order>=6) {
       processParallel(inL,inR,beat,outL,outR);
       if(orderFade_>0 && settings_.mix>0.) {
@@ -641,7 +747,9 @@ public:
         for(auto& v:voices_) if(v.active) {
           double phase=double(v.age)/v.length;
           double window=.5-.5*std::cos(2.*pi*phase);
+          // FREEZE crossfade (parallel path): blend live ring with frozen snapshot.
           double vl=read(0,v.read),vr=read(1,v.read);
+          if(freezeBlend_>0.) { vl+=(freezeRead(0,v.read)-vl)*freezeBlend_; vr+=(freezeRead(1,v.read)-vr)*freezeBlend_; }
           wet[0]+=(vl*(1.-std::max(0.,v.pan))+vr*std::max(0.,-v.pan))*window;
           wet[1]+=(vr*(1.+std::min(0.,v.pan))+vl*std::max(0.,v.pan))*window;
           weight+=window;++playing;v.read+=v.increment;
