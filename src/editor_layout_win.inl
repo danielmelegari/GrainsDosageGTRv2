@@ -90,11 +90,13 @@
   ADD(kDeclickSensitivity,548,56,130,28,Slider,"");
 
   ADD(kResliceEnabled,148,778,72,27,Toggle,"ON");
-  // PRESLICER knobs: WINDOW and MIX are real knobs now (bigger than the old
-  // compact select/slider row), so they use the standard 92px knob strip.
-  // WINDOW is a stepped knob over the four lengths; MIX stays continuous.
-  ADD(kResliceLength,384,773,112,92,Knob,"WINDOW");
-  ADD(kResliceMix,504,773,112,92,Knob,"MIX");
+  // PRESLICER: WINDOW and MIX are horizontal slides now (replacing the
+  // previous oversized knobs), in the same compact row style as RND RATE /
+  // SOURCE SLICE. WINDOW snaps to the four slice lengths as it drags; MIX is
+  // a continuous 0-100% wet slide. Both sit at y=773 so their value readouts
+  // (drawn below the track) stay clear of the STEP RND toggle at y=778.
+  ADD(kResliceLength,384,773,112,40,Slider,"WINDOW");
+  ADD(kResliceMix,504,773,112,40,Slider,"MIX");
   ADD(kResliceRndOn,624,778,126,27,Toggle,"STEP RND");
   ADD(kResliceRndRate,758,773,142,40,Select,"RND RATE");
   ADD(kResliceIndex0+selectedReslice,908,773,132,40,Select,"SOURCE SLICE");
