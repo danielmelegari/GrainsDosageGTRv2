@@ -4,11 +4,9 @@ on:
   push:
     branches: [main, master]
     paths:
-      - 'src/**'
-      - 'index.html'
-      - 'package.json'
-      - 'vite.config.js'
-      - 'tsconfig.json'
+      - 'assets/**'
+      - 'tools/split_module_skins.py'
+      - '.github/workflows/build-app.yml'
   pull_request:
     branches: [main, master]
   workflow_dispatch:
@@ -22,41 +20,64 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    name: Build Application
+  skin-assets:
+    name: Package Per-Module PNG Skin Layers
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Type check
-        run: npm run typecheck
-
-      - name: Build production bundle
-        run: npm run build
-
-      - name: Package dist as ZIP
+      - name: Verify module artwork layers
         run: |
-          cd dist
-          zip -r ../grainsdosage-skin-splitter.zip .
+          python3 - <<'EOF'
+          import os, struct, sys
+
+          MODULES = [
+              "granulizer", "preslicer", "beatrepeater", "modulation", "morph",
+              "reslice", "gater", "filter", "reverb", "filterseq", "masterout",
+          ]
+
+          def png_size(path):
+              with open(path, "rb") as f:
+                  data = f.read(33)
+              assert data[:8] == b"\x89PNG\r\n\x1a\n", f"{path}: not a PNG"
+              w, h = struct.unpack(">II", data[16:24])
+              return w, h
+
+          missing = []
+          for m in MODULES:
+              p1 = f"assets/modules/{m}.png"
+              p2 = f"assets/modules/@2x/{m}.png"
+              for p in (p1, p2):
+                  if not os.path.isfile(p):
+                      missing.append(p)
+              if not missing:
+                  w1, h1 = png_size(p1)
+                  w2, h2 = png_size(p2)
+                  assert (w2, h2) == (w1 * 2, h1 * 2), \
+                      f"@2x mismatch for {m}: {w1}x{h1} vs {w2}x{h2}"
+                  print(f"OK  {m}: {w1}x{h1} @1x, {w2}x{h2} @2x")
+
+          if missing:
+              print("MISSING FILES:", *missing, sep="\n  ")
+              sys.exit(1)
+          print(f"All {len(MODULES)} module layers present at 1x + @2x.")
+          EOF
+
+      - name: Package skin ZIP
+        run: |
+          cd assets
+          zip -r ../grainsdosage-module-skins.zip modules sprites 2>/dev/null || \
+            zip -r ../grainsdosage-module-skins.zip modules
           cd ..
-          echo "ZIP_SIZE=$(du -h grainsdosage-skin-splitter.zip | cut -f1)" >> $GITHUB_ENV
+          echo "ZIP_SIZE=$(du -h grainsdosage-module-skins.zip | cut -f1)" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: grainsdosage-skin-splitter
-          path: grainsdosage-skin-splitter.zip
+          name: grainsdosage-module-skins
+          path: grainsdosage-module-skins.zip
           retention-days: 30
 
       - name: Job summary
@@ -67,5 +88,4 @@ jobs:
           echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Branch | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| ZIP Size | ${{ env.ZIP_SIZE }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Artifact | grainsdosage-skin-splitter.zip |" >> $GITHUB_STEP_SUMMARY
+          echo "| Artifact | grainsdosage-module-skins.zip |" >> $GITHUB_STEP_SUMMARY
