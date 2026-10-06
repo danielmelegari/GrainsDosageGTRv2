@@ -3,6 +3,7 @@
 #include "parameters.h"
 #include "skin_spec.h"
 #include "skin_theme.h"
+#include "gui/modules_loader.h"
 #include "filter_sequencer.h"
 #include "randomize.h"
 #include "preset_io.h"
@@ -103,6 +104,13 @@ static constexpr double slotX[3]={16.,452.,888.};
   aztec::Editor* owner;
 @private
   NSImage* artwork;
+  // Per-module PNG artwork layers (Granulizer.png, PreSlicer.png, ...). One
+  // independent visual layer per module, resolved from the replaceable skin
+  // folder: <skinDir>/modules/<name>.png (+ @2x/ retina sibling). When a
+  // layer is present it replaces that module's vector panel() so the PNG can
+  // be edited/swapped without touching code; missing layers fall back to the
+  // current vector-on-background rendering, pixel-for-pixel as before.
+  NSMutableArray<NSImage*>* moduleLayers;
   NSImage* knobFace;   // user-supplied knobOK.png face (assets/sprites/knob.png)
   NSString* skinDir;   // runtime skin folder: <bundle Resources>/GrainsDosage-skin
                        // (or ./GrainsDosage-skin next to the binary). Drop your
@@ -131,6 +139,7 @@ static constexpr double slotX[3]={16.,452.,888.};
 - (void)chooseSkin:(NSMenuItem*)item;
 - (void)choosePreset:(NSMenuItem*)item;
 - (BOOL)controlsFit;
+- (NSInteger)moduleIndexForRect:(NSRect)r;
 - (void)stop;
 - (void)tick:(NSTimer*)tick;
 - (void)choose:(NSMenuItem*)item;
@@ -175,6 +184,47 @@ static constexpr double slotX[3]={16.,452.,888.};
        if(exists(path)){bg=path;seedSkin(@"background",path);}}
      artwork=bg?[[NSImage alloc] initWithContentsOfFile:bg]:nil;
      if(artwork)artwork.size=NSMakeSize(2048,1520);}
+    // ---- Per-module PNG artwork layers ---------------------------------------
+    // Granulizer.png / PreSlicer.png / BeatRepeater.png / Modulation.png /
+    // Morph.png / Reslice.png / Gater.png / Filter.png / Reverb.png /
+    // FilterSeq.png / MasterOut.png — one independent visual layer per module.
+    // Search order per layer (same replaceable-folder contract as background):
+    //   1. <skinDir>/modules/<name>.png   (+ @2x/ retina sibling rep)
+    //   2. repo assets/modules/<name>.png (dev layout fallback, seeds the folder)
+    // Absent layer -> nil entry -> panel() vector fallback keeps the current
+    // look pixel-for-pixel, so shipping without the PNGs changes nothing.
+    moduleLayers=[NSMutableArray arrayWithCapacity:aztec::gui::kModuleImages.size()];
+    {auto exists2=[](NSString* p){return p&&[[NSFileManager defaultManager] fileExistsAtPath:p];};
+     for(size_t i=0;i<aztec::gui::kModuleImages.size();++i){
+      const auto& img=aztec::gui::kModuleImages[i];
+      NSString* name=[NSString stringWithUTF8String:img.name];
+      NSImage* layer=nil;
+      NSString* runtimeFile=[skinDir stringByAppendingFormat:@"/modules/%@.png",name];
+      NSString* runtimeRetina=[skinDir stringByAppendingFormat:@"/modules/@2x/%@.png",name];
+      if(exists(runtimeFile)){
+        layer=[[NSImage alloc] initWithContentsOfFile:runtimeFile];
+        if(exists2(runtimeRetina)){
+          NSImage* hi=[[NSImage alloc] initWithContentsOfFile:runtimeRetina];
+          if(hi.representations.count)[layer addRepresentation:hi.representations.firstObject];}}
+      if(!layer||!layer.representations.count){
+        // Dev layout: read straight from the repo artwork and seed it into the
+        // writable skin folder so users have a real file to edit per module.
+        NSString* file=[@("assets/modules/") stringByAppendingString:name];
+        file=[file stringByAppendingPathExtension:@"png"];
+        if(!exists(file))file=[@"GrainsDosage/assets/modules/" stringByAppendingFormat:@"%@.png",name];
+        NSString* hiFile=exists(file)?[file stringByReplacingOccurrencesOfString:@"/modules/" withString:@"/modules/@2x/"]:nil;
+        if(exists(file)){
+          layer=[[NSImage alloc] initWithContentsOfFile:file];
+          if(exists2(hiFile)){
+            NSImage* hi=[[NSImage alloc] initWithContentsOfFile:hiFile];
+            if(hi.representations.count)[layer addRepresentation:hi.representations.firstObject];}
+          NSString* dst=[skinDir stringByAppendingFormat:@"/modules/%@.png",name];
+          if(!exists(dst)){
+            [[NSFileManager defaultManager] createDirectoryAtPath:[dst stringByDeletingLastPathComponent]
+                                  withIntermediateDirectories:YES attributes:nil error:nil];
+            [[NSFileManager defaultManager] copyPath:file toPath:dst handler:nil];}}}
+      if(layer)layer.size=NSMakeSize(img.width,img.height);  // canvas units
+      [moduleLayers addObject:layer?:[NSNull null]];}}
     sprites=[NSMutableDictionary dictionary];
     NSArray<NSString*>* spriteNames=@[@"knob",@"slider",@"step",@"header-left",@"header-right",@"xy-nebula"];
     NSArray<NSString*>* spriteKeys=@[@"385,260,76,76",@"453,636,24,32",@"734,456,54,48",@"1850,12,136,104",@"1726,15,95,104",@"nebula"];
@@ -249,7 +299,30 @@ static constexpr double slotX[3]={16.,452.,888.};
   if(!artwork)return;source.origin.y=artwork.size.height-source.origin.y-source.size.height;
   [artwork drawInRect:dest fromRect:source operation:NSCompositingOperationSourceOver fraction:opacity respectFlipped:YES hints:nil];
 }
+- (NSInteger)moduleIndexForRect:(NSRect)r {
+  // Match a panel() rect against the kModuleImages canvas positions. The three
+  // top-row slots share one module identity (Granulizer/PreSlicer/BeatRepeater
+  // swap by drag order), so slot rects always resolve to their index 0/1/2.
+  for(size_t i=0;i<aztec::gui::kModuleImages.size();++i){
+    const auto& img=aztec::gui::kModuleImages[i];
+    if(std::abs(r.origin.x-img.canvasX)<1&&std::abs(r.origin.y-img.canvasY)<1&&
+       std::abs(r.size.width-img.width)<1&&std::abs(r.size.height-img.height)<1)
+      return NSInteger(i);}
+  return -1;
+}
 - (void)panel:(NSRect)r {
+  // Per-module PNG artwork layer wins when present: the panel becomes an
+  // independent visual layer that can be edited/swapped without a rebuild.
+  // All controls keep drawing on top at their exact current positions.
+  NSInteger moduleIndex=[self moduleIndexForRect:r];
+  if(moduleIndex>=0&&moduleIndex<(NSInteger)moduleLayers.count){
+    id entry=moduleLayers[(NSUInteger)moduleIndex];
+    if(entry!=(id)[NSNull null]){
+      NSImage* layer=(NSImage*)entry;
+      [NSGraphicsContext currentContext].imageInterpolation=NSImageInterpolationHigh;
+      [layer drawInRect:r fromRect:NSZeroRect operation:NSCompositingOperationSourceOver
+                fraction:1. respectFlipped:YES hints:nil];
+      return;}}
   box(r,AZSKIN(kPanel),AZSKIN(kFiligree),12.);
   box(NSInsetRect(r,3,3),[NSColor clearColor],AZSKIN(kBorderDark),10.);
   // Vector edge filigree stays in the border, clear of labels and hit areas.
