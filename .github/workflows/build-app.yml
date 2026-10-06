@@ -1,5 +1,71 @@
-git add .
-git commit -m "Add GitHub Actions workflow for app download"
-git push origin main
+name: Build & Package App
 
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'src/**'
+      - 'index.html'
+      - 'package.json'
+      - 'vite.config.js'
+      - 'tsconfig.json'
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag (e.g. v1.0.0) — leave empty for artifact only'
+        required: false
+        type: string
 
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Application
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Build production bundle
+        run: npm run build
+
+      - name: Package dist as ZIP
+        run: |
+          cd dist
+          zip -r ../grainsdosage-skin-splitter.zip .
+          cd ..
+          echo "ZIP_SIZE=$(du -h grainsdosage-skin-splitter.zip | cut -f1)" >> $GITHUB_ENV
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: grainsdosage-skin-splitter
+          path: grainsdosage-skin-splitter.zip
+          retention-days: 30
+
+      - name: Job summary
+        run: |
+          echo "## ✅ Build Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Detail | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Branch | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| ZIP Size | ${{ env.ZIP_SIZE }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Artifact | grainsdosage-skin-splitter.zip |" >> $GITHUB_STEP_SUMMARY
