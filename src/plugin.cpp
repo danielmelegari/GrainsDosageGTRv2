@@ -187,6 +187,10 @@ class Processor final : public AudioEffect {
   void handleTrigger(ParamID id,double v) {
     if(id==kFreeze){if((v>=.5)!=engine_.isFrozen())freezePending_=true;return;}
     if(id==kRandomAll&&v>=.5){randomAllPending_=true;p_[id]=0.;return;}
+    // TAB is UI state that lives in the parameter array (persisted through
+    // getState/loadState), but it must stay writable for the editor even though
+    // its VST3 registration is read-only/hidden: accept editor writes here.
+    if(id==kUiTab){p_[id]=std::clamp(v,0.,1.);return;}
   }
   void applyRandomAll() {
     // Re-roll every control of all three modules (the same ranges the per-module
@@ -272,7 +276,7 @@ public:
           if(std::isfinite(v)) {
             // FREEZE / RANDOM ALL arrive as momentary triggers (>= .5): consume
             // them here instead of storing, so p_ only ever holds 0 for those ids.
-            if(id==int(kFreeze)||id==int(kRandomAll)) handleTrigger(ParamID(id),v);
+            if(id==int(kFreeze)||id==int(kRandomAll)||id==int(kUiTab)) handleTrigger(ParamID(id),v);
             else p_[id]=std::clamp(v,0.,1.);
             changed=true;
           }
@@ -581,6 +585,13 @@ public:
     {auto* randomAll=new StringListParameter(STR16("Randomize All"),kRandomAll);
      randomAll->appendString(STR16("Off"));randomAll->appendString(STR16("Trigger"));
      randomAll->getInfo().defaultNormalizedValue=0.;randomAll->setNormalized(0.);parameters.addParameter(randomAll);}
+    // ACTIVE TAB is UI state persisted with the program data (getState writes it
+    // in the tail loop). It is registered read-only+hidden so it never appears
+    // in the host's parameter list or automation browser; the processor accepts
+    // editor writes to it through handleTrigger() despite those flags.
+    {auto* tab=new RangeParameter(STR16("Active Tab"),kUiTab,nullptr,0,1,0);
+     tab->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;
+     parameters.addParameter(tab);}
     for(int id=kUiResliceSource0;id<=kUiFilterSeqStep;++id){auto* monitor=new RangeParameter(STR16("Sequencer Display"),id,nullptr,0,1,0);monitor->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(monitor);}
     for(int l=0;l<4;++l)for(int t=0;t<8;++t)getParameterObject(routeID(l,t))->getInfo().flags=ParameterInfo::kIsHidden;
     getParameterObject(kFeedback)->getInfo().flags=ParameterInfo::kIsHidden;

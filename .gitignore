@@ -1,2 +1,6 @@
 # Logs
 *.log
+
+# local test builds
+tbuild/
+build-*/

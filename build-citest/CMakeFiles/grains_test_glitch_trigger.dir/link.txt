@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/grains_test_glitch_trigger.dir/test_glitch_trigger.cpp.o -o grains_test_glitch_trigger 

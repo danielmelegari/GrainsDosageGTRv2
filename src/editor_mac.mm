@@ -108,6 +108,22 @@ static bool bipolar(aztec::ParamID id) {
 }
 static const char* names[3]={"GRANULIZER","PRESLICER","BEAT REPEATER"};
 static constexpr double slotX[3]={16.,452.,888.};
+// Tab strip: FIVE buttons on top, one card per module — GRANULIZER /
+// PRESLICER / BEAT REPEATER / RESLICE / GATER. There are no solo buttons and
+// no stacked artefact tabs: each card owns the full-width panel area from
+// extreme left to extreme right (x=16..1304, y=98..502), and switching cards
+// flips instantly between the five processors to morph between artefacts.
+// Modulation / Morph / Filter / Reverb live under the cards and stay visible.
+static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLICE","GATER"};
+// Tab strip geometry (canvas coordinates): five equal buttons in one row at
+// y=84, directly under the header panel (which ends at y=81) and above the
+// module cards (which start at y=98). Five 250 px buttons with 3 px gaps =
+// 1286 px starting at x=17 -> right edge 1303, inside the 1320 canvas. Shared
+// by the Cocoa paint/hit-test pass and mirrored by the Win32 editor.
+inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
+  double ax=17.;for(int k=0;k<i;++k)ax+=253.;
+  x=ax;y=84;w=250;h=14;
+}
 
 @interface GrainsSurface:NSView {
 @public
@@ -150,6 +166,8 @@ static constexpr double slotX[3]={16.,452.,888.};
 - (void)choosePreset:(NSMenuItem*)item;
 - (BOOL)controlsFit;
 - (NSInteger)moduleIndexForRect:(NSRect)r;
+- (int)hitTab:(NSPoint)p;
+- (void)drawTabs;
 - (void)stop;
 - (void)tick:(NSTimer*)tick;
 - (void)choose:(NSMenuItem*)item;
@@ -159,6 +177,11 @@ static constexpr double slotX[3]={16.,452.,888.};
 - (instancetype)initWithFrame:(NSRect)frame {
   self=[super initWithFrame:frame];if(self){
     presetName=@"PRESETS ▾";
+    // Tab strip (Option B): the Cocoa editor owns its own selection state for
+    // the per-step step-sequencer widgets (mirrors the Win32 editor). The tab
+    // itself lives in kUiTab. These must be initialised before any layout is
+    // built - otherwise every dependent row (STEP LENGTH / SUSTAIN / SOURCE
+    // SLICE / DESTINATION) reads garbage indices and controls land off-canvas.
     selectedGate=selectedReslice=0;
     randomSeed=arc4random()|1;selectedLfo=selectedRepeat=0;dragID=dragSlot=dropSlot=-1;dragXY=false;cached.fill(-1.);
     // ---- Runtime skin folder -------------------------------------------------
@@ -286,6 +309,15 @@ static constexpr double slotX[3]={16.,452.,888.};
   NSPoint p=[self convertPoint:event.locationInWindow fromView:nil];return NSMakePoint(p.x*aztec::canvasW/self.bounds.size.width,p.y*aztec::canvasH/self.bounds.size.height);
 }
 - (int)order {return std::clamp(int(std::round(owner->value(aztec::kModuleOrder)*6.)),0,6);}
+- (int)tab {return aztec::tabFromValue(owner->value(aztec::kUiTab));}
+// The tab strip is the single source of truth for the top-row cards: the
+// active card selects which module owns the full-width panel area. Audio
+// routing keeps following kModuleOrder (the AUDIO ORDER control), untouched.
+- (void)chooseTab:(int)tab {
+  if(!owner||tab<0||tab>=aztec::tabCount)return;
+  owner->edit(aztec::kUiTab,aztec::tabToValue(tab));
+  [self setNeedsDisplay:YES];
+}
 - (int)stage:(int)slot {int order=[self order];return aztec::moduleOrders[order>=6?0:order][slot];}
 - (int)slot:(int)stage {for(int i=0;i<3;++i)if([self stage:i]==stage)return i;return 0;}
 - (void)add:(aztec::ParamID)id x:(double)x y:(double)y w:(double)w h:(double)h kind:(aztec::Kind)kind label:(const char*)name {
@@ -293,6 +325,7 @@ static constexpr double slotX[3]={16.,452.,888.};
 }
 - (void)layoutControls {
   using namespace aztec;controls.clear();
+  const int currentTab=[self tab];   // shared layout (.inl) reads this
 #define ADD(ID,X,Y,W,H,K,L) [self add:(ID) x:(X) y:(Y) w:(W) h:(H) kind:(K) label:(L)]
   auto slot=[&](int stage){return [self slot:stage];};
   auto value=[&](ParamID id){return owner->value(id);};
@@ -308,6 +341,22 @@ static constexpr double slotX[3]={16.,452.,888.};
   if(sprite){[NSGraphicsContext currentContext].imageInterpolation=NSImageInterpolationHigh;[sprite drawInRect:dest fromRect:NSMakeRect(0,0,sprite.size.width,sprite.size.height) operation:NSCompositingOperationSourceOver fraction:opacity respectFlipped:YES hints:nil];return;}
   if(!artwork)return;source.origin.y=artwork.size.height-source.origin.y-source.size.height;
   [artwork drawInRect:dest fromRect:source operation:NSCompositingOperationSourceOver fraction:opacity respectFlipped:YES hints:nil];
+}
+- (int)hitTab:(NSPoint)p {
+  // Tab strip hit test (see tabRectAt for geometry). Returns -1 when the point
+  // is outside every tab button so callers fall through to the legacy handlers.
+  for(int i=0;i<5;++i){double x,y,w,h;tabRectAt(i,x,y,w,h);
+    if(NSPointInRect(p,NSMakeRect(x,y,w,h)))return i;}
+  return -1;
+}
+- (void)drawTabs {
+  const int active=[self tab];
+  for(int i=0;i<5;++i){
+    double x,y,w,h;tabRectAt(i,x,y,w,h);NSRect r=NSMakeRect(x,y,w,h);
+    bool on=i==active;
+    box(r,on?AZSKIN(kAccentGlow):AZSKIN(kPanelRaised),on?green():AZSKIN(kFiligreeDim),4);
+    label(@(tabNames[i]),NSMakeRect(x,y+1,w,h-2),9,on?onText():cream(),true);
+  }
 }
 - (NSInteger)moduleIndexForRect:(NSRect)r {
   // Match a panel() rect against the kModuleImages canvas positions. The three
@@ -471,6 +520,7 @@ static constexpr double slotX[3]={16.,452.,888.};
   label(declickOn?@"ON":@"OFF",NSMakeRect(684,63,56,16),10,declickOn?onText():cream(),true);}
   box(NSMakeRect(748,56,46,28),AZSKIN(kPanelRaised),AZSKIN(kFiligree),5);label(@"LOAD",NSMakeRect(748,63,46,16),10,cream(),true);
   box(NSMakeRect(800,56,46,28),AZSKIN(kPanelRaised),AZSKIN(kFiligree),5);label(@"SAVE",NSMakeRect(800,63,46,16),10,cream(),true);
+  [self drawTabs];   // tab strip (Option B): five switchable modules + artefact tabs
   for(int slot=0;slot<3;++slot){
     int stage=[self stage:slot];double x=slotX[slot];
     [self panel:NSMakeRect(x,98,416,404)];
@@ -667,6 +717,7 @@ static constexpr double slotX[3]={16.,452.,888.};
 - (void)mouseDown:(NSEvent*)event {
   if(!owner)return;[self.window makeFirstResponder:self];NSPoint p=[self logical:event];[self layoutControls];
   if(NSPointInRect(p,NSMakeRect(806,22,38,30))){[self stepPreset:-1];return;}// PRESET <
+  {int tabHit=[self hitTab:p];if(tabHit>=0){[self chooseTab:tabHit];return;}}// TAB STRIP
   if(NSPointInRect(p,NSMakeRect(848,22,38,30))){[self stepPreset:1];return;}// PRESET >
   if(NSPointInRect(p,NSMakeRect(420,22,380,30))){[self presetMenu:event];return;}
   if(NSPointInRect(p,NSMakeRect(548,56,130,28))){// SENSITIVITY drag

@@ -226,8 +226,11 @@ class WinEditor final:public CPluginView{
   int order()const{return std::clamp(int(std::round(value(kModuleOrder)*6)),0,6);}
   int stage(int i)const{return moduleOrders[order()==6?0:order()][i];}
   int slot(int st)const{for(int i=0;i<3;++i)if(stage(i)==st)return i;return 0;}
+  int tab()const{return aztec::tabFromValue(value(kUiTab));}
+  void chooseTab(int t){t=std::clamp(t,0,tabCount-1);edit(kUiTab,tabToValue(t));InvalidateRect(window,nullptr,FALSE);}
   void layout(){controls.clear();
 #define ADD(ID,X,Y,W,H,K,L) controls.push_back({ParamID(ID),double(X),double(Y),double(W),double(H),K,L})
+  const int currentTab=tab();
 #include "editor_layout_win.inl"
 #undef ADD
   }

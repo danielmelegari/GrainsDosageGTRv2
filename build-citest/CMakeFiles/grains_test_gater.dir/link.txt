@@ -1,1 +1,0 @@
-/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/grains_test_gater.dir/test_gater.cpp.o -o grains_test_gater 

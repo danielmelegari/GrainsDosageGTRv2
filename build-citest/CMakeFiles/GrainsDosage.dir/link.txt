@@ -1,1 +1,0 @@
-/usr/bin/c++ -fPIC -O3 -DNDEBUG -shared  -o VST3/Release/GrainsDosage.vst3/Contents/x86_64-linux/GrainsDosage.so CMakeFiles/GrainsDosage.dir/src/plugin.cpp.o CMakeFiles/GrainsDosage.dir/tmp/vst3sdk/public.sdk/source/main/linuxmain.cpp.o  lib/Release/libsdk.a lib/Release/libsdk_common.a lib/Release/libbase.a lib/Release/libpluginterfaces.a -lstdc++fs -lpthread -ldl 
