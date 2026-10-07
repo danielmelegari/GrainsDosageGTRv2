@@ -80,6 +80,7 @@ qg::Settings settings(const std::array<double, kCount>& saved, double tempo, dou
   s.repeatAuto=value(p,kRepeatAuto)>=.5;s.repeatInterval=captureIntervals[int(std::round(value(p,kRepeatInterval)*7.))];
   s.repeatDuration=.25+value(p,kRepeatDuration)*7.75;s.repeatChance=value(p,kRepeatChance);
   s.order=std::min(6,int(std::round(value(p,kModuleOrder)*6.)));
+  s.routing=int(std::round(value(p,kRoutingOrder)*120.))-1;
   // Global BYPASS button removed from the plugin: kBypassReserved stays in the enum only so
   // legacy state/preset IDs keep their positions, but it is never read anymore.
   s.bypass=false; s.densityFlow=value(p,kDensityFlow)>=.5; s.transpose=value(p,kTranspose)*96.-48.;
@@ -100,7 +101,7 @@ qg::Settings settings(const std::array<double, kCount>& saved, double tempo, dou
     l.gateReset=value(p,base+lReset)>=.5; l.glide=.01+value(p,base+lGlide)*.99;
     for(int t=0;t<8;++t) l.amount[t]=value(p,routeID(i,t))*2.-1.;
     const double speeds[]={.25,.5,1.,2.};l.speed=speeds[int(std::round(value(p,kLfoSpeed0+i)*3.))];l.waveRandom=int(std::round(value(p,kModWaveRnd0+i)*4.));
-    for(int slot=0;slot<6;++slot){int target=int(std::round(value(p,slotTarget(i,slot))*qg::modTargetCount))-1;if(target>=0&&target<qg::modTargetCount)l.amount[target]+=value(p,slotAmount(i,slot))*2.-1.;}
+    for(int slot=0;slot<6;++slot){int target=int(std::round(value(p,slotTarget(i,slot))*qg::modTargetCount))-1;if(target>=0&&target<qg::modTargetCount){double amount=value(p,slotAmount(i,slot))*2.-1.;int polarity=int(std::round(value(p,slotPolarity(i,slot))*2.));if(polarity==1)l.positive[target]+=std::abs(amount);else if(polarity==2)l.negative[target]+=std::abs(amount);else l.amount[target]+=amount;}}
   }
   return s;
 }
@@ -110,14 +111,15 @@ std::array<double,kCount> defaults(){return initialParameters();}
 static constexpr int kParamEnd = int(kUiFilterSeqStep) + 1;
 bool loadState(IBStream* stream, std::array<double,kCount>& p) {
   IBStreamer in(stream,kLittleEndian); int32 magic=0;
-  if(!in.readInt32(magic) || (magic!=0x51473130 && magic!=0x51473131 && magic!=0x51473132 && magic!=0x51473133 && magic!=0x51473134 && magic!=0x51473135 && magic!=0x51473136 && magic!=0x51473137 && magic!=0x51473138 && magic!=0x51473139 && magic!=0x5147313A && magic!=0x5147313B && magic!=0x5147313C && magic!=0x5147313D && magic!=0x5147313E && magic!=0x5147313F && magic!=0x51473140 && magic!=0x51473141 && magic!=0x51473142 && magic!=0x51473143 && magic!=0x51473144 && magic!=0x51473145)) return false;
+  if(!in.readInt32(magic) || (magic!=0x51473130 && magic!=0x51473131 && magic!=0x51473132 && magic!=0x51473133 && magic!=0x51473134 && magic!=0x51473135 && magic!=0x51473136 && magic!=0x51473137 && magic!=0x51473138 && magic!=0x51473139 && magic!=0x5147313A && magic!=0x5147313B && magic!=0x5147313C && magic!=0x5147313D && magic!=0x5147313E && magic!=0x5147313F && magic!=0x51473140 && magic!=0x51473141 && magic!=0x51473142 && magic!=0x51473143 && magic!=0x51473144 && magic!=0x51473145 && magic!=0x51473146)) return false;
   auto result=defaults();
   // Layouts: legacy versions store `count` plain doubles. Current saves
   // (0x51473145, written by getState) use the same prefix plus three extra
   // fields injected after kParamEnd: buffer size, freeze flag, then the array
   // continues at kGrainBuffer+2 through kCount-1.
-  const bool current=magic==0x51473145;
-  const int count = current ? int(kParamEnd) : magic==0x51473144 ? int(kCount) : magic==0x51473143 ? int(kResliceRndOn) : magic==0x51473130 ? int(kGrainMix) : (magic==0x51473131 ? int(kLfo0) : (magic==0x51473132 ? int(kLegacyCount) : (magic==0x51473133 ? int(kModuleOrder) : (magic==0x51473134 ? int(kExtraRoutes0) : (magic==0x51473135 ? int(kGlitchMove) : (magic==0x51473136 ? int(kMasterFilter) : (magic==0x51473137 ? int(kNormalize) : (magic==0x51473138 ? int(kReverbLength) : (magic==0x51473139 ? int(kUiWave0) : (magic==0x5147313A ? int(kLfoSlots0) : (magic==0x5147313B ? int(kModWaveRnd0) : (magic==0x5147313C ? int(kReverbSource) : (magic==0x5147313D ? int(kLimiterCeiling) : (magic==0x5147313E ? int(kGaterEnabled) : (magic==0x5147313F ? int(kInputDeclick) : (magic==0x51473140 ? int(kFilterModel) : (magic==0x51473141 ? int(kGaterMinLength) : int(kGlitchTriggerRate))))))))))))))))));
+  const bool current=magic>=0x51473145;
+  const int storedEnd=magic==0x51473146?int(kCount):kLegacySkinCount;
+  const int count = current ? int(kParamEnd) : magic==0x51473144 ? kLegacySkinCount : magic==0x51473143 ? int(kResliceRndOn) : magic==0x51473130 ? int(kGrainMix) : (magic==0x51473131 ? int(kLfo0) : (magic==0x51473132 ? int(kLegacyCount) : (magic==0x51473133 ? int(kModuleOrder) : (magic==0x51473134 ? int(kExtraRoutes0) : (magic==0x51473135 ? int(kGlitchMove) : (magic==0x51473136 ? int(kMasterFilter) : (magic==0x51473137 ? int(kNormalize) : (magic==0x51473138 ? int(kReverbLength) : (magic==0x51473139 ? int(kUiWave0) : (magic==0x5147313A ? int(kLfoSlots0) : (magic==0x5147313B ? int(kModWaveRnd0) : (magic==0x5147313C ? int(kReverbSource) : (magic==0x5147313D ? int(kLimiterCeiling) : (magic==0x5147313E ? int(kGaterEnabled) : (magic==0x5147313F ? int(kInputDeclick) : (magic==0x51473140 ? int(kFilterModel) : (magic==0x51473141 ? int(kGaterMinLength) : int(kGlitchTriggerRate))))))))))))))))));
   for(int i=0;i<count;++i) {
     double v=0.; if(!in.readDouble(v) || !std::isfinite(v)) return false;
     // kBypassReserved keeps its legacy position in the stream; the global bypass
@@ -133,7 +135,7 @@ bool loadState(IBStream* stream, std::array<double,kCount>& p) {
     // FREEZE is a sustained state (the engine keeps recording stopped while it
     // holds); RANDOM ALL and the PRESET < / > slots stay momentary/inert.
     result[kFreeze]=frozen>=.5?1.:0.;
-    for(int i=kFreeze+1;i<int(kCount);++i) {
+    for(int i=kFreeze+1;i<storedEnd;++i) {
       double v=0.; if(!in.readDouble(v) || !std::isfinite(v)) return false;
       result[i]=std::clamp(v,0.,1.);
     }
@@ -231,7 +233,7 @@ public:
   }
   tresult PLUGIN_API getState(IBStream* stream) override {
     IBStreamer out(stream,kLittleEndian);
-    if(!out.writeInt32(0x51473145)) return kResultFalse;
+    if(!out.writeInt32(0x51473146)) return kResultFalse;
     for(int i=0;i<kParamEnd;++i) if(!out.writeDouble(p_[i])) return kResultFalse;
     // v0.14 additions: buffer size, freeze state, then the remaining tail ids
     // (RANDOM/PRESET slots) written like any other array entry.
@@ -349,6 +351,7 @@ public:
       waveCountdown_=std::max(1,int(rate_/30.));auto wave=engine_.grainView();
       auto emit=[&](int id,double v){int32 index=0;auto* q=data.outputParameterChanges->addParameterData(ParamID(id),index);if(q)q->addPoint(data.numSamples-1,v,index);};
       for(int i=0;i<128;++i)emit(kUiWave0+i,wave.amplitude[i]);
+      for(int i=0;i<waveformBins;++i){emit(kUiWaveLow0+i,(wave.low[i]+1.)*.5);emit(kUiWaveHigh0+i,(wave.high[i]+1.)*.5);}
       for(int i=0;i<16;++i)emit(kUiResliceSource0+i,engine_.resliceSource(i)/15.);emit(kUiFilterSeqStep,engine_.filterSequenceStep()/31.);emit(kUiResliceStep,engine_.resliceStep()/15.);emit(kUiResliceActive,engine_.resliceActive()?1.:0.);emit(kUiGaterStep,engine_.gaterStep()/15.);for(int i=0;i<16;++i){emit(kUiGaterState0+i,engine_.gaterState(i)?1.:0.);emit(kUiGaterLength0+i,engine_.gaterLength(i));}emit(kUiReverbGate,!s.bypass&&engine_.reverbGate()?1.:0.);emit(kUiGrainStart,wave.start);emit(kUiGrainEnd,wave.end);emit(kUiGrainHead,wave.head);emit(kUiGrainActive,!s.bypass&&wave.active?1.:0.);emit(kUiWaveSeconds,wave.seconds/16.);for(int i=0;i<4;++i){emit(kUiModWave0+i,engine_.lfoWave(i)/129.);emit(kUiLfoPhase0+i,engine_.lfoPhase(i));emit(kUiLfoCycle0+i,std::clamp((double(engine_.lfoCycle(i))+2147483648.)/4294967295.,0.,1.));emit(kUiLfoEpoch0+i,std::clamp((double(engine_.lfoEpoch(i))+2147483648.)/4294967295.,0.,1.));}
     }
     fallbackBeat_ += data.numSamples * beatIncrement;
@@ -593,6 +596,16 @@ public:
      tab->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;
      parameters.addParameter(tab);}
     for(int id=kUiResliceSource0;id<=kUiFilterSeqStep;++id){auto* monitor=new RangeParameter(STR16("Sequencer Display"),id,nullptr,0,1,0);monitor->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(monitor);}
+    for(int l=0;l<4;++l)for(int slot=0;slot<6;++slot){
+      char ascii[64];String128 name{};std::snprintf(ascii,sizeof(ascii),"Mod %d Polarity %d",l+1,slot+1);UString(name,128).fromAscii(ascii);
+      auto* polarity=new StringListParameter(name,slotPolarity(l,slot));
+      polarity->appendString(STR16("+/-"));polarity->appendString(STR16("+"));polarity->appendString(STR16("-"));parameters.addParameter(polarity);
+    }
+    {auto* routing=new StringListParameter(STR16("Five Module Routing"),kRoutingOrder);
+      routing->appendString(STR16("Preset / legacy routing"));
+      const char* names[]={"Granulizer","Preslicer","BeatRepeater","Reslice","Gater"};
+      for(int i=0;i<120;++i){std::string label;for(int stage:fiveModuleOrder(i)){if(!label.empty())label+=" > ";label+=names[stage];}String128 name{};UString(name,128).fromAscii(label.c_str());routing->appendString(name);}parameters.addParameter(routing);}
+    for(int id=kUiWaveLow0;id<int(kCount);++id){auto* monitor=new RangeParameter(STR16("Waveform Envelope"),id,nullptr,0,1,.5);monitor->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(monitor);}
     for(int l=0;l<4;++l)for(int t=0;t<8;++t)getParameterObject(routeID(l,t))->getInfo().flags=ParameterInfo::kIsHidden;
     getParameterObject(kFeedback)->getInfo().flags=ParameterInfo::kIsHidden;
 
@@ -626,3 +639,4 @@ DEF_CLASS2(INLINE_UID_FROM_FUID(processorID), PClassInfo::kManyInstances, kVstAu
 DEF_CLASS2(INLINE_UID_FROM_FUID(controllerID), PClassInfo::kManyInstances, kVstComponentControllerClass,
            "GrainsDosage Controller", 0, "", "0.13.0", kVstVersionString, Controller::create)
 END_FACTORY
+

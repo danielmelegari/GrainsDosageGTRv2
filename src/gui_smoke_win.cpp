@@ -14,13 +14,13 @@ int main(){try{
  auto click=[&](double x,double y){send(WM_LBUTTONDOWN,x,y);send(WM_LBUTTONUP,x,y);};
  auto toggle=[&](int id,double x,double y){double old=c->getParamNormalized(id);click(x,y);check(c->getParamNormalized(id)==(old>=.5?0.:1.),"Toggle binding");c->setParamNormalized(id,old);};
  using namespace aztec;
- toggle(kFreeze,440,526);toggle(kInputDeclick,1350,66);toggle(kXYEnable,1160,928);toggle(kMasterFilter,209,1158);toggle(kMasterLimiter,700,1481);
- c->setParamNormalized(kSize,.25);send(WM_LBUTTONDOWN,158,338);send(WM_MOUSEMOVE,158,293);send(WM_LBUTTONUP,158,293);check(std::abs(c->getParamNormalized(kSize)-.5)<.015,"Knob drag");
- send(WM_LBUTTONDBLCLK,158,338);send(WM_LBUTTONUP,158,338);check(std::abs(c->getParamNormalized(kSize)-.25)<1e-6,"Double click reset");
+ toggle(kFreeze,440,442);toggle(kInputDeclick,1350,66);toggle(kXYEnable,1545,703);toggle(kMasterFilter,209,1158);toggle(kMasterLimiter,700,1481);
+ c->setParamNormalized(kSize,.25);send(WM_LBUTTONDOWN,158,290);send(WM_MOUSEMOVE,158,245);send(WM_LBUTTONUP,158,245);check(std::abs(c->getParamNormalized(kSize)-.5)<.015,"Knob drag");
+ send(WM_LBUTTONDBLCLK,158,290);send(WM_LBUTTONUP,158,290);check(std::abs(c->getParamNormalized(kSize)-.25)<1e-6,"Double click reset");
  const ParamID enabled[]={kGrainEnabled,kGlitchEnabled,kRepeatEnabled,kResliceEnabled,kGaterEnabled};
- for(int t=0;t<5;++t){click(140+256*t,135);check(tabFromValue(c->getParamNormalized(kUiTab))==t,"Tab hit target");toggle(enabled[t],1190,526);UpdateWindow(child);}
- toggle(kGaterState0,77,650);click(140+3*256,135);toggle(kResliceRndOn,700,273);
- click(140,135);click(688+105*2,885);toggle(lfoID(2,lEnabled),540,882);
+ for(int t=0;t<5;++t){click(140+252*t,135);check(tabFromValue(c->getParamNormalized(kUiTab))==t,"Tab hit target");toggle(enabled[t],1190,442);auto led=mockup::ledRect(t);toggle(enabled[t],led.x+led.w/2,led.y+led.h/2);UpdateWindow(child);}
+ toggle(kGaterState0,77,536);click(140+3*252,135);toggle(kResliceRndOn,700,273);
+ click(140,135);click(688+105*2,703);toggle(lfoID(2,lEnabled),540,703);
  click(mockup::xy.x+13,mockup::xy.y+13);check(c->getParamNormalized(kXYX)<.015&&c->getParamNormalized(kXYY)>.985,"XY corner");
  ViewRect resized(0,0,816,759);check(view->checkSizeConstraint(&resized)==kResultOk,"Resize constraint");check(view->onSize(&resized)==kResultOk,"Resize");UpdateWindow(child);
  view->removed();view->release();c->terminate();c->release();DestroyWindow(parent);std::cout<<"PASS: native skin, tabs, controls, XY and resize\n";return 0;

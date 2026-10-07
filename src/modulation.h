@@ -19,6 +19,7 @@ struct LfoSettings {
   double speed=1.;
   int waveRandom=0; // Off, 1/1, 1/2, 1/4, 1/8 (host quarter-note beats)
   double hz = 1., beats = 4., depth = 1., phase = 0., glide = 1.;
+  std::array<double, modTargetCount> positive{},negative{};
   std::array<double, modTargetCount> amount{}; // bipolar normalized destination range
 };
 using ModValues = std::array<double, modTargetCount>;
@@ -139,10 +140,14 @@ public:
     ModValues result=base;
     for(int i=0;i<lfoCount;++i) {
       const double value=lfos_[i].process(settings[i],beat,sampleRate,gateTrigger,gateStep);
-      for(int target=0;target<modTargetCount;++target) result[target]+=value*settings[i].amount[target];
+      if(!settings[i].enabled)continue;
+      const double unipolar=(value+std::clamp(settings[i].depth,0.,1.))*.5;
+      for(int target=0;target<modTargetCount;++target)
+        result[target]+=value*settings[i].amount[target]+unipolar*(settings[i].positive[target]-settings[i].negative[target]);
     }
     for(auto& value:result) value=std::clamp(value,0.,1.);
     return result;
   }
 };
 }
+

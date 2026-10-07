@@ -407,6 +407,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
     [str drawInRect:NSMakeRect(r.x,r.y+(r.h-size*1.2)/2,r.w,size*1.4) withAttributes:@{NSFontAttributeName:font,NSForegroundColorAttributeName:C(color),NSParagraphStyleAttributeName:style,NSShadowAttributeName:shadow}];
   };
   painter.line=[](double x,double y,double xx,double yy,skin::Rgb col,double width){NSBezierPath* path=[NSBezierPath bezierPath];[path moveToPoint:NSMakePoint(x,y)];[path lineToPoint:NSMakePoint(xx,yy)];[C(col) setStroke];path.lineWidth=width;[path stroke];};
+  painter.polygon=[](const std::vector<std::pair<double,double>>& pts,skin::Rgb col){if(pts.empty())return;NSBezierPath* path=[NSBezierPath bezierPath];[path moveToPoint:NSMakePoint(pts[0].first,pts[0].second)];for(size_t i=1;i<pts.size();++i)[path lineToPoint:NSMakePoint(pts[i].first,pts[i].second)];[path closePath];[C(col) setFill];[path fill];};
   painter.knob=[&](mockup::Rect r,double value){
     if(!knobFace){box(NSMakeRect(r.x,r.y,r.w,r.h),rgb(.7,.7,.7),cream(),r.w/2);return;}
     CGImageRef face=[knobFace CGImageForProposedRect:nullptr context:nil hints:nil];
@@ -513,6 +514,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
     for(int percent:{50,60,70,75,80,90,100}){NSMenuItem* item=[[NSMenuItem alloc] initWithTitle:[NSString stringWithFormat:@"%d%%",percent] action:@selector(chooseZoom:) keyEquivalent:@""];item.target=self;item.tag=percent;[menu addItem:item];}
     [NSMenu popUpContextMenu:menu withEvent:event forView:self];return;
   }
+  int led=mockup::hitLed(p.x,p.y);if(led>=0){auto id=mockup::stageEnabled[led];owner->edit(id,owner->value(id)>=.5?0.:1.);[self setNeedsDisplay:YES];return;}
   int tabHit=mockup::hitTab(p.x,p.y);if(tabHit>=0){[self chooseTab:tabHit];return;}
   int lfoHit=mockup::hitLfo(p.x,p.y);if(lfoHit>=0){selectedLfo=lfoHit;[self setNeedsDisplay:YES];return;}
   if(hit(mockup::random)){

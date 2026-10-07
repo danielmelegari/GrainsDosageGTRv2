@@ -52,6 +52,7 @@ struct Settings {
   bool freeze=false;        // hold the input stream: grains keep reading the frozen audio
   int freezeBucket=-1;      // BUFFER SIZE bucket captured when FREEZE engaged (-1 = none): a change re-freezes the new selection
   int order=6;
+  int routing=-1; // -1 keeps the legacy chain; 0..119 select all five stages
   uint16_t pattern = 0xAAAA;
   std::array<LfoSettings,lfoCount> lfos{};
 };
@@ -264,18 +265,26 @@ class Engine {
     return fire;
   }
 public:
-  struct GrainView{std::array<double,128> amplitude{};double start=0.,end=0.,head=0.,seconds=2.5;bool active=false;};
+  struct GrainView{std::array<double,aztec::waveformBins> low{},high{};std::array<double,128> amplitude{};double start=0.,end=0.,head=0.,seconds=2.5;bool active=false;};
   GrainView grainView()const{
     GrainView view;if(buffer_[0].empty())return view;
     const Voice* voice=nullptr;for(const auto& v:voices_)if(v.active&&(!voice||v.age<voice->age))voice=&v;
     double origin=voice?voice->read-voice->age*voice->increment:double(write_);
     // Follow the audible read position: the head stays centered while source audio scrolls.
     // Keep unavailable future/overwritten samples empty rather than wrapping stale audio.
-    double span=std::clamp(std::max(settings_.sampleRate*2.5,voice?2.*voice->length*voice->increment:0.),settings_.sampleRate*2.5,double(buffer_[0].size()-2));
+    double maxSpan=double(buffer_[0].size()-2);
+    double span=std::clamp(std::max(settings_.sampleRate*2.5,voice?2.*voice->length*voice->increment:0.),std::min(settings_.sampleRate*2.5,maxSpan),maxSpan);
     double center=voice?voice->read:double(write_);
     double left=center-span*.5;view.seconds=span/settings_.sampleRate;
     const double oldest=std::max(0.,double(write_)-double(buffer_[0].size())+1.);
-    for(int i=0;i<128;++i){double peak=0.;for(int j=0;j<8;++j){double pos=left+span*(i+(j+.5)/8.)/128.;if(pos>=oldest&&pos<double(write_)-1.)peak=std::max({peak,std::abs(read(0,pos)),std::abs(read(1,pos))});}view.amplitude[i]=std::min(1.,peak);}
+    // A bounded min/max envelope preserves waveform shape and polarity. Sample
+    // more positions than the old 128-bin absolute-peak display at the same 30 Hz.
+    for(int i=0;i<aztec::waveformBins;++i){double lo=0.,hi=0.;
+      for(int j=0;j<32;++j){double pos=left+span*(i+(j+.5)/32.)/aztec::waveformBins;
+        if(pos>=oldest&&pos<double(write_)-1.){double l=read(0,pos),r=read(1,pos);lo=std::min({lo,l,r});hi=std::max({hi,l,r});}}
+      view.low[i]=std::max(-1.,lo);view.high[i]=std::min(1.,hi);
+    }
+    for(int i=0;i<128;++i)view.amplitude[i]=std::max({-view.low[i*2],view.high[i*2],-view.low[i*2+1],view.high[i*2+1]});
     if(voice&&settings_.moduleOn[0]&&grainLevel_>.0001){view.active=true;view.start=std::clamp((origin-left)/span,0.,1.);view.end=std::clamp((origin+voice->length*voice->increment-left)/span,0.,1.);view.head=std::clamp((voice->read-left)/span,0.,1.);}
     return view;
   }
@@ -395,8 +404,8 @@ public:
     levelSmoothing_=std::exp(-1./(.003*settings_.sampleRate));
   }
   void set(Settings s) {
-    if(s.order!=settings_.order) { orderFade_=128; lastOrder_=settings_.order; }
-    if(s.order!=settings_.order){serialRepeat_.reset();serialGlitch_.reset();glitchBlock_=false;glitchClock_.reset();glitchUntil_=-1e30;}
+    if(s.order!=settings_.order||s.routing!=settings_.routing) { orderFade_=128; lastOrder_=settings_.order; }
+    if(s.order!=settings_.order||s.routing!=settings_.routing){serialRepeat_.reset();serialGlitch_.reset();glitchBlock_=false;glitchClock_.reset();glitchUntil_=-1e30;}
     const size_t capacity = size_t(settings_.sampleRate * std::clamp(s.bufferSeconds,1.,64.));
     if(capacity != buffer_[0].size()) setBufferSeconds(std::clamp(s.bufferSeconds,1.,64.)); // live buffer-size switch
     // FREEZE is engine-owned sustained state: settings() always carries
@@ -408,7 +417,7 @@ public:
     // BUFFER SELECTION drives FREEZE: switching buckets while frozen re-freezes
     // around the newly selected span (50 ms fade-in).
     applyFreezeSelection(bucketForSeconds(std::clamp(s.bufferSeconds,1.,64.)));
-    for(const auto& mod:s.lfos)if(mod.enabled&&mod.depth>0.)for(int t=0;t<modTargetCount;++t)if(mod.amount[t]!=0.){modRouted_[t]=true;if(t>=11)extendedMod_=true;}
+    for(const auto& mod:s.lfos)if(mod.enabled&&mod.depth>0.)for(int t=0;t<modTargetCount;++t)if(mod.amount[t]!=0.||mod.positive[t]!=0.||mod.negative[t]!=0.){modRouted_[t]=true;if(t>=11)extendedMod_=true;}
     gater_.set(s.gater);reslice_.set(s.reslice);
     reverb_.set(s.reverbOn,s.reverbType,s.reverbGrid,s.reverbPattern,s.reverbMix,s.reverbLength,s.reverbKill,s.reverbRandom,s.reverbRandomGrid,s.reverbModel);
     modBase_ = {(s.size-.015)/.235,(s.density-1.)/31.,(s.pitch+48.)/96.,(s.position-.015)/1.985,s.chaos,s.grainMix,(s.stretchSpeed-.25)/3.75,(s.transpose+48.)/96.,s.filterCutoff,s.filterResonance,s.filterDrive};
@@ -503,7 +512,7 @@ public:
     modBase_[99]=std::clamp(s.reslice.slice[14]/15.,0.,1.);
     modBase_[100]=std::clamp(s.reslice.slice[15]/15.,0.,1.);
     mixModulated_=false;
-    for(const auto& lfo:s.lfos) if(lfo.enabled && lfo.depth>0. && lfo.amount[5]!=0.) mixModulated_=true;
+    for(const auto& lfo:s.lfos) if(lfo.enabled && lfo.depth>0. && (lfo.amount[5]!=0.||lfo.positive[5]!=0.||lfo.negative[5]!=0.)) mixModulated_=true;
     gateAttack_ = std::exp(-1./(s.sampleRate*std::max(.0001,s.attack)));
     gateRelease_ = std::exp(-1./(s.sampleRate*std::max(.0001,s.release)));
   }
@@ -526,8 +535,8 @@ public:
   double lfoPhase(int i)const{return modulation_.phase(i);}
   int64_t lfoCycle(int i)const{return modulation_.cycle(i);}
   int64_t lfoEpoch(int i)const{return modulation_.epoch(i);}
-  bool glitchRunning()const{return settings_.moduleOn[1]&&(settings_.order>=6?(glitchActive_&&(!settings_.glitchRandom||glitchGate_>.01)):serialGlitch_.active());}
-  bool repeatRunning()const{return settings_.moduleOn[2]&&(settings_.order>=6?repeating_:serialRepeat_.active());}
+  bool glitchRunning()const{return settings_.moduleOn[1]&&((settings_.routing<0&&settings_.order>=6)?(glitchActive_&&(!settings_.glitchRandom||glitchGate_>.01)):serialGlitch_.active());}
+  bool repeatRunning()const{return settings_.moduleOn[2]&&((settings_.routing<0&&settings_.order>=6)?repeating_:serialRepeat_.active());}
   // beat is the host PPQ beat position for this sample, or a running fallback beat.
   void processParallel(float inL, float inR, double beat, float& outL, float& outR) {
     if(buffer_[0].empty()) { outL = inL; outR = inR; return; }
@@ -672,7 +681,7 @@ public:
         if(--freezeRamp_<=0) { freezeRamp_=0; freezeBlend_=0.; freezeFadingOut_=false; freezeLength_=0.; } // snapshot released once faded out
       } else { freezeRamp_=0; }
     }
-    if(settings_.order>=6) {
+    if(settings_.routing<0&&settings_.order>=6) {
       processParallel(inL,inR,beat,outL,outR);
       if(orderFade_>0 && settings_.mix>0.) {
         double t=1.-orderFade_/128.;outL=float(lastOutput_[0]*(1.-t)+outL*t);
@@ -735,7 +744,11 @@ public:
     smoothGate(gate_,activeStep);smoothGate(glitchGate_,glitchOpen);smoothGate(repeatGate_,repeatOpen);
     double signal[2]={inL,inR};
     const int order=std::clamp(settings_.order,0,5);
-    for(int stage:aztecOrder(order)) {
+    auto legacy=aztecOrder(order);
+    std::array<int,5> chain=settings_.routing>=0?aztec::fiveModuleOrder(settings_.routing):std::array<int,5>{{legacy[0],legacy[1],legacy[2],-1,-1}};
+    for(int stage:chain) {
+      if(stage<0)continue;
+      if(stage>=3){float l=float(signal[0]),r=float(signal[1]);if(stage==3)reslice_.process(l,r,beat,settings_.tempo,settings_.playing);else gater_.process(l,r,beat,settings_.tempo,settings_.playing);signal[0]=l;signal[1]=r;continue;}
       double before[2]={signal[0],signal[1]};
       double target=settings_.moduleOn[stage]?1.:0.;moduleBlend_[stage]=target+levelSmoothing_*(moduleBlend_[stage]-target);
       if(stage==0) {
@@ -773,7 +786,7 @@ public:
     ++write_;
     // Feedback follows the selected chain without an extra dry injection.
     previous_[0]=signal[0]-inL;previous_[1]=signal[1]-inR;
-    float wl=float(signal[0]),wr=float(signal[1]);stretch_.process(wl,wr,settings_.stretchOn,.25+values[6]*3.75);transpose_.process(wl,wr,-48.+values[7]*96.);reslice_.process(wl,wr,beat,settings_.tempo,settings_.playing);gater_.process(wl,wr,beat,settings_.tempo,settings_.playing);filter_.set(settings_.filterOn,settings_.filterType,filterSequencer_.process(settings_.filterSequence,values[8],beat,settings_.sampleRate,settings_.playing,settings_.filterModel==7||settings_.filterModel==8),values[9],false,settings_.filterSlope,values[10]*24.,0.,settings_.filterModel,settings_.filterModel==7||settings_.filterModel==8);filter_.process(wl,wr);reverb_.process(wl,wr,beat);signal[0]=wl;signal[1]=wr;
+    float wl=float(signal[0]),wr=float(signal[1]);stretch_.process(wl,wr,settings_.stretchOn,.25+values[6]*3.75);transpose_.process(wl,wr,-48.+values[7]*96.);if(settings_.routing<0){reslice_.process(wl,wr,beat,settings_.tempo,settings_.playing);gater_.process(wl,wr,beat,settings_.tempo,settings_.playing);}filter_.set(settings_.filterOn,settings_.filterType,filterSequencer_.process(settings_.filterSequence,values[8],beat,settings_.sampleRate,settings_.playing,settings_.filterModel==7||settings_.filterModel==8),values[9],false,settings_.filterSlope,values[10]*24.,0.,settings_.filterModel,settings_.filterModel==7||settings_.filterModel==8);filter_.process(wl,wr);reverb_.process(wl,wr,beat);signal[0]=wl;signal[1]=wr;
     match_.process(inL,inR,signal[0],signal[1],settings_.normalize);
     double finalMix=settings_.mix+(1.-settings_.mix)*reverb_.killAmount();
     outL=float(inL*(1.-finalMix)+signal[0]*finalMix);outR=float(inR*(1.-finalMix)+signal[1]*finalMix);
@@ -791,3 +804,4 @@ private:
 
 };
 }
+

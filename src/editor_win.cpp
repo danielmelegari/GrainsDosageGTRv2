@@ -266,6 +266,7 @@ class WinEditor final:public CPluginView{
     };
     painter.text=[&](const std::string& s,mockup::Rect r,double size,skin::Rgb col,bool center){text(wide(s),r.x,r.y,r.w,r.h,int(size),C(col),center,0);};
     painter.line=[&](double x,double y,double xx,double yy,skin::Rgb col,double width){line(x,y,xx,yy,C(col),int(std::max(1.,width)));};
+    painter.polygon=[&](const std::vector<std::pair<double,double>>& pts,skin::Rgb col){if(pts.size()<3)return;Gdiplus::Graphics g(dc);SIZE viewport{},logical{};GetViewportExtEx(dc,&viewport);GetWindowExtEx(dc,&logical);g.ScaleTransform(float(viewport.cx)/logical.cx,float(viewport.cy)/logical.cy);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);std::vector<Gdiplus::PointF> points;for(auto pt:pts)points.emplace_back(float(pt.first),float(pt.second));Gdiplus::SolidBrush brush(Gdiplus::Color(255,col.r,col.g,col.b));g.FillPolygon(&brush,points.data(),int(points.size()));};
     painter.knob=[&](mockup::Rect r,double value){
       if(!mockupKnob||mockupKnob->GetLastStatus()!=Gdiplus::Ok){disc(r.x+r.w/2,r.y+r.h/2,r.w/2,RGB(180,180,180),cream());return;}
       Gdiplus::Graphics g(dc);SIZE viewport{},logical{};GetViewportExtEx(dc,&viewport);GetWindowExtEx(dc,&logical);
@@ -285,6 +286,7 @@ class WinEditor final:public CPluginView{
     if(hit(mockup::save)){preset(true);return;}
     if(hit(mockup::skinMenu)){skinMenu();return;}
     if(hit(mockup::zoomMenu)){HMENU m=CreatePopupMenu();int n=1;for(int size:{50,60,70,75,80,90,100})AppendMenuW(m,MF_STRING,n++,(std::to_wstring(size)+L"%").c_str());POINT p;GetCursorPos(&p);int pick=TrackPopupMenu(m,TPM_RETURNCMD,p.x,p.y,0,window,nullptr);DestroyMenu(m);if(pick&&plugFrame){int sizes[]={50,60,70,75,80,90,100};double f=sizes[pick-1]/100.;ViewRect r(0,0,int(mockup::width*f),int(mockup::height*f));plugFrame->resizeView(this,&r);}return;}
+    int led=mockup::hitLed(x,y);if(led>=0){auto id=mockup::stageEnabled[led];edit(id,value(id)>=.5?0.:1.);return;}
     int t=mockup::hitTab(x,y);if(t>=0){chooseTab(t);return;}
     int lfo=mockup::hitLfo(x,y);if(lfo>=0){selectedLfo=lfo;InvalidateRect(window,nullptr,FALSE);return;}
     if(hit(mockup::random)){if(tab()<3)randomizeModule(tab(),selectedRepeat,seed,[&](ParamID id,double v){edit(id,v);});else if(tab()==3)randomizeReslice(seed,[&](ParamID id){return value(id);},[&](ParamID id,double v){edit(id,v);});else for(int i=0;i<16;++i){seed=seed*1664525u+1013904223u;edit(kGaterState0+i,(seed>>31)?1.:0.);}return;}

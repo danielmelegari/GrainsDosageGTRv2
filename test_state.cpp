@@ -12,7 +12,7 @@ int main() {
   for(int version=0;version<21;++version) {
     MemoryStream stream; IBStreamer writer(&stream,kLittleEndian);
     writer.writeInt32(0x51473130+version);
-    const int count=version==0 ? 26 : (version==1 ? 35 : (version==2 ? 95 : (version==3 ? int(kModuleOrder) : (version==4 ? int(kExtraRoutes0) : (version==5 ? int(kGlitchMove) : (version==6 ? int(kMasterFilter) : (version==7 ? int(kNormalize) : (version==8 ? int(kReverbLength) : (version==9 ? int(kUiWave0) : (version==10 ? int(kLfoSlots0) : (version==11 ? int(kModWaveRnd0) : (version==12 ? int(kReverbSource) : (version==13 ? int(kLimiterCeiling) : (version==14 ? int(kGaterEnabled) : (version==15 ? int(kInputDeclick) : (version==16 ? int(kFilterModel) : (version==17 ? int(kGaterMinLength) : (version==18 ? int(kGlitchTriggerRate) : (version==19 ? int(kResliceRndOn) : int(kCount))))))))))))))))))));
+    const int count=version==0 ? 26 : (version==1 ? 35 : (version==2 ? 95 : (version==3 ? int(kModuleOrder) : (version==4 ? int(kExtraRoutes0) : (version==5 ? int(kGlitchMove) : (version==6 ? int(kMasterFilter) : (version==7 ? int(kNormalize) : (version==8 ? int(kReverbLength) : (version==9 ? int(kUiWave0) : (version==10 ? int(kLfoSlots0) : (version==11 ? int(kModWaveRnd0) : (version==12 ? int(kReverbSource) : (version==13 ? int(kLimiterCeiling) : (version==14 ? int(kGaterEnabled) : (version==15 ? int(kInputDeclick) : (version==16 ? int(kFilterModel) : (version==17 ? int(kGaterMinLength) : (version==18 ? int(kGlitchTriggerRate) : (version==19 ? int(kResliceRndOn) : kLegacySkinCount)))))))))))))))))));
     auto expected=defaults();if(version<16)expected[kInputDeclick]=0.;if(version<7)expected[kMasterLimiter]=0.;
     for(int i=0;i<count;++i) { expected[i]=double((i*7)%101)/100.; writer.writeDouble(expected[i]); }
     if(version<20&&count>kResliceLength)expected[kResliceLength]=expected[kResliceLength]<1./6.?2./3.:1.;
@@ -40,6 +40,24 @@ int main() {
       assert(actual[lfoID(i,lEnabled)]==0.);
       for(int t=0;t<6;++t) assert(actual[lfoID(i,lRoute0+t)]==.5);
     }
+  }
+  // Previous split-format state must not consume newly appended fields.
+  {
+    auto expected=defaults(); expected[kSize]=.73; expected[kModuleOrder]=1.;
+    expected[kFreeze]=1.; expected[kGrainBuffer]=.4;
+    MemoryStream legacy; IBStreamer out(&legacy,kLittleEndian);out.writeInt32(0x51473145);
+    for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);
+    out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);
+    for(int i=kFreeze+1;i<kLegacySkinCount;++i)out.writeDouble(expected[i]);
+    legacy.seek(0,IBStream::kIBSeekSet,nullptr);auto actual=defaults();
+    assert(loadState(&legacy,actual)&&actual==expected);
+    assert(settings(actual,120.,48000.).routing==-1);
+  }
+  {
+    auto p=defaults();p[slotTarget(0,0)]=1./qg::modTargetCount;p[slotAmount(0,0)]=.75;
+    p[kRoutingOrder]=1.;assert(settings(p,120.,48000.).routing==119);
+    for(int mode=0;mode<3;++mode){p[slotPolarity(0,0)]=mode*.5;auto l=settings(p,120.,48000.).lfos[0];
+      assert(l.amount[0]==(mode==0?.5:0.));assert(l.positive[0]==(mode==1?.5:0.));assert(l.negative[0]==(mode==2?.5:0.));}
   }
   MemoryStream bad; IBStreamer writer(&bad,kLittleEndian);
   writer.writeInt32(0x51473132); writer.writeDouble(std::numeric_limits<double>::quiet_NaN());
@@ -136,7 +154,7 @@ int main() {
     MemoryStream rt3; assert(p2.getState(&rt3)==kResultOk);
     rt.seek(0,IBStream::kIBSeekSet,nullptr); rt3.seek(0,IBStream::kIBSeekSet,nullptr);
     int32 m1=0,m2=0;IBStreamer r1(&rt,kLittleEndian),r2(&rt3,kLittleEndian);
-    r1.readInt32(m1);r2.readInt32(m2);assert(m1==m2&&m1==0x51473145);
+    r1.readInt32(m1);r2.readInt32(m2);assert(m1==m2&&m1==0x51473146);
     // getState layout: kParamEnd values, buffer size, freeze flag, then the tail
     // (kBypassReserved lives in this region) up to kCount.
     const int fields=kParamEnd+2+(int(kCount)-int(kFreeze)-1);
@@ -145,3 +163,4 @@ int main() {
   processor->setActive(false);processor->terminate();processor->release();
   std::cout<<"PASS: v0.1–v0.12.0 state migration and legacy parallel mode, disabled legacy routes, malformed state rejection, controller defaults, appended Speed/Transpose routes, XY routing and processor state roundtrip, master host automation\n";
 }
+
