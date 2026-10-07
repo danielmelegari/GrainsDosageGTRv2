@@ -22,9 +22,14 @@ jobs:
           git clone --no-checkout https://github.com/steinbergmedia/vst3sdk.git "$RUNNER_TEMP/vst3sdk"
           git -C "$RUNNER_TEMP/vst3sdk" checkout 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
           git -C "$RUNNER_TEMP/vst3sdk" submodule update --init --recursive --depth 1
-      - name: Configure
+      - name: Configure universal Mac build
+        if: runner.os == 'macOS'
         shell: bash
-        run: cmake -S . -B build -DVST3_SDK_ROOT="$RUNNER_TEMP/vst3sdk" -DSMTG_CREATE_PLUGIN_LINK=OFF -DGRAINS_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Release
+        run: cmake -S . -B build -G Xcode -DVST3_SDK_ROOT="$RUNNER_TEMP/vst3sdk" '-DCMAKE_OSX_ARCHITECTURES=x86_64;arm64' -DCMAKE_OSX_DEPLOYMENT_TARGET=10.14 -DSMTG_CREATE_PLUGIN_LINK=OFF -DSMTG_BUILD_UNIVERSAL_BINARY=ON -DGRAINS_BUILD_TESTS=ON
+      - name: Configure Windows build
+        if: runner.os == 'Windows'
+        shell: bash
+        run: cmake -S . -B build -DVST3_SDK_ROOT="$RUNNER_TEMP/vst3sdk" -DSMTG_CREATE_PLUGIN_LINK=OFF -DGRAINS_BUILD_TESTS=ON
       - name: Build
         shell: bash
         run: cmake --build build --config Release --parallel 4
@@ -43,8 +48,9 @@ jobs:
         if: runner.os == 'macOS'
         shell: bash
         run: |
+          lipo build/VST3/Release/GrainsDosage.vst3/Contents/MacOS/GrainsDosage -verify_arch x86_64 arm64
           codesign --force --sign - --timestamp=none build/VST3/Release/GrainsDosage.vst3
-          ditto -c -k --sequesterRsrc --keepParent build/VST3/Release/GrainsDosage.vst3 GrainsDosage-Purple-macOS-Intel.vst3.zip
+          ditto -c -k --sequesterRsrc --keepParent build/VST3/Release/GrainsDosage.vst3 GrainsDosage-Purple-macOS-Universal.vst3.zip
       - name: Package Windows VST3
         if: runner.os == 'Windows'
         shell: pwsh
