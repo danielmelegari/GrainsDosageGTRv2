@@ -769,6 +769,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
   if([self tab]==4){if(NSPointInRect(p,NSMakeRect(hx+18,hy+14,72,28))){owner->edit(aztec::kGaterEnabled,owner->value(aztec::kGaterEnabled)>=.5?0.:1.);[self setNeedsDisplay:YES];return;}
   for(int i=0;i<16;++i)if(NSPointInRect(p,NSMakeRect(hx+32+i*78,hy+26,70,40))){gateAction(i);return;}}
   else if([self tab]!=4){for(int i=0;i<16;++i)if(NSPointInRect(p,NSMakeRect(32+i*78,943,70,40))){gateAction(i);return;}}
+  }
   {double hx=pxHitCard(),hy=pyHitCard();int t=[self tab];
    if(t<3&&NSPointInRect(p,NSMakeRect(hx+316,106,87,28))){aztec::randomizeModule(t,selectedRepeat,randomSeed,[&](aztec::ParamID id,double v){owner->edit(id,v);});[self setNeedsDisplay:YES];return;}}
   // Card model: no per-slot drag/reorder widgets anymore (single full-width card).
