@@ -758,22 +758,22 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
     for(int percent:{50,60,70,75,80,90,100}){NSMenuItem* item=[[NSMenuItem alloc] initWithTitle:[NSString stringWithFormat:@"%d%%",percent] action:@selector(chooseZoom:) keyEquivalent:@""];item.target=self;item.tag=percent;[menu addItem:item];}
     [NSMenu popUpContextMenu:menu withEvent:event forView:self];return;
   }
-  {double hx=pxHitCard(),hy=pyHitCard();
+  {double hx=[self pxHitCard],hy=[self pyHitCard];
   if([self tab]==3){ if(NSPointInRect(p,NSMakeRect(hx+18,hy+14,72,28))){owner->edit(aztec::kResliceEnabled,owner->value(aztec::kResliceEnabled)>=.5?0.:1.);[self setNeedsDisplay:YES];return;}
   if(NSPointInRect(p,NSMakeRect(hx+1052,hy+14,216,28))){if(event.clickCount>=2)owner->edit(aztec::kResliceEnabled,owner->value(aztec::kResliceEnabled)>=.5?0.:1.);aztec::randomizeReslice(randomSeed,[&](aztec::ParamID id){return owner->value(id);},[&](aztec::ParamID id,double v){owner->edit(id,v);});[self setNeedsDisplay:YES];return;}
     for(int i=0;i<16;++i)if(NSPointInRect(p,NSMakeRect(hx+32+i*78,hy+74,70,40))){selectedReslice=i;if(event.clickCount>=2)owner->edit(aztec::kResliceStep0+i,owner->value(aztec::kResliceStep0+i)>.5?0.:1.);[self setNeedsDisplay:YES];return;} }
   else if(NSPointInRect(p,NSMakeRect(1052,778,216,28))){aztec::randomizeReslice(randomSeed,[&](aztec::ParamID id){return owner->value(id);},[&](aztec::ParamID id,double v){owner->edit(id,v);});[self setNeedsDisplay:YES];return;}
   else if([self tab]!=3)for(int i=0;i<16;++i)if(NSPointInRect(p,NSMakeRect(32+i*78,823,70,40))){selectedReslice=i;if(event.clickCount>=2)owner->edit(aztec::kResliceStep0+i,owner->value(aztec::kResliceStep0+i)>.5?0.:1.);[self setNeedsDisplay:YES];return;}}
-  {double hx=pxHitCard(),hy=pyHitCard();
+  {double hx=[self pxHitCard],hy=[self pyHitCard];
   auto gateAction=[&](int i){selectedGate=i;if(event.modifierFlags & NSEventModifierFlagShift){double next=owner->value(aztec::kGaterRelease0+i)>.5?0.:1.;owner->edit(aztec::kGaterRelease0+i,next);if(next>.5)owner->edit(aztec::kGaterState0+i,0.);}else{owner->edit(aztec::kGaterRelease0+i,0.);owner->edit(aztec::kGaterState0+i,owner->value(aztec::kGaterState0+i)>=.25?0.:1.);}[self setNeedsDisplay:YES];};
   if([self tab]==4){if(NSPointInRect(p,NSMakeRect(hx+18,hy+14,72,28))){owner->edit(aztec::kGaterEnabled,owner->value(aztec::kGaterEnabled)>=.5?0.:1.);[self setNeedsDisplay:YES];return;}
   for(int i=0;i<16;++i)if(NSPointInRect(p,NSMakeRect(hx+32+i*78,hy+26,70,40))){gateAction(i);return;}}
   else if([self tab]!=4){for(int i=0;i<16;++i)if(NSPointInRect(p,NSMakeRect(32+i*78,943,70,40))){gateAction(i);return;}}
   }
-  {double hx=pxHitCard(),hy=pyHitCard();int t=[self tab];
+  {double hx=[self pxHitCard],hy=[self pyHitCard];int t=[self tab];
    if(t<3&&NSPointInRect(p,NSMakeRect(hx+316,106,87,28))){aztec::randomizeModule(t,selectedRepeat,randomSeed,[&](aztec::ParamID id,double v){owner->edit(id,v);});[self setNeedsDisplay:YES];return;}}
   // Card model: no per-slot drag/reorder widgets anymore (single full-width card).
-  if([self tab]==2){double rx=pxHitCard();
+  if([self tab]==2){double rx=[self pxHitCard];
   for(int i=0;i<16;++i)if(NSPointInRect(p,NSMakeRect(rx+19+(i%8)*48,271+(i/8)*39,43,32))){
     selectedRepeat=i;if(event.clickCount>=2){auto id=aztec::ParamID(aztec::kRepeatStep0+i);owner->edit(id,owner->value(id)>=.5?0.:1.);}[self setNeedsDisplay:YES];return;
   }}
