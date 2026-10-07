@@ -268,24 +268,25 @@ public:
   struct GrainView{std::array<double,aztec::waveformBins> low{},high{};std::array<double,128> amplitude{};double start=0.,end=0.,head=0.,seconds=2.5;bool active=false;};
   GrainView grainView()const{
     GrainView view;if(buffer_[0].empty())return view;
-    const Voice* voice=nullptr;for(const auto& v:voices_)if(v.active&&(!voice||v.age<voice->age))voice=&v;
+    const Voice* voice=nullptr;for(const auto& v:voices_)if(v.active&&(!voice||std::abs(double(v.age)/v.length-.5)<std::abs(double(voice->age)/voice->length-.5)))voice=&v;
     double origin=voice?voice->read-voice->age*voice->increment:double(write_);
-    // Follow the audible read position: the head stays centered while source audio scrolls.
-    // Keep unavailable future/overwritten samples empty rather than wrapping stale audio.
-    double maxSpan=double(buffer_[0].size()-2);
-    double span=std::clamp(std::max(settings_.sampleRate*2.5,voice?2.*voice->length*voice->increment:0.),std::min(settings_.sampleRate*2.5,maxSpan),maxSpan);
-    double center=voice?voice->read:double(write_);
-    double left=center-span*.5;view.seconds=span/settings_.sampleRate;
+    // Fixed trailing window: spawning a grain must never recenter or zoom the
+    // entire display. Frozen audio uses its own fixed source window.
+    double span=std::min(settings_.sampleRate*4.,double(buffer_[0].size()-2));
+    bool frozen=freezeLength_>0.&&freezeBlend_>.5;
+    double left=double(write_)-span;if(frozen){left=freezeStart_;span=freezeLength_;}
+    view.seconds=span/settings_.sampleRate;
     const double oldest=std::max(0.,double(write_)-double(buffer_[0].size())+1.);
     // A bounded min/max envelope preserves waveform shape and polarity. Sample
     // more positions than the old 128-bin absolute-peak display at the same 30 Hz.
     for(int i=0;i<aztec::waveformBins;++i){double lo=0.,hi=0.;
       for(int j=0;j<32;++j){double pos=left+span*(i+(j+.5)/32.)/aztec::waveformBins;
-        if(pos>=oldest&&pos<double(write_)-1.){double l=read(0,pos),r=read(1,pos);lo=std::min({lo,l,r});hi=std::max({hi,l,r});}}
+        if(frozen||(pos>=oldest&&pos<double(write_)-1.)){double l=frozen?freezeRead(0,pos):read(0,pos),r=frozen?freezeRead(1,pos):read(1,pos);lo=std::min({lo,l,r});hi=std::max({hi,l,r});}}
       view.low[i]=std::max(-1.,lo);view.high[i]=std::min(1.,hi);
     }
     for(int i=0;i<128;++i)view.amplitude[i]=std::max({-view.low[i*2],view.high[i*2],-view.low[i*2+1],view.high[i*2+1]});
-    if(voice&&settings_.moduleOn[0]&&grainLevel_>.0001){view.active=true;view.start=std::clamp((origin-left)/span,0.,1.);view.end=std::clamp((origin+voice->length*voice->increment-left)/span,0.,1.);view.head=std::clamp((voice->read-left)/span,0.,1.);}
+    double head=voice?voice->read:0.;if(voice&&frozen){head=left+std::fmod(std::fmod(head-left,span)+span,span);origin=head-voice->age*voice->increment;}
+    if(voice&&settings_.moduleOn[0]&&grainLevel_>.0001){view.active=true;view.start=std::clamp((origin-left)/span,0.,1.);view.end=std::clamp((origin+voice->length*voice->increment-left)/span,0.,1.);view.head=std::clamp((head-left)/span,0.,1.);}
     return view;
   }
   // Resize the recording buffers live (2/4/8/16 s), preserving the audible tail.

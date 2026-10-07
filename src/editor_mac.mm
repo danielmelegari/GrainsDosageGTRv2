@@ -148,6 +148,8 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
   int selectedGate,selectedReslice;
   int selectedLfo,selectedRepeat,dragID,dragSlot,dropSlot;
   bool dragXY;
+  aztec::mockup::WaveVisual waveVisual;
+  std::array<int,5> routingAtDrag;
   aztec::Kind dragKind;
   NSRect dragRect;
   NSPoint origin;
@@ -298,7 +300,8 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
   // Modulation arcs around the knobs were removed, so live mod depths no
   // longer drive repaints — only parameter value changes do.
   for(int id=0;id<aztec::kCount;++id){double v=owner->value(id);if(v!=cached[id]){cached[id]=v;changed=true;}}
-  if(changed)[self setNeedsDisplay:YES];
+  waveVisual.update([&](aztec::ParamID id){return owner->value(id);});
+  if(changed||[self tab]==0)[self setNeedsDisplay:YES];
 }
 - (NSPoint)logical:(NSEvent*)event {
   NSPoint p=[self convertPoint:event.locationInWindow fromView:nil];return NSMakePoint(p.x*aztec::canvasW/self.bounds.size.width,p.y*aztec::canvasH/self.bounds.size.height);
@@ -416,7 +419,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
     CGContextScaleCTM(ctx,1,-1);CGContextSetInterpolationQuality(ctx,kCGInterpolationHigh);
     CGContextDrawImage(ctx,CGRectMake(-r.w/2,-r.h/2,r.w,r.h),face);CGContextRestoreGState(ctx);
   };
-  mockup::render(painter,[&](ParamID id){return owner->value(id);},[&](ParamID id,double v){return std::string([owner->display(id,v) UTF8String]);},std::string([presetName UTF8String]),[self tab],selectedLfo,selectedRepeat,selectedGate,selectedReslice);
+  mockup::render(painter,[&](ParamID id){return owner->value(id);},[&](ParamID id,double v){return std::string([owner->display(id,v) UTF8String]);},std::string([presetName UTF8String]),[self tab],selectedLfo,selectedRepeat,selectedGate,selectedReslice,&waveVisual,dragSlot,dropSlot);
   [NSGraphicsContext restoreGraphicsState];
 }
 - (void)chooseSkin:(NSMenuItem*)item {
@@ -514,6 +517,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
     for(int percent:{50,60,70,75,80,90,100}){NSMenuItem* item=[[NSMenuItem alloc] initWithTitle:[NSString stringWithFormat:@"%d%%",percent] action:@selector(chooseZoom:) keyEquivalent:@""];item.target=self;item.tag=percent;[menu addItem:item];}
     [NSMenu popUpContextMenu:menu withEvent:event forView:self];return;
   }
+  int route=mockup::hitRoute(p.x,p.y);if(route>=0){dragSlot=route;dropSlot=-1;routingAtDrag=mockup::routeChain([&](ParamID id){return owner->value(id);});[self setNeedsDisplay:YES];return;}
   int led=mockup::hitLed(p.x,p.y);if(led>=0){auto id=mockup::stageEnabled[led];owner->edit(id,owner->value(id)>=.5?0.:1.);[self setNeedsDisplay:YES];return;}
   int tabHit=mockup::hitTab(p.x,p.y);if(tabHit>=0){[self chooseTab:tabHit];return;}
   int lfoHit=mockup::hitLfo(p.x,p.y);if(lfoHit>=0){selectedLfo=lfoHit;[self setNeedsDisplay:YES];return;}
@@ -550,7 +554,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
 }
 - (void)mouseDragged:(NSEvent*)event {
   if(!owner)return;NSPoint p=[self logical:event];
-  if(dragSlot>=0){[self setNeedsDisplay:YES];return;} // card model: no slot reorder
+  if(dragSlot>=0){dropSlot=aztec::mockup::routeInsertion(p.x,p.y);[self setNeedsDisplay:YES];return;}
   if(dragXY){owner->change(aztec::kXYX,(p.x-aztec::mockup::xy.x-12)/(aztec::mockup::xy.w-24));owner->change(aztec::kXYY,1.-(p.y-aztec::mockup::xy.y-12)/(aztec::mockup::xy.h-24));[self setNeedsDisplay:YES];return;}
   if(dragID<0)return;double delta=(dragKind==aztec::Slider||dragKind==aztec::Pan)?(p.x-origin.x)/dragRect.size.width:(origin.y-p.y)/180.;
   if(event.modifierFlags&NSEventModifierFlagShift)delta*=.1;
@@ -559,7 +563,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
 }
 - (void)mouseUp:(NSEvent*)event {
   (void)event;if(!owner)return;
-  if(dragSlot>=0&&dropSlot>=0&&dragSlot!=dropSlot){std::array<int,3> order{};for(int i=0;i<3;++i)order[i]=[self stage:i];std::swap(order[dragSlot],order[dropSlot]);for(int i=0;i<6;++i)if(order==aztec::moduleOrders[i]){owner->edit(aztec::kModuleOrder,double(i)/6.);break;}}
+  if(dragSlot>=0&&dropSlot>=0&&dropSlot!=dragSlot&&dropSlot!=dragSlot+1)owner->edit(aztec::kRoutingOrder,aztec::mockup::moveRoute(routingAtDrag,dragSlot,dropSlot));
   if(dragID>=0)owner->end(aztec::ParamID(dragID));if(dragXY){owner->end(aztec::kXYX);owner->end(aztec::kXYY);}
   dragID=dragSlot=dropSlot=-1;dragXY=false;[self setNeedsDisplay:YES];
 }
@@ -574,7 +578,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
 namespace aztec {
 // No "using namespace qg" here: inside this namespace an unqualified qg would
 // find aztec::qg first (shadowing), so global qg names must stay ::qg-qualified.
-Editor::Editor(EditController* c):controller_(c){controller_->addRef();rect=ViewRect(0,0,979,911);(void)::qg::waveBank();}
+Editor::Editor(EditController* c):controller_(c){controller_->addRef();rect=ViewRect(0,0,979,960);(void)::qg::waveBank();}
 Editor::~Editor(){removed();controller_->release();}
 NSString* Editor::display(ParamID id,double v,bool units) const {
   String128 text{};controller_->getParamStringByValue(id,v,text);

@@ -22,6 +22,15 @@ int main(){try{
  toggle(kGaterState0,77,536);click(140+3*252,135);toggle(kResliceRndOn,700,273);
  click(140,135);click(688+105*2,703);toggle(lfoID(2,lEnabled),540,703);
  click(mockup::xy.x+13,mockup::xy.y+13);check(c->getParamNormalized(kXYX)<.015&&c->getParamNormalized(kXYY)>.985,"XY corner");
+ auto routeValue=[&](ParamID id){return c->getParamNormalized(id);};
+ auto original=mockup::routeChain(routeValue);
+ send(WM_LBUTTONDOWN,1457,1556);send(WM_MOUSEMOVE,197,1556);send(WM_LBUTTONUP,197,1556);
+ auto moved=mockup::routeChain(routeValue);check(moved[0]==original[4]&&moved[1]==original[0],"Routing inserts before first");
+ send(WM_LBUTTONDOWN,329,1556);send(WM_MOUSEMOVE,1597,1556);send(WM_LBUTTONUP,1597,1556);
+ check(mockup::routeChain(routeValue)==original,"Routing inserts after last");
+ double beforeCancel=c->getParamNormalized(kRoutingOrder);
+ send(WM_LBUTTONDOWN,329,1556);send(WM_MOUSEMOVE,100,100);send(WM_LBUTTONUP,100,100);
+ check(c->getParamNormalized(kRoutingOrder)==beforeCancel,"Routing outside drop cancels");
  ViewRect resized(0,0,816,759);check(view->checkSizeConstraint(&resized)==kResultOk,"Resize constraint");check(view->onSize(&resized)==kResultOk,"Resize");UpdateWindow(child);
  view->removed();view->release();c->terminate();c->release();DestroyWindow(parent);std::cout<<"PASS: native skin, tabs, controls, XY and resize\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

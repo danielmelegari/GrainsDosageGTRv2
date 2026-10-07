@@ -24,7 +24,7 @@ if(tab==1){
  ADD(kGlitchTriggerRate,58,378,280,44,Select,"TRIGGER EVERY");
  ADD(kGlitchChance,420,201,180,182,Knob,"CHANCE");
  ADD(kGlitchMix,664,201,180,182,Knob,"MIX");
- ADD(kGlitchVariation,902,270,302,55,Slider,"VARIATION");
+ ADD(kGlitchVariation,902,270,302,66,Slider,"VARIATION");
 }
 if(tab==2){
  ADD(kRepeatDivision,50,226,246,42,Select,"LENGTH");
@@ -33,15 +33,15 @@ if(tab==2){
  ADD(kRepeatSeq,560,226,220,44,Toggle,"GRID ON");
  ADD(kRepeatAuto,560,290,220,44,Toggle,"AUTO");
  ADD(kRepeatInterval,828,226,270,44,Select,"INTERVAL");
- ADD(kRepeatDuration,828,298,170,55,Slider,"DURATION");
- ADD(kRepeatChance,1020,298,170,55,Slider,"CHANCE");
+ ADD(kRepeatDuration,828,298,170,66,Slider,"DURATION");
+ ADD(kRepeatChance,1020,298,170,66,Slider,"CHANCE");
  ADD(kRepeatStep0+selectedRepeat,50,590,210,32,Toggle,"STEP ON");
  ADD(kRepeatRate0+selectedRepeat,292,590,340,32,Select,"STEP DIVISION");
- ADD(kRepeatPitch0+selectedRepeat,670,578,300,48,Slider,"STEP PITCH");
+ ADD(kRepeatPitch0+selectedRepeat,670,578,300,58,Slider,"STEP PITCH");
 }
 if(tab==3){
- ADD(kResliceLength,55,240,240,60,Slider,"WINDOW");
- ADD(kResliceMix,330,240,220,60,Slider,"MIX");
+ ADD(kResliceLength,55,240,240,68,Slider,"WINDOW");
+ ADD(kResliceMix,330,240,220,68,Slider,"MIX");
  ADD(kResliceRndOn,598,250,210,46,Toggle,"STEP RND");
  ADD(kResliceRndRate,850,250,340,46,Select,"RND RATE");
  ADD(kResliceIndex0+selectedReslice,55,590,370,32,Select,"SOURCE SLICE");
@@ -51,10 +51,10 @@ if(tab==4){
  ADD(kGaterLengthRnd,320,230,242,42,Toggle,"LENGTH RND");
  ADD(kGaterStepRnd,592,230,220,42,Toggle,"STEP RND");
  ADD(kGaterLatch,848,230,200,42,Toggle,"LATCH");
- ADD(kGaterChance,50,330,240,58,Slider,"CHANCE");
- ADD(kGaterMinLength,340,330,250,58,Slider,"MIN LENGTH");
- ADD(kGaterLength0+selectedGate,640,330,250,58,Slider,"STEP LENGTH");
- ADD(kGaterSustain0+selectedGate,940,330,250,58,Slider,"SUSTAIN");
+ ADD(kGaterChance,50,330,240,68,Slider,"CHANCE");
+ ADD(kGaterMinLength,340,330,250,68,Slider,"MIN LENGTH");
+ ADD(kGaterLength0+selectedGate,640,330,250,68,Slider,"STEP LENGTH");
+ ADD(kGaterSustain0+selectedGate,940,330,250,68,Slider,"SUSTAIN");
 }
 ADD(lfoID(selectedLfo,lEnabled),472,680,142,46,Toggle,"ON");
 ADD(lfoID(selectedLfo,lWave),40,731,390,34,Select,"");
@@ -111,4 +111,3 @@ ADD(kMix,196,1461,204,40,Slider,"MIX");
 ADD(kNormalize,420,1466,184,31,Toggle,"NORMALIZE");
 ADD(kMasterLimiter,619,1466,182,31,Toggle,"LIMITER");
 ADD(kLimiterCeiling,818,1466,204,31,Select,"LIMIT");
-ADD(kRoutingOrder,1252,1466,346,31,Select,"ROUTING");

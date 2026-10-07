@@ -11,7 +11,7 @@
 #include <vector>
 
 namespace aztec { namespace mockup {
-constexpr double width=1632, height=1518;
+constexpr double width=1632, height=1600;
 struct Rect {double x,y,w,h; bool contains(double px,double py)const{return px>=x&&py>=y&&px<x+w&&py<y+h;}};
 constexpr Rect preset{532,31,364,43}, previous{911,31,50,43}, next{964,31,50,43};
 constexpr Rect load{1032,31,105,43}, save{1150,31,105,43};
@@ -29,6 +29,17 @@ inline int hitLfo(double x,double y){for(int i=0;i<4;++i)if(lfoRect(i).contains(
 inline int hitStep(double x,double y){for(int i=0;i<16;++i)if(stepRect(i).contains(x,y))return i;return -1;}
 using Value=std::function<double(ParamID)>;
 using Display=std::function<std::string(ParamID,double)>;
+// Shared insertion semantics: moving a stage shifts its neighbours, never swaps.
+inline Rect routeRect(int i){return {196.+i*282,1534,266,44};}
+inline int hitRoute(double x,double y){for(int i=0;i<5;++i)if(routeRect(i).contains(x,y))return i;return -1;}
+inline int routeInsertion(double x,double y){if(y<1520||y>1590||x<180||x>1610)return -1;for(int i=0;i<5;++i)if(x<routeRect(i).x+routeRect(i).w/2)return i;return 5;}
+inline std::array<int,5> routeChain(const Value& value){int n=int(std::round(value(kRoutingOrder)*120))-1;if(n>=0)return fiveModuleOrder(n);std::array<int,5> c{{0,1,2,3,4}};int old=int(std::round(value(kModuleOrder)*6));if(old<6){auto a=moduleOrders[std::clamp(old,0,5)];std::copy(a.begin(),a.end(),c.begin());}return c;}
+inline double moveRoute(std::array<int,5> c,int from,int insertion){int to=insertion-(insertion>from?1:0);int stage=c[from];if(to>from)for(int i=from;i<to;++i)c[i]=c[i+1];else for(int i=from;i>to;--i)c[i]=c[i-1];c[to]=stage;for(int i=0;i<120;++i)if(fiveModuleOrder(i)==c)return (i+1)/120.;return 0;}
+struct WaveVisual {
+ std::array<double,waveformBins> lo{},hi{};
+ double active=0;
+ void update(const Value& value){for(int i=0;i<waveformBins;++i){lo[i]+=.12*((value(kUiWaveLow0+i)*2-1)-lo[i]);hi[i]+=.12*((value(kUiWaveHigh0+i)*2-1)-hi[i]);}active+=.12*((value(kUiGrainActive)>.5?1.:0.)-active);}
+};
 using skin::Rgb;
 struct Painter {
  std::function<void(Rect,Rgb,Rgb,double)> box;
@@ -85,24 +96,24 @@ inline void renderControl(Painter& p,const Control& c,const Value& value,const D
    for(int i=0;i<20;++i){Rgb col=i<amount*20?accent:skin::C(skin::kHairline);p.box({r.x+i*meterWidth/20,r.y+5,meterWidth/20-3,r.h-10},col,col,0);}
    p.text(std::to_string(int(std::round(amount*100)))+"%",{r.x+meterWidth+6,r.y,48,r.h},16,white,true);return;
   }
-  bool compact=r.h<=46;double ty=r.y+(c.label.empty()?r.h/2:std::min(r.h-14,29.));
-  if(!c.label.empty())p.text(c.label,{r.x,r.y,r.w,20},16,white,false);
+  bool compact=r.h<=46;double ty=r.y+(c.label.empty()?r.h/2:(compact?r.h-11:31.));
+  if(!c.label.empty())p.text(c.label,{r.x,r.y,r.w,18},15,white,false);
   double track=r.w-(compact?48:8);track=std::max(20.,track);
   p.box({r.x,ty-5,track,10},ink,skin::C(skin::kBorderDark),5);
   p.box({r.x+4,ty-2,track-8,3},skin::C(skin::kHairline),skin::C(skin::kHairline),1);
   double knobX=r.x+5+v*(track-10);
-  double thumb=std::min(30.,r.h-2);
+  double thumb=c.label.empty()?std::min(24.,r.h-2):14.;
   p.box({knobX-6,ty-thumb/2,12,thumb},ink,skin::C(skin::kBorderDark),6);
   p.box({knobX-2,ty-thumb/2+5,4,thumb-10},edge,edge,2);
   if(compact)p.text(display(c.id,v),{r.x+track+4,ty-12,44,24},14,white,false);
-  else p.text(display(c.id,v),{r.x,r.y+r.h-20,r.w,20},15,white,false);
+  else p.text(display(c.id,v),{r.x,r.y+r.h-18,r.w,18},15,white,false);
  }else if(c.kind==Pad){
   bool on=v>=.5;p.box(r,on?accent:ink,on?skin::C(skin::kAccentBright):skin::C(skin::kBorderDark),r.w/2);
   if(c.id>=kReverbStep0&&c.id<kReverbStep0+16&&int(std::round(value(kUiReverb)*15))==int(c.id-kReverbStep0))
    p.line(r.x+7,r.y+r.h-7,r.x+r.w-7,r.y+r.h-7,white,2);
  }
 }
-inline void render(Painter& p,const Value& value,const Display& display,const std::string& presetName,int tab,int lfo,int repeat,int gate,int reslice){
+inline void render(Painter& p,const Value& value,const Display& display,const std::string& presetName,int tab,int lfo,int repeat,int gate,int reslice,WaveVisual* visual=nullptr,int drag=-1,int insertion=-1){
  auto panel=skin::C(skin::kPanel),edge=skin::C(skin::kFiligree),border=skin::C(skin::kBorderDark);
  auto white=skin::C(skin::kCream),muted=skin::C(skin::kMuted),ink=skin::C(skin::kWell),screen=skin::C(skin::kPanelInset),accent=skin::C(skin::kAccent);
  auto plate=[&](Rect r){p.box(r,panel,border,16);p.line(r.x+14,r.y+3,r.x+r.w-14,r.y+3,skin::C(skin::kFiligreeDim),1);};
@@ -123,14 +134,18 @@ inline void render(Painter& p,const Value& value,const Display& display,const st
  button(random,tab==3?"RANDOM ONCE":"RANDOM");
  if(tab==0){
   p.box(wave,screen,edge,18);
-  double peak=.02;std::vector<std::pair<double,double>> envelope;
-  for(int i=0;i<waveformBins;++i)peak=std::max({peak,std::abs(value(kUiWaveLow0+i)*2.-1),std::abs(value(kUiWaveHigh0+i)*2.-1)});
-  const double scale=(wave.h/2-6)/std::max(.1,peak),mid=wave.y+wave.h/2;
-  for(int i=0;i<waveformBins;++i)envelope.push_back({wave.x+3+i*(wave.w-6)/(waveformBins-1),mid-(value(kUiWaveHigh0+i)*2-1)*scale});
-  for(int i=waveformBins-1;i>=0;--i)envelope.push_back({wave.x+3+i*(wave.w-6)/(waveformBins-1),mid-(value(kUiWaveLow0+i)*2-1)*scale});
-  p.polygon(envelope,skin::mix(skin::C(skin::kFaint),edge,.3));
+  WaveVisual direct;if(!visual){for(int i=0;i<waveformBins;++i){direct.lo[i]=value(kUiWaveLow0+i)*2-1;direct.hi[i]=value(kUiWaveHigh0+i)*2-1;}direct.active=value(kUiGrainActive);visual=&direct;}
+  const double scale=wave.h/2-6,mid=wave.y+wave.h/2;
+  auto envelope=[&](int first,int last){std::vector<std::pair<double,double>> pts;for(int i=first;i<=last;++i)pts.push_back({wave.x+3+i*(wave.w-6)/(waveformBins-1),mid-visual->hi[i]*scale});for(int i=last;i>=first;--i)pts.push_back({wave.x+3+i*(wave.w-6)/(waveformBins-1),mid-visual->lo[i]*scale});return pts;};
+  auto base=skin::mix(screen,muted,.35);p.polygon(envelope(0,waveformBins-1),base);
   p.line(wave.x+3,mid,wave.x+wave.w-3,mid,skin::C(skin::kHairline),1);
-  if(value(kUiGrainActive)>.5){double x=wave.x+value(kUiGrainHead)*wave.w;p.line(x,wave.y+4,x,wave.y+wave.h-4,accent,2);}
+  if(visual->active>.01){double start=std::min(value(kUiGrainStart),value(kUiGrainEnd)),end=std::max(value(kUiGrainStart),value(kUiGrainEnd));
+   int first=std::clamp(int(start*(waveformBins-1)),0,waveformBins-1),last=std::clamp(int(std::ceil(end*(waveformBins-1))),first,waveformBins-1);
+   auto lit=skin::mix(base,accent,.45*visual->active);p.polygon(envelope(first,last),lit);
+   double x1=wave.x+3+start*(wave.w-6),x2=wave.x+3+end*(wave.w-6);
+   p.line(x1,wave.y+wave.h-7,x2,wave.y+wave.h-7,lit,3);
+   double x=wave.x+3+value(kUiGrainHead)*(wave.w-6);p.line(x,wave.y+6,x,wave.y+wave.h-6,lit,1.5);
+  }
 
  }else if(tab==1){
   p.text("SLICE LENGTH / TRIGGER INTERVAL / PROBABILITY",{52,510,1150,36},24,white,true);
@@ -158,6 +173,8 @@ inline void render(Painter& p,const Value& value,const Display& display,const st
  qg::LfoSettings shape;shape.enabled=true;shape.beats=1.;shape.wave=int(std::round(value(value(kModWaveRnd0+lfo)>0?kUiModWave0+lfo:lfoID(lfo,lWave))*129.));
  shape.randomSteps=1+int(std::round(value(kRandomSteps0+lfo)*63.));shape.depth=value(lfoID(lfo,lDepth));shape.phase=0;shape.glide=.01+.99*value(lfoID(lfo,lGlide));
  double lastX=0,lastY=0;for(int i=0;i<=210;++i){double x=scope.x+5+i*(scope.w-10)/210,y=scope.y+scope.h/2-preview.process(shape,cycle+i/210.,48000.,false,0)*(scope.h/2-8);if(i)p.line(lastX,lastY,x,y,accent,2);lastX=x;lastY=y;}
+ double cursor=scope.x+5+std::clamp(value(kUiLfoPhase0+lfo),0.,1.)*(scope.w-10);
+ p.line(cursor,scope.y+5,cursor,scope.y+scope.h-5,skin::mix(screen,white,.65),1.5);
  heading("MORPH XY",{1112,680,300,35});p.box(xy,screen,edge,16);
  p.line(xy.x+xy.w/2,xy.y,xy.x+xy.w/2,xy.y+xy.h,skin::C(skin::kHairline),1);
  p.line(xy.x,xy.y+xy.h/2,xy.x+xy.w,xy.y+xy.h/2,skin::C(skin::kHairline),1);
@@ -169,8 +186,13 @@ inline void render(Painter& p,const Value& value,const Display& display,const st
   p.box(r,ink,border,8);double n=(qg::filterPattern(int(std::round(value(kFilterSeqPattern)*63)),i)+1)*.5;
   if(value(kFilterSeqOn)>.5)p.box({x+3,1285-n*65,9,5+n*65},active?accent:skin::mix(accent,ink,.4),active?white:skin::mix(accent,ink,.4),4);}
  plate({15,1326,1603,110});p.text("REVERB",{58,1337,94,36},20,white,false);
- plate({15,1453,1603,56});heading("OUTPUT",{60,1465,130,35});
+ plate({15,1453,1603,137});heading("OUTPUT",{60,1465,130,35});
  for(const auto& c:controls(value,tab,lfo,repeat,gate,reslice))renderControl(p,c,value,display,lfo);
+ p.text("ROUTING",{40,1534,145,44},20,white,false);
+ auto chain=routeChain(value);const char* routeNames[]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLICE","GATER"};
+ bool parallel=value(kRoutingOrder)<.5/120&&value(kModuleOrder)>.99;
+ for(int i=0;i<5;++i){auto r=routeRect(i);p.box(r,i==drag?panel:screen,i==drag?accent:edge,12);p.text(routeNames[chain[i]],{r.x+10,r.y,r.w-20,r.h},18,white,true);if(i<4)p.text(parallel&&i<2?"+":">",{r.x+r.w, r.y,16,r.h},16,muted,true);}
+ if(drag>=0&&insertion>=0){double x=insertion==5?routeRect(4).x+routeRect(4).w+4:routeRect(insertion).x-5;p.line(x,1530,x,1582,accent,3);}
  p.box(skinMenu,ink,edge,16);p.text("SKIN",skinMenu,16,white,true);
  p.text("SIZE",zoomMenu,16,white,true);
 }

@@ -15,12 +15,12 @@ int main(int argc,char** argv){
  unsigned buffer=0;int bits=0;for(unsigned char c:bytes){buffer=(buffer<<8)|c;bits+=8;while(bits>=6){bits-=6;base64+=alphabet[(buffer>>bits)&63];}}
  if(bits)base64+=alphabet[(buffer<<(6-bits))&63];while(base64.size()%4)base64+='=';
  auto state=factoryPreset(0);state[kUiTab]=tabToValue(tab);state[kXYX]=state[kXYY]=.5;
- state[kFilterSeqOn]=1;state[kUiFilterSeqStep]=7./31;state[kPitch]=state[kTranspose]=.5;state[kStretchSpeed]=.2;state[kGrainMix]=.5;
+ state[kUiGrainActive]=1;state[kUiGrainStart]=.25;state[kUiGrainEnd]=.4;state[kUiGrainHead]=.31;state[kUiLfoPhase0]=.3;state[kFilterSeqOn]=1;state[kUiFilterSeqStep]=7./31;state[kPitch]=state[kTranspose]=.5;state[kStretchSpeed]=.2;state[kGrainMix]=.5;
  // Representative incoming audio for this offline preview; the editor reads live monitor parameters.
  for(int i=0;i<128;++i)state[kUiWave0+i]=.12+.65*std::abs(std::sin(i*1.74)*std::cos(i*.183));
  for(int i=0;i<waveformBins;++i){double h=.12+.65*std::abs(std::sin(i*.87)*std::cos(i*.0915));state[kUiWaveLow0+i]=.5-h*.5;state[kUiWaveHigh0+i]=.5+h*.5;}
  mockup::Painter p;
- std::cout<<"<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='1632' height='1518' viewBox='0 0 1632 1518'>";
+ std::cout<<"<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='1632' height='1600' viewBox='0 0 1632 1600'>";
  p.box=[](mockup::Rect r,skin::Rgb fill,skin::Rgb edge,double radius){std::cout<<"<rect x='"<<r.x<<"' y='"<<r.y<<"' width='"<<r.w<<"' height='"<<r.h<<"' rx='"<<radius<<"' fill='"<<colour(fill)<<"' stroke='"<<colour(edge)<<"'/>";};
  p.text=[](const std::string& s,mockup::Rect r,double size,skin::Rgb c,bool center){std::cout<<"<text x='"<<(center?r.x+r.w/2:r.x)<<"' y='"<<r.y+r.h/2+size*.35<<"' font-family='DejaVu Sans' font-weight='900' font-size='"<<size<<"' text-anchor='"<<(center?"middle":"start")<<"' fill='"<<colour(c)<<"'>"<<escape(s)<<"</text>";};
  p.line=[](double x,double y,double xx,double yy,skin::Rgb c,double w){std::cout<<"<path d='M "<<x<<" "<<y<<" L "<<xx<<" "<<yy<<"' stroke='"<<colour(c)<<"' stroke-width='"<<w<<"'/>";};
