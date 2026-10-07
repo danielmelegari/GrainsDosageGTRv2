@@ -109,3 +109,4 @@ jobs:
           path: dist/GrainsDosage-macOS-x64.vst3.zip
           if-no-files-found: error
           retention-days: 14
+trigger: re-run 00:22:55
