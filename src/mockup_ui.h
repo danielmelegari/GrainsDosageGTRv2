@@ -64,7 +64,7 @@ inline void renderControl(Painter& p,const Control& c,const Value& value,const D
   p.box(r,screen,edge,r.h/2);
   double shown=c.id==lfoID(lfo,lWave)&&value(kModWaveRnd0+lfo)>0?value(kUiModWave0+lfo):v;
   if(c.label.empty())p.text(display(c.id,shown),{r.x+8,r.y,r.w-16,r.h},18,white,true);
-  else{double split=std::min(r.w*.44,118.);p.line(r.x+split,r.y+1,r.x+split,r.y+r.h-1,edge,1);
+  else{double split=c.label=="DEST"?50.:std::min(r.w*.44,118.);p.line(r.x+split,r.y+1,r.x+split,r.y+r.h-1,edge,1);
    p.text(c.label,{r.x+4,r.y,split-8,r.h},r.h>35?18:14,muted,true);
    p.text(display(c.id,shown),{r.x+split+3,r.y,r.w-split-7,r.h},r.h>35?22:16,white,true);}
  }else if(c.kind==Slider||c.kind==Pan){

@@ -18,7 +18,7 @@ available alongside the mockup's controls. The filter sequencer retains all
 it is not relabeled as feedback because the engine has no equivalent binding.
 
 Run `.github/workflows/mockup-skin.yml` through its branch push / PR trigger
-to build Mac Intel and Windows VST3 bundles, exercise native interactions,
+to build universal Mac (Intel + Apple Silicon) and Windows VST3 bundles, exercise native interactions,
 and produce a Mac screenshot. These builds are not installers. Installing on
 a workstation requires copying the built `.vst3` bundle into its VST3 folder
 and rescanning in the host. macOS builds use an ad-hoc signature.
