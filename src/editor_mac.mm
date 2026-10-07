@@ -167,6 +167,8 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
 - (BOOL)controlsFit;
 - (NSInteger)moduleIndexForRect:(NSRect)r;
 - (int)hitTab:(NSPoint)p;
+- (double)pxHitCard;
+- (double)pyHitCard;
 - (void)drawTabs;
 - (void)stop;
 - (void)tick:(NSTimer*)tick;
@@ -349,6 +351,8 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
     if(NSPointInRect(p,NSMakeRect(x,y,w,h)))return i;}
   return -1;
 }
+- (double)pxHitCard { double x,y,w,h;aztec::tabSlotRect([self tab],0,x,y,w,h);return x;}
+- (double)pyHitCard { double x,y,w,h;aztec::tabSlotRect([self tab],0,x,y,w,h);return y;}
 - (void)drawTabs {
   const int active=[self tab];
   for(int i=0;i<5;++i){
@@ -520,45 +524,40 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
   label(declickOn?@"ON":@"OFF",NSMakeRect(684,63,56,16),10,declickOn?onText():cream(),true);}
   box(NSMakeRect(748,56,46,28),AZSKIN(kPanelRaised),AZSKIN(kFiligree),5);label(@"LOAD",NSMakeRect(748,63,46,16),10,cream(),true);
   box(NSMakeRect(800,56,46,28),AZSKIN(kPanelRaised),AZSKIN(kFiligree),5);label(@"SAVE",NSMakeRect(800,63,46,16),10,cream(),true);
-  [self drawTabs];   // tab strip (Option B): five switchable modules + artefact tabs
-  for(int slot=0;slot<3;++slot){
-    int stage=[self stage:slot];double x=slotX[slot];
-    [self panel:NSMakeRect(x,98,416,404)];
-    
-    label([NSString stringWithFormat:@"↔  %d   %s",slot+1,names[stage]],NSMakeRect(x+15,110,210,25),14,muted());
-    box(NSMakeRect(x+316,106,87,28),AZSKIN(kPanelRaised),AZSKIN(kFiligree),6);
-    label(@"RANDOM",NSMakeRect(x+319,114,81,18),10,cream(),true);
+  [self drawTabs];   // tab strip: five switchable module cards
+  // ONE full-width card from extreme left to extreme right (x=16..1304,
+  // y=98..502). The active tab decides which of the five modules owns it;
+  // the other four paint nothing at all - no split columns, no solo buttons.
+  const int topTab=[self tab];
+  double pxCard,cyCard,cwCard,chCard;aztec::tabSlotRect(topTab,0,pxCard,cyCard,cwCard,chCard);
+  {double cx,cy,cw,ch;aztec::tabSlotRect(topTab,0,cx,cy,cw,ch);
+  [self panel:NSMakeRect(cx,cy,cw,ch)];
+  label(@(tabNames[topTab]),NSMakeRect(cx+15,cy+12,320,25),14,muted());}
+  if(topTab<3){
+    // ONE full-width card: only the ACTIVE module paints inside it.
+    const int stage=topTab;double x=pxCard;
     bool active=stage==0?(owner->value(aztec::kGrainEnabled)>.5&&owner->value(aztec::kGrainMix)>.001):owner->value(stage==1?aztec::kUiGlitch:aztec::kUiRepeat)>.5;
     for(int j=0;j<12;++j)box(NSMakeRect(x+19+j*32,486,23,4),active?green():AZSKIN(kAccentTrack),nil,2);
     if(stage==0){
       box(NSMakeRect(x+208,248,196,147),AZSKIN(kPanelInset),AZSKIN(kFiligreeDim),8);
       label(@"MASTER OPTIONS",NSMakeRect(x+220,252,174,17),10,muted(),true);
-      // Option A: the two rows freed by moving STRETCH into the knob grid now
-      // hold FREEZE and BUFFER SELECTION. Their hit areas are registered in
-      // editor_layout_win.inl at exactly these rects; the widgets themselves
-      // are painted by the generic control pass (Toggle/Select kinds) which
-      // runs after this panel block - so nothing is drawn here beyond the
-      // inset box and its title. The old RANDOM-ALL hit area next to ON was
-      // removed (kRandomAll stays registered for automation/state only).
       if(owner->value(aztec::kPanMode)>=.25)label(owner->value(aztec::kPanMode)<.75?@"PAN: ALTERNATE L / R":@"PAN: RANDOM L / R",NSMakeRect(x+170,405,228,16),10,green(),true);
       NSRect screen=NSMakeRect(x+14,432,388,48);box(screen,dark(),AZSKIN(kHairline),4);
-      double left=owner->value(aztec::kUiGrainStart),right=owner->value(aztec::kUiGrainEnd),head=owner->value(aztec::kUiGrainHead);bool active=owner->value(aztec::kUiGrainActive)>.5;
+      double left=owner->value(aztec::kUiGrainStart),right=owner->value(aztec::kUiGrainEnd),head=owner->value(aztec::kUiGrainHead);bool grainActive=owner->value(aztec::kUiGrainActive)>.5;
       double wavePeak=.02;for(int b=0;b<128;++b)wavePeak=std::max(wavePeak,owner->value(aztec::kUiWave0+b));
-      for(int b=0;b<128;++b){double u=(b+.5)/128.,h=std::max(1.,owner->value(aztec::kUiWave0+b)/wavePeak*30.);bool lit=active&&(b+1.)/128.>=left&&b/128.<=right;box(NSMakeRect(x+18+b*3.,446+(30.-h)*.5,2,h),lit?green():AZSKIN(kFaint),nil,0);}
-      if(active)box(NSMakeRect(x+18+head*384.,446,1,30),cream(),nil,0);
-      label([NSString stringWithFormat:@"GRAIN FOLLOW   ·   %.1f s",owner->value(aztec::kUiWaveSeconds)*16.],NSMakeRect(x+22,433,360,11),9,muted());
+      for(int b=0;b<128;++b){double h=std::max(1.,owner->value(aztec::kUiWave0+b)/wavePeak*30.);bool lit=grainActive&&(b+1.)/128.>=left&&b/128.<=right;box(NSMakeRect(x+18+b*3.,446+(30.-h)*.5,2,h),lit?green():AZSKIN(kFaint),nil,0);}
+      if(grainActive)box(NSMakeRect(x+18+head*384.,446,1,30),cream(),nil,0);
+      label([NSString stringWithFormat:@"GRAIN FOLLOW   \u00b7   %.1f s",owner->value(aztec::kUiWaveSeconds)*16.],NSMakeRect(x+22,433,360,11),9,muted());
     }
-    if(dragSlot>=0&&dropSlot==slot)box(NSMakeRect(x+2,100,412,300),[NSColor clearColor],green(),11);
     if(stage==1){label(@"RANDOM TRIGGER",NSMakeRect(x+20,261,350,20),12,muted());
       label(@"CHANCE = probability at each interval",NSMakeRect(x+20,354,375,24),10,muted());
       label(@"SLICE = cut length  /  burst = up to 2 cuts",NSMakeRect(x+20,380,375,24),10,muted());}
     if(stage==2){
-      label([NSString stringWithFormat:@"16 STEPS  ·  SELECTED %02d",selectedRepeat+1],NSMakeRect(x+20,249,365,16),10,muted());
+      label([NSString stringWithFormat:@"16 STEPS  \u00b7  SELECTED %02d",selectedRepeat+1],NSMakeRect(x+20,249,365,16),10,muted());
       for(int i=0;i<16;++i){
         NSRect r=NSMakeRect(x+19+(i%8)*48,271+(i/8)*39,43,32);bool enabled=owner->value(aztec::kRepeatStep0+i)>=.5;
         const bool selected=i==selectedRepeat;const double press=selected?1.:0.;
         const double a=r.origin.x,b=r.origin.y;
-        // Raised cap, dark lower edge and a narrow top highlight, inside the hit area.
         box(NSMakeRect(a,b+3,43,29),AZSKIN(kWell),AZSKIN(kBorderDark),5);
         box(NSMakeRect(a,b+press,43,28),enabled?AZSKIN(kAccentGlow):AZSKIN(kPanelRaised),selected?cream():(enabled?AZSKIN(kFiligreeDim):AZSKIN(kFiligreeDim)),5);
         box(NSMakeRect(a+4,b+2+press,35,1),enabled?AZSKIN(kFiligree):AZSKIN(kFiligreeDim),nil,0);
@@ -569,8 +568,9 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
         if(i==int(std::round(owner->value(aztec::kUiStep)*15.)))box(NSMakeRect(a+5,b+30,33,2),green(),nil,1);
       }
     }
+    box(NSMakeRect(x+316,106,87,28),AZSKIN(kPanelRaised),AZSKIN(kFiligree),6);
+    label(@"RANDOM",NSMakeRect(x+319,114,81,18),10,cream(),true);
   }
-  for(int i=0;i<2;++i)label(@"›",NSMakeRect(433+i*436,222,17,30),24,green(),true);
   [self panel:NSMakeRect(16,516,836,236)];
   label(@"MODULATION",NSMakeRect(32,533,129,21),13,cream());
   for(int i=0;i<4;++i){
@@ -600,9 +600,35 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
   double px=pad.origin.x+owner->value(aztec::kXYX)*pad.size.width,py=NSMaxY(pad)-owner->value(aztec::kXYY)*pad.size.height;
   NSBezierPath* cross=[NSBezierPath bezierPath];[cross moveToPoint:NSMakePoint(px,pad.origin.y)];[cross lineToPoint:NSMakePoint(px,NSMaxY(pad))];[cross moveToPoint:NSMakePoint(pad.origin.x,py)];[cross lineToPoint:NSMakePoint(NSMaxX(pad),py)];[[AZSKIN(kAccent) colorWithAlphaComponent:.25] setStroke];cross.lineWidth=1.;[cross stroke];
   box(NSMakeRect(px-5,py-5,10,10),green(),cream(),5);
+  if(topTab==3){
+    // RESLICE card: full-width step grid inside the active card band.
+    label(@"STEP GRID",NSMakeRect(pxCard+18,cyCard+52,200,16),10,muted());
+    for(int i=0;i<16;++i){double gx=pxCard+32+i*78.;bool on=owner->value(aztec::kResliceStep0+i)>=.5;
+      box(NSMakeRect(gx,cyCard+74,70,40),on?AZSKIN(kAccentGlow):dark(),selectedReslice==i?cream():muted(),5);
+      label([NSString stringWithFormat:@"%02d \u2192 %02d",i+1,1+int(std::round(owner->value(owner->value(aztec::kResliceRndOn)>.5?aztec::kUiResliceSource0+i:aztec::kResliceIndex0+i)*15.))],NSMakeRect(gx,cyCard+78,70,18),10,on?onText():muted(),true);
+      if(i==int(std::round(owner->value(aztec::kUiResliceStep)*15.)))box(NSMakeRect(gx+5,cyCard+116,60,2),owner->value(aztec::kUiResliceActive)>.5?green():cream(),nil,1);}
+    {BOOL rOn=owner->value(aztec::kResliceEnabled)>.5;box(NSMakeRect(pxCard+18,cyCard+14,72,28),rOn?AZSKIN(kAccentGlow):AZSKIN(kPanelRaised),rOn?green():AZSKIN(kFiligreeDim),5);label(rOn?@"ON":@"OFF",NSMakeRect(pxCard+18,cyCard+20,72,16),10,rOn?onText():cream(),true);}
+    box(NSMakeRect(pxCard+1052,cyCard+14,216,28),AZSKIN(kAccentGlow),green(),5);label(@"RANDOM ONCE",NSMakeRect(pxCard+1052,cyCard+18,216,20),12,onText(),true);
+  }
+  bool resliceInCard=topTab==3;
+  if(!resliceInCard){
   [self panel:NSMakeRect(16,766,1288,108)];label(@"RESLICE",NSMakeRect(32,781,108,24),14,muted());
   box(NSMakeRect(1052,778,216,28),AZSKIN(kAccentGlow),green(),5);label(@"RANDOM ONCE",NSMakeRect(1052,782,216,20),12,onText(),true);
   for(int i=0;i<16;++i){double x=32+i*78.;bool on=owner->value(aztec::kResliceStep0+i)>.5;box(NSMakeRect(x,823,70,40),on?AZSKIN(kAccentGlow):dark(),selectedReslice==i?cream():muted(),5);label([NSString stringWithFormat:@"%02d → %02d",i+1,1+int(std::round(owner->value(owner->value(aztec::kResliceRndOn)>.5?aztec::kUiResliceSource0+i:aztec::kResliceIndex0+i)*15.))],NSMakeRect(x,827,70,18),10,on?onText():muted(),true);if(i==int(std::round(owner->value(aztec::kUiResliceStep)*15.)))box(NSMakeRect(x+5,858,60,2),owner->value(aztec::kUiResliceActive)>.5?green():cream(),nil,1);}
+  }
+  if(topTab==4){
+    // GATER card: full-width gate grid inside the active card band.
+    {BOOL gOn=owner->value(aztec::kGaterEnabled)>.5;box(NSMakeRect(pxCard+18,cyCard+14,72,28),gOn?AZSKIN(kAccentGlow):AZSKIN(kPanelRaised),gOn?green():AZSKIN(kFiligreeDim),5);label(gOn?@"ON":@"OFF",NSMakeRect(pxCard+18,cyCard+20,72,16),10,gOn?onText():cream(),true);}
+    label(@"CLICK: WET / OFF     SHIFT-CLICK: LATCH RELEASE",NSMakeRect(pxCard+760,cyCard+8,500,16),9,muted(),true);
+    for(int i=0;i<16;++i){double gx=pxCard+32+i*78.;int state=owner->value(aztec::kGaterState0+i)>=.25?1:0;if(owner->value(aztec::kGaterEnabled)>.5&&owner->value(aztec::kGaterStepRnd)>.5)state=owner->value(aztec::kUiGaterState0+i)>=.5?1:0;bool release=owner->value(aztec::kGaterRelease0+i)>=.5;double length=owner->value(aztec::kGaterLengthRnd)>.5?owner->value(aztec::kUiGaterLength0+i):.05+.95*owner->value(aztec::kGaterLength0+i);double sustain=owner->value(aztec::kGaterSustain0+i);NSColor* color=release?AZSKIN(kRelease):state?green():muted();
+      box(NSMakeRect(gx,cyCard+26,70,40),dark(),selectedGate==i?cream():color,5);
+      label([NSString stringWithFormat:@"%02d  %@",i+1,release?@"REL":state?@"WET":owner->value(aztec::kGaterLatch)>.5?@"HOLD":@"OFF"],NSMakeRect(gx+2,cyCard+27,66,17),10,color,true);
+      box(NSMakeRect(gx+5,cyCard+48,60,4),AZSKIN(kBorderDark),nil,1);box(NSMakeRect(gx+5,cyCard+48,60*length,4),color,nil,1);
+      box(NSMakeRect(gx+5,cyCard+56,60,4),AZSKIN(kBorderDark),nil,1);box(NSMakeRect(gx+5,cyCard+56,60*sustain,4),AZSKIN(kViolet),nil,1);
+      if(owner->value(aztec::kGaterEnabled)>.5&&i==int(std::round(owner->value(aztec::kUiGaterStep)*15.)))box(NSMakeRect(gx+5,cyCard+64,60,2),cream(),nil,1);}
+  }
+  bool gaterInCard=topTab==4;
+  if(!gaterInCard){
   [self panel:NSMakeRect(16,886,1288,108)];label(@"GATER",NSMakeRect(32,901,104,24),14,muted());
   label(@"CLICK: WET / OFF     SHIFT-CLICK: LATCH RELEASE",NSMakeRect(760,876,500,16),9,muted(),true);
   for(int i=0;i<16;++i){double x=32+i*78.;int state=owner->value(aztec::kGaterState0+i)>=.25?1:0;if(owner->value(aztec::kGaterEnabled)>.5&&owner->value(aztec::kGaterStepRnd)>.5)state=owner->value(aztec::kUiGaterState0+i)>=.5?1:0;bool release=owner->value(aztec::kGaterRelease0+i)>=.5;double length=owner->value(aztec::kGaterLengthRnd)>.5?owner->value(aztec::kUiGaterLength0+i):.05+.95*owner->value(aztec::kGaterLength0+i);double sustain=owner->value(aztec::kGaterSustain0+i);NSColor* color=release?AZSKIN(kRelease):state?green():muted();
@@ -614,6 +640,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
     if(owner->value(aztec::kGaterEnabled)>.5&&i==int(std::round(owner->value(aztec::kUiGaterStep)*15.)))box(NSMakeRect(x+5,981,60,2),cream(),nil,1);
   }
   // Tie wrap-around badge removed (Tie feature dropped).
+  }
   [self panel:NSMakeRect(16,1006,540,136)];
   label(@"FILTER",NSMakeRect(32,1017,100,22),13,cream());
   [self panel:NSMakeRect(568,1006,736,136)];
@@ -731,15 +758,24 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
     for(int percent:{50,60,70,75,80,90,100}){NSMenuItem* item=[[NSMenuItem alloc] initWithTitle:[NSString stringWithFormat:@"%d%%",percent] action:@selector(chooseZoom:) keyEquivalent:@""];item.target=self;item.tag=percent;[menu addItem:item];}
     [NSMenu popUpContextMenu:menu withEvent:event forView:self];return;
   }
-  if(NSPointInRect(p,NSMakeRect(1052,778,216,28))){aztec::randomizeReslice(randomSeed,[&](aztec::ParamID id){return owner->value(id);},[&](aztec::ParamID id,double v){owner->edit(id,v);});[self setNeedsDisplay:YES];return;}
-  for(int i=0;i<16;++i)if(NSPointInRect(p,NSMakeRect(32+i*78,823,70,40))){selectedReslice=i;if(event.clickCount>=2)owner->edit(aztec::kResliceStep0+i,owner->value(aztec::kResliceStep0+i)>.5?0.:1.);[self setNeedsDisplay:YES];return;}
-  for(int i=0;i<16;++i)if(NSPointInRect(p,NSMakeRect(32+i*78,943,70,40))){selectedGate=i;if(event.modifierFlags & NSEventModifierFlagShift){double next=owner->value(aztec::kGaterRelease0+i)>.5?0.:1.;owner->edit(aztec::kGaterRelease0+i,next);if(next>.5)owner->edit(aztec::kGaterState0+i,0.);}else{owner->edit(aztec::kGaterRelease0+i,0.);owner->edit(aztec::kGaterState0+i,owner->value(aztec::kGaterState0+i)>=.25?0.:1.);}[self setNeedsDisplay:YES];return;}
-  for(int i=0;i<3;++i)if(NSPointInRect(p,NSMakeRect(slotX[i]+316,106,87,28))){aztec::randomizeModule([self stage:i],selectedRepeat,randomSeed,[&](aztec::ParamID id,double value){owner->edit(id,value);});[self setNeedsDisplay:YES];return;}
-  for(int i=0;i<3;++i)if(NSPointInRect(p,NSMakeRect(slotX[i]+1,99,226,42))){dragSlot=dropSlot=i;[self setNeedsDisplay:YES];return;}
-  double repeatX=slotX[[self slot:2]];
-  for(int i=0;i<16;++i)if(NSPointInRect(p,NSMakeRect(repeatX+19+(i%8)*48,271+(i/8)*39,43,32))){
+  {double hx=pxHitCard(),hy=pyHitCard();
+  if([self tab]==3){ if(NSPointInRect(p,NSMakeRect(hx+18,hy+14,72,28))){owner->edit(aztec::kResliceEnabled,owner->value(aztec::kResliceEnabled)>=.5?0.:1.);[self setNeedsDisplay:YES];return;}
+  if(NSPointInRect(p,NSMakeRect(hx+1052,hy+14,216,28))){if(event.clickCount>=2)owner->edit(aztec::kResliceEnabled,owner->value(aztec::kResliceEnabled)>=.5?0.:1.);aztec::randomizeReslice(randomSeed,[&](aztec::ParamID id){return owner->value(id);},[&](aztec::ParamID id,double v){owner->edit(id,v);});[self setNeedsDisplay:YES];return;}
+    for(int i=0;i<16;++i)if(NSPointInRect(p,NSMakeRect(hx+32+i*78,hy+74,70,40))){selectedReslice=i;if(event.clickCount>=2)owner->edit(aztec::kResliceStep0+i,owner->value(aztec::kResliceStep0+i)>.5?0.:1.);[self setNeedsDisplay:YES];return;} }
+  else if(NSPointInRect(p,NSMakeRect(1052,778,216,28))){aztec::randomizeReslice(randomSeed,[&](aztec::ParamID id){return owner->value(id);},[&](aztec::ParamID id,double v){owner->edit(id,v);});[self setNeedsDisplay:YES];return;}
+  else if([self tab]!=3)for(int i=0;i<16;++i)if(NSPointInRect(p,NSMakeRect(32+i*78,823,70,40))){selectedReslice=i;if(event.clickCount>=2)owner->edit(aztec::kResliceStep0+i,owner->value(aztec::kResliceStep0+i)>.5?0.:1.);[self setNeedsDisplay:YES];return;}}
+  {double hx=pxHitCard(),hy=pyHitCard();
+  auto gateAction=[&](int i){selectedGate=i;if(event.modifierFlags & NSEventModifierFlagShift){double next=owner->value(aztec::kGaterRelease0+i)>.5?0.:1.;owner->edit(aztec::kGaterRelease0+i,next);if(next>.5)owner->edit(aztec::kGaterState0+i,0.);}else{owner->edit(aztec::kGaterRelease0+i,0.);owner->edit(aztec::kGaterState0+i,owner->value(aztec::kGaterState0+i)>=.25?0.:1.);}[self setNeedsDisplay:YES];};
+  if([self tab]==4){if(NSPointInRect(p,NSMakeRect(hx+18,hy+14,72,28))){owner->edit(aztec::kGaterEnabled,owner->value(aztec::kGaterEnabled)>=.5?0.:1.);[self setNeedsDisplay:YES];return;}
+  for(int i=0;i<16;++i)if(NSPointInRect(p,NSMakeRect(hx+32+i*78,hy+26,70,40))){gateAction(i);return;}}
+  else if([self tab]!=4){for(int i=0;i<16;++i)if(NSPointInRect(p,NSMakeRect(32+i*78,943,70,40))){gateAction(i);return;}}
+  {double hx=pxHitCard(),hy=pyHitCard();int t=[self tab];
+   if(t<3&&NSPointInRect(p,NSMakeRect(hx+316,106,87,28))){aztec::randomizeModule(t,selectedRepeat,randomSeed,[&](aztec::ParamID id,double v){owner->edit(id,v);});[self setNeedsDisplay:YES];return;}}
+  // Card model: no per-slot drag/reorder widgets anymore (single full-width card).
+  if([self tab]==2){double rx=pxHitCard();
+  for(int i=0;i<16;++i)if(NSPointInRect(p,NSMakeRect(rx+19+(i%8)*48,271+(i/8)*39,43,32))){
     selectedRepeat=i;if(event.clickCount>=2){auto id=aztec::ParamID(aztec::kRepeatStep0+i);owner->edit(id,owner->value(id)>=.5?0.:1.);}[self setNeedsDisplay:YES];return;
-  }
+  }}
   for(int i=0;i<4;++i)if(NSPointInRect(p,NSMakeRect(171+i*133,528,120,28))){selectedLfo=i;[self setNeedsDisplay:YES];return;}
   if(NSPointInRect(p,NSMakeRect(880,566,168,166))){
     dragXY=true;owner->begin(aztec::kXYX);owner->begin(aztec::kXYY);owner->change(aztec::kXYX,(p.x-880)/168.);owner->change(aztec::kXYY,1.-(p.y-566)/166.);[self setNeedsDisplay:YES];return;
@@ -764,7 +800,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
 }
 - (void)mouseDragged:(NSEvent*)event {
   if(!owner)return;NSPoint p=[self logical:event];
-  if(dragSlot>=0){dropSlot=-1;for(int i=0;i<3;++i)if(NSPointInRect(p,NSMakeRect(slotX[i],98,416,304)))dropSlot=i;[self setNeedsDisplay:YES];return;}
+  if(dragSlot>=0){[self setNeedsDisplay:YES];return;} // card model: no slot reorder
   if(dragXY){owner->change(aztec::kXYX,(p.x-880)/168.);owner->change(aztec::kXYY,1.-(p.y-566)/166.);[self setNeedsDisplay:YES];return;}
   if(dragID<0)return;double delta=(dragKind==aztec::Slider||dragKind==aztec::Pan)?(p.x-origin.x)/dragRect.size.width:(origin.y-p.y)/180.;
   if(event.modifierFlags&NSEventModifierFlagShift)delta*=.1;

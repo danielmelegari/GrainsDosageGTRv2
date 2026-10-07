@@ -1,8 +1,1 @@
-# Logs
-*.log
-
-# local test builds
-tbuild/
-build-*/
-
-artifacts/
+(empty)artifacts/
