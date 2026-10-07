@@ -1,0 +1,58 @@
+name: Mockup skin build and native GUI checks
+on:
+  push:
+    branches: ['work/mockup-purple-skin']
+  pull_request:
+    paths: ['src/**', 'assets/mockup/**', 'test_*.cpp', 'CMakeLists.txt', '.github/workflows/mockup-skin.yml']
+permissions:
+  contents: read
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15-intel, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download tested VST3 SDK
+        shell: bash
+        run: |
+          git clone --no-checkout https://github.com/steinbergmedia/vst3sdk.git "$RUNNER_TEMP/vst3sdk"
+          git -C "$RUNNER_TEMP/vst3sdk" checkout 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
+          git -C "$RUNNER_TEMP/vst3sdk" submodule update --init --recursive --depth 1
+      - name: Configure
+        shell: bash
+        run: cmake -S . -B build -DVST3_SDK_ROOT="$RUNNER_TEMP/vst3sdk" -DSMTG_CREATE_PLUGIN_LINK=OFF -DGRAINS_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        shell: bash
+        run: cmake --build build --config Release --parallel 4
+      - name: Regression tests
+        shell: bash
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Mac native interactions and screenshot
+        if: runner.os == 'macOS'
+        shell: bash
+        run: build/gui-test/Release/aztec_gui_smoke mockup-native-mac.png
+      - name: Windows native interactions
+        if: runner.os == 'Windows'
+        shell: bash
+        run: build/gui-test/Release/aztec_gui_smoke_win.exe
+      - name: Package Mac VST3
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          codesign --force --sign - --timestamp=none build/VST3/Release/GrainsDosage.vst3
+          ditto -c -k --sequesterRsrc --keepParent build/VST3/Release/GrainsDosage.vst3 GrainsDosage-Purple-macOS-Intel.vst3.zip
+      - name: Package Windows VST3
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path build/VST3/Release/GrainsDosage.vst3 -DestinationPath GrainsDosage-Purple-Windows.vst3.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GrainsDosage-Purple-${{ runner.os }}
+          path: |
+            GrainsDosage-Purple-*.zip
+            mockup-native-mac.png
+          if-no-files-found: error

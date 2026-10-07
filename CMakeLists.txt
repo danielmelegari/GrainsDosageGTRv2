@@ -88,6 +88,9 @@ if(APPLE)
   enable_language(OBJCXX)
   set_property(TARGET GrainsDosage PROPERTY OBJCXX_STANDARD 17)
   set_property(TARGET GrainsDosage PROPERTY OBJCXX_STANDARD_REQUIRED ON)
+  configure_file(assets/mockup/knob.png "${CMAKE_CURRENT_BINARY_DIR}/mockup-knob.png" COPYONLY)
+  set_source_files_properties("${CMAKE_CURRENT_BINARY_DIR}/mockup-knob.png" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+  target_sources(GrainsDosage PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/mockup-knob.png")
   # knobOK.png is the user-supplied knob face: copy it over the shipped knob
   # sprite so both the macOS bundle and the Windows RC resource pick it up.
   if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/workspace/assets/knobOK.png")
@@ -192,3 +195,4 @@ if(GRAINS_BUILD_TESTS)
     add_test(NAME ${suite} COMMAND grains_test_${suite})
   endforeach()
 endif()
+

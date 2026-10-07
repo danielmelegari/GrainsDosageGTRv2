@@ -35,8 +35,8 @@ struct Rgb { int r, g, b; };
 
 // Logical design canvas (keep in sync with editor_mac.mm canvasW/canvasH and
 // the 1320x1360 coordinate space used by editor_layout_win.inl).
-constexpr double canvasW = 1320.0;
-constexpr double canvasH = 1360.0;
+constexpr double canvasW = 1632.0;
+constexpr double canvasH = 1518.0;
 
 // ── Backgrounds / plates ────────────────────────────────────────────────────
 constexpr Rgb bgDeep      {11, 10, 18};   // outermost charcoal behind the frame
@@ -237,17 +237,28 @@ inline Palette midnight(){
   return makeTheme(e,sizeof(e)/sizeof(*e),"midnight");
 }
 
-constexpr int themeCount = 6;
+// Purple panels, white type and cyan indicators from GRAINSDOSAGE_ALL.jpg.
+inline Palette purple(){
+ static const ThemeDef e[]={
+  {kBgDeep,{13,10,28}},{kPanel,{99,53,176}},{kPanelRaised,{47,24,92}},
+  {kPanelInset,{40,36,58}},{kWell,{15,11,28}},{kFiligree,{216,213,229}},
+  {kFiligreeDim,{145,111,201}},{kBorderDark,{54,29,114}},{kHairline,{81,72,101}},
+  {kAccent,{0,241,222}},{kAccentGlow,{0,81,77}},{kAccentBright,{114,255,239}},
+  {kTitle,{255,255,255}},{kCream,{255,255,255}},{kMuted,{158,153,169}},
+  {kFaint,{84,79,102}},{kReadout,{255,255,255}},{kOnText,{255,255,255}}};
+ return makeTheme(e,sizeof(e)/sizeof(*e),"purple");
+}
+constexpr int themeCount = 7;
 inline const char* themeName(int i){
-  static const char* names[themeCount]={"astral","ember","nebula","arctic","aurora","midnight"};
+  static const char* names[themeCount]={"astral","ember","nebula","arctic","aurora","midnight","purple"};
   return i>=0&&i<themeCount?names[i]:"astral";
 }
 inline const char* themeTitle(int i){
-  static const char* titles[themeCount]={"ASTRAL GREEN","EMBER COPPER","NEBULA ROSE","ARCTIC PLATINUM","AURORA LIME","MIDNIGHT MONO"};
+  static const char* titles[themeCount]={"ASTRAL GREEN","EMBER COPPER","NEBULA ROSE","ARCTIC PLATINUM","AURORA LIME","MIDNIGHT MONO","PURPLE MOCKUP"};
   return i>=0&&i<themeCount?titles[i]:"ASTRAL GREEN";
 }
 inline Palette themePalette(int i){
-  switch(i){case 1:return ember();case 2:return nebula();case 3:return arctic();case 4:return aurora();case 5:return midnight();default:return astral();}
+  switch(i){case 1:return ember();case 2:return nebula();case 3:return arctic();case 4:return aurora();case 5:return midnight();case 6:return purple();default:return astral();}
 }
 inline int themeIndex(const std::string& name){
   for(int i=0;i<themeCount;++i)if(name==themeName(i))return i;return -1;
@@ -260,7 +271,7 @@ inline int keyForName(const std::string& n){for(int i=0;i<kColorCount;++i)if(n==
 // NEWGUI mockup). The SKIN menu can switch to any other theme at run time,
 // and a persisted skin file overrides this when present. Set to 0 for the
 // original Astral Green look.
-constexpr int kDefaultTheme = 4; // aurora
+constexpr int kDefaultTheme = 6; // supplied purple mockup
 
 // ── Active skin (renderer state) ─────────────────────────────────────────────
 inline Palette& active(){static Palette p=themePalette(kDefaultTheme);return p;}
@@ -270,3 +281,4 @@ inline Rgb C(ColorKey k){return active().at(int(k));}
 
 } // namespace skin
 } // namespace aztec
+

@@ -10,6 +10,7 @@
 #include "modulation.h"
 #include "skin_spec.h"
 #include "skin_theme.h"
+#include "mockup_ui.h"
 #include "gui/modules_loader.h"
 #include "filter_sequencer.h"
 #include "randomize.h"
@@ -26,7 +27,7 @@
 @class GrainsSurface;
 namespace aztec {
 using namespace Steinberg;using namespace Steinberg::Vst;
-constexpr double canvasW=1320.,canvasH=1360.;
+constexpr double canvasW=mockup::width,canvasH=mockup::height;
 enum Kind {Knob,Slider,Toggle,Select,Pad,Pan,PanMode};
 struct Control {ParamID id;NSRect rect;Kind kind;std::string label;};
 class Editor final:public CPluginView {
@@ -121,8 +122,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
 // 1286 px starting at x=17 -> right edge 1303, inside the 1320 canvas. Shared
 // by the Cocoa paint/hit-test pass and mirrored by the Win32 editor.
 inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
-  double ax=17.;for(int k=0;k<i;++k)ax+=253.;
-  x=ax;y=84;w=250;h=14;
+  auto r=aztec::mockup::tabRect(i);x=r.x;y=r.y;w=r.w;h=r.h;
 }
 
 @interface GrainsSurface:NSView {
@@ -275,18 +275,11 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
           sprite=[[NSImage alloc] initWithContentsOfFile:file];
           seedSkin(spriteNames[i],file);}}
       if(sprite)sprites[spriteKeys[i]]=sprite;}
-    // Knob face (user-supplied knobOK.png shipped as assets/sprites/knob.png).
-    {NSString* kf=skinFile(@"knob");
-     knobFace=kf?[[NSImage alloc] initWithContentsOfFile:kf]:nil;
-     if(!knobFace||!knobFace.representations.count){
-       NSString* probe=[[NSBundle bundleForClass:[GrainsSurface class]] pathForResource:@"knob" ofType:@"png"];
-       if(!exists(probe))probe=@"assets/sprites/knob.png";
-       if(!exists(probe))probe=@"workspace/assets/knobOK.png";
-       if(!exists(probe))probe=@"GrainsDosage/workspace/assets/knobOK.png";
-       if(exists(probe)){
-         knobFace=[[NSImage alloc] initWithContentsOfFile:probe];
-         seedSkin(@"knob",probe);}}}
-    self.toolTip=@"Drag a knob vertically; Shift gives fine control. Double-click resets. Drag module headers to change audio order.";
+    // Use the supplied transparent face. A distinct name avoids stale skins.
+    NSString* face=[[NSBundle bundleForClass:[GrainsSurface class]] pathForResource:@"mockup-knob" ofType:@"png"];
+    if(!exists(face))face=@"assets/mockup/knob.png";
+    knobFace=[[NSImage alloc] initWithContentsOfFile:face];
+    self.toolTip=@"Drag knobs vertically; Shift gives fine control. Double-click resets. Use ORDER to change audio order.";
     timer=[NSTimer timerWithTimeInterval:1./30. target:self selector:@selector(tick:) userInfo:nil repeats:YES];
     [[NSRunLoop mainRunLoop] addTimer:timer forMode:NSRunLoopCommonModes];
   }return self;
@@ -294,7 +287,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
 - (BOOL)isFlipped{return YES;}
 - (BOOL)isOpaque{return YES;}
 - (BOOL)acceptsFirstResponder{return YES;}
-- (BOOL)skinLoaded{return artwork!=nil;}
+- (BOOL)skinLoaded{return knobFace!=nil;}
 - (void)stop {
   if(owner&&dragID>=0)owner->end(aztec::ParamID(dragID));
   if(owner&&dragXY){owner->end(aztec::kXYX);owner->end(aztec::kXYY);}
@@ -399,266 +392,30 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
   }
   box(NSMakeRect(r.origin.x+15,r.origin.y+5,r.size.width-30,1),AZSKIN(kFiligree),nil,0);
 }
-- (void)drawControl:(const aztec::Control&)c {
-  using namespace aztec;NSRect r=c.rect;double v=std::clamp(owner->value(c.id),0.,1.);
-  NSString* title=[NSString stringWithUTF8String:c.label.c_str()];
-  // INPUT DE-CLICK / SENSITIVITY are drawn manually in the header rows.
-  if(c.id==kInputDeclick||c.id==kDeclickSensitivity)return;
-  if(c.kind==PanMode){const char* modes[]={"MANUAL","ALTERNATE","RANDOM"};int mode=int(std::round(v*2.));for(int i=0;i<3;++i){NSRect b=NSMakeRect(r.origin.x+i*r.size.width/3.,r.origin.y,r.size.width/3.-3,r.size.height);box(b,mode==i?AZSKIN(kAccentGlow):dark(),mode==i?green():muted(),4);label([NSString stringWithUTF8String:modes[i]],NSInsetRect(b,2,6),9,mode==i?onText():cream(),true);}return;}
-  if(c.id==kRandomAll){
-    // Momentary trigger: the processor consumes the pulse and mirrors 0 back,
-    // so the lamp lights only while the re-roll request is in flight. The label
-    // stays "RANDOM ALL" even though the shared layout string is shortened to
-    // fit the Win32 toggle renderer.
-    bool pending=v>=.5;box(r,pending?AZSKIN(kAccentGlow):AZSKIN(kPanelRaised),pending?green():AZSKIN(kFiligreeDim),6);
-    if(pending)box(NSMakeRect(r.origin.x+6,NSMidY(r)-6,12,12),AZSKIN(kAccentBright),nil,6);
-    box(NSMakeRect(r.origin.x+9,NSMidY(r)-3,6,6),pending?green():muted(),nil,3);
-    label(@"RANDOM ALL",NSMakeRect(r.origin.x+20,r.origin.y+(r.size.height-14)/2.,r.size.width-25,16),10,pending?onText():muted(),true);return;}
-  if(c.kind==Pan){label(@"L",NSMakeRect(r.origin.x,r.origin.y,16,16),10,cream());label(@"C",NSMakeRect(NSMidX(r)-8,r.origin.y,16,16),10,cream(),true);label(@"R",NSMakeRect(NSMaxX(r)-16,r.origin.y,16,16),10,cream());box(NSMakeRect(r.origin.x+4,r.origin.y+23,r.size.width-8,3),muted(),nil,1);box(NSMakeRect(r.origin.x+v*(r.size.width-8),r.origin.y+18,8,13),green(),nil,3);return;}
-  if(c.kind==Knob){
-    label(title,NSMakeRect(r.origin.x,r.origin.y,r.size.width,16),11,cream(),true);
-    const double cx=NSMidX(r),cy=r.origin.y+43.,radius=24.;
-    double angle=135.+270.*v;
-    if(knobFace){
-      // User-supplied knob PNG face from the replaceable skin folder
-      // (assets/sprites/knob.png → GrainsDosage-skin/knob.png). The face is
-      // drawn as-is (no clipping/recolouring), but ROTATED so the printed
-      // indicator points to 135°+270°·value — same sweep as the vector
-      // fallback pointer. Swap the PNG and the look changes with zero
-      // rebuild; rotation follows the value live.
-      [NSGraphicsContext currentContext].imageInterpolation=NSImageInterpolationHigh;
-      NSRect face=NSMakeRect(cx-radius,cy-radius,radius*2,radius*2);
-      // rot = (angle-90) radians, applied via the raw CGContext so the
-      // on-screen rotation direction is unambiguous. NOTE: we deliberately
-      // use respectFlipped:NO here. In this flipped view, YES would make
-      // AppKit conjugate the image through CTM' = F·M·F, which MIRRORS the
-      // face vertically and turns a clockwise sweep into a counter-
-      // clockwise one (the "upside down" knob). With NO, NSImage draws the
-      // bitmap upright (top of file at top of rect, like every other sprite
-      // call in this view) and the content simply follows the CTM rotation:
-      // positive rot = CLOCKWISE on screen. The printed indicator points UP
-      // at rest, so rot=(angle-90) lands it on the fallback pointer ray
-      // (cos angle, sin angle): v=0 → 135° bottom-left, v=.5 → top,
-      // v=1 → 45° bottom-right, sweeping CLOCKWISE. Verified by
-      // test_knob_rotation.cpp + pixel analysis of assets/sprites/knob.png.
-      double rot=(angle-90.)*::qg::tau/360.;
-      CGContextRef ctx=[NSGraphicsContext currentContext].CGContext;
-      CGContextSaveGState(ctx);
-      CGContextTranslateCTM(ctx,NSMidX(face),NSMidY(face));
-      CGContextRotateCTM(ctx,rot);
-      [knobFace drawInRect:NSMakeRect(-radius,-radius,radius*2,radius*2)
-                  fromRect:NSZeroRect operation:NSCompositingOperationSourceOver
-                   fraction:1. respectFlipped:NO hints:nil];
-      CGContextRestoreGState(ctx);
-    }else{
-    box(NSMakeRect(cx-radius-2,cy-radius+2,radius*2+4,radius*2+4),AZSKIN(kWell),nil,radius+2);
-    NSBezierPath* cap=[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(cx-radius,cy-radius,radius*2,radius*2)];
-    // Knob metal + ring groove resolve against the live palette so every
-    // theme (and the persisted one) recolours the caps too.
-    aztec::skin::Rgb capTopS=aztec::skin::scale(AZCOL(kPanelRaised),1.15),capBotS=AZCOL(kWell);
-    NSColor* capTop=rgb(capTopS.r/255.,capTopS.g/255.,capTopS.b/255.);
-    NSColor* capBot=rgb(capBotS.r/255.,capBotS.g/255.,capBotS.b/255.);
-    NSGradient* metal=[[NSGradient alloc] initWithStartingColor:capTop endingColor:capBot];
-    [metal drawInBezierPath:cap angle:90.];[AZSKIN(kFiligreeDim) setStroke];cap.lineWidth=1.;[cap stroke];
-    // No arcs / groove / tick ring around the knob (removed by request).
-    // The PNG face below is now the canonical look; this vector fallback only
-    // draws a clean cap + pointer if the skin folder is missing knob.png.
-    double a=angle*::qg::tau/360.;NSBezierPath* pointer=[NSBezierPath bezierPath];
-    [pointer moveToPoint:NSMakePoint(cx+8*std::cos(a),cy+8*std::sin(a))];
-    [pointer lineToPoint:NSMakePoint(cx+22*std::cos(a),cy+22*std::sin(a))];
-    [cream() setStroke];pointer.lineWidth=3.;pointer.lineCapStyle=NSRoundLineCapStyle;[pointer stroke];
-    box(NSMakeRect(cx+28*std::cos(a)-2.5,cy+28*std::sin(a)-2.5,5,5),cream(),nil,2.5);
-    }
-    box(NSMakeRect(r.origin.x+4,r.origin.y+74,r.size.width-8,19),dark(),AZSKIN(kHairline),4);
-    label(owner->display(c.id,v),NSMakeRect(r.origin.x+5,r.origin.y+76,r.size.width-10,16),12,AZSKIN(kReadout),true);
-  }else if(c.kind==Slider){
-    label(title,NSMakeRect(r.origin.x,r.origin.y,r.size.width,13),9,muted());
-    double yy=r.origin.y+20.,xx=r.origin.x+4.,width=r.size.width-8.;
-    box(NSMakeRect(xx,yy,width,4),AZSKIN(kHairline),nil,2);
-    double start=bipolar(c.id)?.5:0.;
-    box(NSMakeRect(xx+std::min(v,start)*width,yy,std::max(1.,std::abs(v-start)*width),4),green(),nil,2);
-    [self art:NSMakeRect(453,636,24,32) in:NSMakeRect(xx+v*width-6,yy-7,12,16) opacity:1.];
-    if(r.size.height>=33)label(owner->display(c.id,v),NSMakeRect(r.origin.x,r.origin.y+28,r.size.width,12),10,cream(),true);
-    else label(owner->display(c.id,v),NSMakeRect(r.origin.x+65,r.origin.y,r.size.width-65,13),9,cream(),true);
-  }else if(c.kind==Select){
-    box(r,dark(),AZSKIN(kBorderDark),6);
-    bool stacked=r.size.height>=38;
-    bool compact=r.size.height<16; // thin stacked rows (e.g. MASTER OPTIONS BUFFER)
-    if(stacked)label(title,NSMakeRect(r.origin.x+8,r.origin.y+4,r.size.width-24,11),8,muted());
-    double shown=v;if(c.id==lfoID(selectedLfo,lWave)&&owner->value(kModWaveRnd0+selectedLfo)>0.)shown=owner->value(kUiModWave0+selectedLfo);
-    NSString* value=owner->display(c.id,shown,c.id>=kRandomSteps0&&c.id<kDensityFlow);
-    if(compact){ // horizontal micro row: "BUFFER ▾ 4 s" - click still opens the menu
-      label([title stringByAppendingString:@" ▾"],NSMakeRect(r.origin.x+6,r.origin.y,58,r.size.height),9,onText(),false);
-      label(value,NSMakeRect(r.origin.x+64,r.origin.y,r.size.width-70,r.size.height),9,cream(),true);
-    }
-    else{label(value,NSMakeRect(r.origin.x+8,r.origin.y+(stacked?18:9),r.size.width-29,18),11,cream());label(@"▾",NSMakeRect(NSMaxX(r)-21,r.origin.y+(stacked?17:8),16,18),12,green());}
-  }else if(c.kind==Toggle){
-    bool on=v>=.5;if(c.id>=kGrainEnabled&&c.id<=kRepeatEnabled)title=on?@"ON":@"OFF";if(c.id==kFreeze)title=on?@"FROZEN":@"FREEZE";// sustained toggle: label shows live status
-    bool compact=r.size.height<16; // thin stacked rows (MASTER OPTIONS FREE STRETCH / FREEZE)
-    box(r,on?AZSKIN(kAccentGlow):AZSKIN(kPanelRaised),on?green():AZSKIN(kFiligreeDim),6);
-    box(NSMakeRect(r.origin.x+6,NSMidY(r)-(compact?2:3),compact?4:6,compact?4:6),on?(compact?green():AZSKIN(kAccentBright)):muted(),nil,3);
-    label(title,NSMakeRect(r.origin.x+(compact?14:20),r.origin.y,r.size.width-(compact?18:25),r.size.height),compact?9:10,on?onText():muted(),!compact);
-  }else{
-    bool on=v>=.5;box(r,on?AZSKIN(kAccentGlow):AZSKIN(kPanelRaised),on?green():AZSKIN(kFiligreeDim),5);
-    int step=c.id>=kReverbStep0?int(c.id-kReverbStep0)+1:c.id>=kGlitchStep0?int(c.id-kGlitchStep0)+1:int(c.id-kStep0)+1;
-    if(step==1+int(std::round(owner->value(c.id>=kReverbStep0?kUiReverb:kUiStep)*15.)))box(NSInsetRect(r,1,1),[NSColor clearColor],cream(),4);
-    [self art:NSMakeRect(734,456,54,48) in:NSMakeRect(NSMidX(r)-10,r.origin.y+1,20,18) opacity:(on?1.:.35)];
-    label([NSString stringWithFormat:@"%d",step],NSMakeRect(r.origin.x,NSMaxY(r)-15,r.size.width,14),10,on?onText():muted(),true);
-  }
-}
 - (void)drawRect:(NSRect)dirty {
   (void)dirty;[dark() setFill];NSRectFill(self.bounds);if(!owner)return;[self layoutControls];
-  [NSGraphicsContext saveGraphicsState];NSAffineTransform* t=[NSAffineTransform transform];
-  [t scaleXBy:self.bounds.size.width/aztec::canvasW yBy:self.bounds.size.height/aztec::canvasH];[t concat];
-  [self panel:NSMakeRect(8,8,1304,73)];
-  label(@"GRAINS",NSMakeRect(29,23,165,44),31,AZSKIN(kTitle));label(@"DOSAGE",NSMakeRect(196,23,194,44),31,AZSKIN(kTitle));
-  // Row 1: preset menu, previous, next. Row 2: input de-click + sensitivity, load, save.
-  box(NSMakeRect(420,22,380,30),dark(),green(),5);label([presetName stringByAppendingString:@" ▾"],NSMakeRect(432,30,356,18),12,cream(),true);
-  box(NSMakeRect(806,22,38,30),AZSKIN(kPanelRaised),AZSKIN(kFiligree),5);label(@"<",NSMakeRect(806,30,38,18),13,cream(),true);
-  box(NSMakeRect(848,22,38,30),AZSKIN(kPanelRaised),AZSKIN(kFiligree),5);label(@">",NSMakeRect(848,30,38,18),13,cream(),true);
-  label(@"INPUT DE-CLICK",NSMakeRect(420,63,124,16),10,cream());
-  {BOOL declickOn=owner->value(aztec::kInputDeclick)>=.5;
-  box(NSMakeRect(548,56,130,28),dark(),AZSKIN(kBorderDark),5);
-  label(owner->display(aztec::kDeclickSensitivity,owner->value(aztec::kDeclickSensitivity)),NSMakeRect(553,62,120,16),10,cream(),true);
-  box(NSMakeRect(684,56,56,28),declickOn?AZSKIN(kAccentGlow):AZSKIN(kPanelRaised),declickOn?green():AZSKIN(kFiligreeDim),5);
-  label(declickOn?@"ON":@"OFF",NSMakeRect(684,63,56,16),10,declickOn?onText():cream(),true);}
-  box(NSMakeRect(748,56,46,28),AZSKIN(kPanelRaised),AZSKIN(kFiligree),5);label(@"LOAD",NSMakeRect(748,63,46,16),10,cream(),true);
-  box(NSMakeRect(800,56,46,28),AZSKIN(kPanelRaised),AZSKIN(kFiligree),5);label(@"SAVE",NSMakeRect(800,63,46,16),10,cream(),true);
-  [self drawTabs];   // tab strip: five switchable module cards
-  // ONE full-width card from extreme left to extreme right (x=16..1304,
-  // y=98..502). The active tab decides which of the five modules owns it;
-  // the other four paint nothing at all - no split columns, no solo buttons.
-  const int topTab=[self tab];
-  double pxCard,cyCard,cwCard,chCard;aztec::tabSlotRect(topTab,0,pxCard,cyCard,cwCard,chCard);
-  {double cx,cy,cw,ch;aztec::tabSlotRect(topTab,0,cx,cy,cw,ch);
-  [self panel:NSMakeRect(cx,cy,cw,ch)];
-  label(@(tabNames[topTab]),NSMakeRect(cx+15,cy+12,320,25),14,muted());}
-  if(topTab<3){
-    // ONE full-width card: only the ACTIVE module paints inside it.
-    const int stage=topTab;double x=pxCard;
-    bool active=stage==0?(owner->value(aztec::kGrainEnabled)>.5&&owner->value(aztec::kGrainMix)>.001):owner->value(stage==1?aztec::kUiGlitch:aztec::kUiRepeat)>.5;
-    for(int j=0;j<12;++j)box(NSMakeRect(x+19+j*32,486,23,4),active?green():AZSKIN(kAccentTrack),nil,2);
-    if(stage==0){
-      box(NSMakeRect(x+208,248,196,147),AZSKIN(kPanelInset),AZSKIN(kFiligreeDim),8);
-      label(@"MASTER OPTIONS",NSMakeRect(x+220,252,174,17),10,muted(),true);
-      if(owner->value(aztec::kPanMode)>=.25)label(owner->value(aztec::kPanMode)<.75?@"PAN: ALTERNATE L / R":@"PAN: RANDOM L / R",NSMakeRect(x+170,405,228,16),10,green(),true);
-      NSRect screen=NSMakeRect(x+14,432,388,48);box(screen,dark(),AZSKIN(kHairline),4);
-      double left=owner->value(aztec::kUiGrainStart),right=owner->value(aztec::kUiGrainEnd),head=owner->value(aztec::kUiGrainHead);bool grainActive=owner->value(aztec::kUiGrainActive)>.5;
-      double wavePeak=.02;for(int b=0;b<128;++b)wavePeak=std::max(wavePeak,owner->value(aztec::kUiWave0+b));
-      for(int b=0;b<128;++b){double h=std::max(1.,owner->value(aztec::kUiWave0+b)/wavePeak*30.);bool lit=grainActive&&(b+1.)/128.>=left&&b/128.<=right;box(NSMakeRect(x+18+b*3.,446+(30.-h)*.5,2,h),lit?green():AZSKIN(kFaint),nil,0);}
-      if(grainActive)box(NSMakeRect(x+18+head*384.,446,1,30),cream(),nil,0);
-      label([NSString stringWithFormat:@"GRAIN FOLLOW   \u00b7   %.1f s",owner->value(aztec::kUiWaveSeconds)*16.],NSMakeRect(x+22,433,360,11),9,muted());
-    }
-    if(stage==1){label(@"RANDOM TRIGGER",NSMakeRect(x+20,261,350,20),12,muted());
-      label(@"CHANCE = probability at each interval",NSMakeRect(x+20,354,375,24),10,muted());
-      label(@"SLICE = cut length  /  burst = up to 2 cuts",NSMakeRect(x+20,380,375,24),10,muted());}
-    if(stage==2){
-      label([NSString stringWithFormat:@"16 STEPS  \u00b7  SELECTED %02d",selectedRepeat+1],NSMakeRect(x+20,249,365,16),10,muted());
-      for(int i=0;i<16;++i){
-        NSRect r=NSMakeRect(x+19+(i%8)*48,271+(i/8)*39,43,32);bool enabled=owner->value(aztec::kRepeatStep0+i)>=.5;
-        const bool selected=i==selectedRepeat;const double press=selected?1.:0.;
-        const double a=r.origin.x,b=r.origin.y;
-        box(NSMakeRect(a,b+3,43,29),AZSKIN(kWell),AZSKIN(kBorderDark),5);
-        box(NSMakeRect(a,b+press,43,28),enabled?AZSKIN(kAccentGlow):AZSKIN(kPanelRaised),selected?cream():(enabled?AZSKIN(kFiligreeDim):AZSKIN(kFiligreeDim)),5);
-        box(NSMakeRect(a+4,b+2+press,35,1),enabled?AZSKIN(kFiligree):AZSKIN(kFiligreeDim),nil,0);
-        box(NSMakeRect(a+2,b+5+press,1,19),AZSKIN(kFiligreeDim),nil,0);
-        box(NSMakeRect(a+3,b+26+press,37,1),AZSKIN(kWell),nil,0);
-        label([NSString stringWithFormat:@"%d",i+1],NSMakeRect(a+3,b+2+press,37,13),11,enabled?onText():muted(),true,11);
-        label(owner->display(aztec::kRepeatRate0+i,owner->value(aztec::kRepeatRate0+i),false),NSMakeRect(a+3,b+16+press,37,10),9,enabled?onText():muted(),true,9);
-        if(i==int(std::round(owner->value(aztec::kUiStep)*15.)))box(NSMakeRect(a+5,b+30,33,2),green(),nil,1);
-      }
-    }
-    box(NSMakeRect(x+316,106,87,28),AZSKIN(kPanelRaised),AZSKIN(kFiligree),6);
-    label(@"RANDOM",NSMakeRect(x+319,114,81,18),10,cream(),true);
-  }
-  [self panel:NSMakeRect(16,516,836,236)];
-  label(@"MODULATION",NSMakeRect(32,533,129,21),13,cream());
-  for(int i=0;i<4;++i){
-    NSRect tab=NSMakeRect(171+i*133,528,120,28);bool selected=i==selectedLfo;
-    box(tab,selected?AZSKIN(kPanelRaised):AZSKIN(kPanel),selected?AZSKIN(kFiligree):AZSKIN(kFiligreeDim),6);
-    label([NSString stringWithFormat:@"Mod %d  %@",i+1,owner->value(aztec::lfoID(i,aztec::lEnabled))>=.5?@"●":@"○"],NSMakeRect(tab.origin.x+7,tab.origin.y+7,106,18),11,selected?cream():muted(),true);
-  }
-  NSRect scope=NSMakeRect(32,613,220,64);box(scope,dark(),AZSKIN(kHairline),6);
-  double cycle=std::round(owner->value(aztec::kUiLfoCycle0+selectedLfo)*4294967295.-2147483648.);
-  int64_t epoch=int64_t(std::round(owner->value(aztec::kUiLfoEpoch0+selectedLfo)*4294967295.-2147483648.));
-  ::qg::Lfo preview;preview.prepare(0x13579BDFULL+uint64_t(selectedLfo)*104729+(owner->value(aztec::lfoID(selectedLfo,aztec::lReset))>=.5?uint64_t(epoch)*0x9e3779b97f4a7c15ULL:0));
-  ::qg::LfoSettings shape;shape.enabled=true;shape.beats=1.;
-  shape.wave=int(std::round(owner->value(owner->value(aztec::kModWaveRnd0+selectedLfo)>0.?aztec::kUiModWave0+selectedLfo:aztec::lfoID(selectedLfo,aztec::lWave))*129.));
-  shape.randomSteps=1+int(std::round(owner->value(aztec::kRandomSteps0+selectedLfo)*63.));
-  shape.depth=owner->value(aztec::lfoID(selectedLfo,aztec::lDepth));shape.phase=0.;
-  shape.glide=.01+.99*owner->value(aztec::lfoID(selectedLfo,aztec::lGlide));
-  NSBezierPath* wave=[NSBezierPath bezierPath];for(int i=0;i<=210;++i){double v=preview.process(shape,cycle+double(i)/210.,48000.,false,0);NSPoint pt=NSMakePoint(37+i,640-v*21.);if(i==0)[wave moveToPoint:pt];else[wave lineToPoint:pt];}
-  [green() setStroke];wave.lineWidth=1.6;[wave stroke];label(@"WAVE PREVIEW",NSMakeRect(42,664,190,11),8,muted());
-  double cursor=37.+210.*owner->value(aztec::kUiLfoPhase0+selectedLfo);box(NSMakeRect(cursor,617,2,44),cream(),nil,0);
-  [self panel:NSMakeRect(864,516,440,236)];
-  label(@"XY MORPH",NSMakeRect(880,533,270,21),13,cream());
-  NSRect pad=NSMakeRect(880,566,168,166);box(pad,dark(),AZSKIN(kHairline),8);
-  NSImage* nebula=sprites[@"nebula"];if(nebula)[nebula drawInRect:pad fromRect:NSMakeRect(0,0,nebula.size.width,nebula.size.height) operation:NSCompositingOperationSourceOver fraction:1. respectFlipped:YES hints:nil];
-  NSBezierPath* geometry=[NSBezierPath bezierPath];
-  for(int i=0;i<8;++i){double a=i*::qg::tau/8.;NSPoint pt=NSMakePoint(NSMidX(pad)+72*std::cos(a),NSMidY(pad)+71*std::sin(a));for(int j=i+1;j<8;++j){double b=j*::qg::tau/8.;[geometry moveToPoint:pt];[geometry lineToPoint:NSMakePoint(NSMidX(pad)+72*std::cos(b),NSMidY(pad)+71*std::sin(b))];}}
-  [[AZSKIN(kViolet) colorWithAlphaComponent:.48] setStroke];geometry.lineWidth=.6;[geometry stroke];
-  double px=pad.origin.x+owner->value(aztec::kXYX)*pad.size.width,py=NSMaxY(pad)-owner->value(aztec::kXYY)*pad.size.height;
-  NSBezierPath* cross=[NSBezierPath bezierPath];[cross moveToPoint:NSMakePoint(px,pad.origin.y)];[cross lineToPoint:NSMakePoint(px,NSMaxY(pad))];[cross moveToPoint:NSMakePoint(pad.origin.x,py)];[cross lineToPoint:NSMakePoint(NSMaxX(pad),py)];[[AZSKIN(kAccent) colorWithAlphaComponent:.25] setStroke];cross.lineWidth=1.;[cross stroke];
-  box(NSMakeRect(px-5,py-5,10,10),green(),cream(),5);
-  if(topTab==3){
-    // RESLICE card: full-width step grid inside the active card band.
-    label(@"STEP GRID",NSMakeRect(pxCard+18,cyCard+52,200,16),10,muted());
-    for(int i=0;i<16;++i){double gx=pxCard+32+i*78.;bool on=owner->value(aztec::kResliceStep0+i)>=.5;
-      box(NSMakeRect(gx,cyCard+74,70,40),on?AZSKIN(kAccentGlow):dark(),selectedReslice==i?cream():muted(),5);
-      label([NSString stringWithFormat:@"%02d \u2192 %02d",i+1,1+int(std::round(owner->value(owner->value(aztec::kResliceRndOn)>.5?aztec::kUiResliceSource0+i:aztec::kResliceIndex0+i)*15.))],NSMakeRect(gx,cyCard+78,70,18),10,on?onText():muted(),true);
-      if(i==int(std::round(owner->value(aztec::kUiResliceStep)*15.)))box(NSMakeRect(gx+5,cyCard+116,60,2),owner->value(aztec::kUiResliceActive)>.5?green():cream(),nil,1);}
-    {BOOL rOn=owner->value(aztec::kResliceEnabled)>.5;box(NSMakeRect(pxCard+18,cyCard+14,72,28),rOn?AZSKIN(kAccentGlow):AZSKIN(kPanelRaised),rOn?green():AZSKIN(kFiligreeDim),5);label(rOn?@"ON":@"OFF",NSMakeRect(pxCard+18,cyCard+20,72,16),10,rOn?onText():cream(),true);}
-    box(NSMakeRect(pxCard+1052,cyCard+14,216,28),AZSKIN(kAccentGlow),green(),5);label(@"RANDOM ONCE",NSMakeRect(pxCard+1052,cyCard+18,216,20),12,onText(),true);
-  }
-  bool resliceInCard=topTab==3;
-  if(!resliceInCard){
-  [self panel:NSMakeRect(16,766,1288,108)];label(@"RESLICE",NSMakeRect(32,781,108,24),14,muted());
-  box(NSMakeRect(1052,778,216,28),AZSKIN(kAccentGlow),green(),5);label(@"RANDOM ONCE",NSMakeRect(1052,782,216,20),12,onText(),true);
-  for(int i=0;i<16;++i){double x=32+i*78.;bool on=owner->value(aztec::kResliceStep0+i)>.5;box(NSMakeRect(x,823,70,40),on?AZSKIN(kAccentGlow):dark(),selectedReslice==i?cream():muted(),5);label([NSString stringWithFormat:@"%02d → %02d",i+1,1+int(std::round(owner->value(owner->value(aztec::kResliceRndOn)>.5?aztec::kUiResliceSource0+i:aztec::kResliceIndex0+i)*15.))],NSMakeRect(x,827,70,18),10,on?onText():muted(),true);if(i==int(std::round(owner->value(aztec::kUiResliceStep)*15.)))box(NSMakeRect(x+5,858,60,2),owner->value(aztec::kUiResliceActive)>.5?green():cream(),nil,1);}
-  }
-  if(topTab==4){
-    // GATER card: full-width gate grid inside the active card band.
-    {BOOL gOn=owner->value(aztec::kGaterEnabled)>.5;box(NSMakeRect(pxCard+18,cyCard+14,72,28),gOn?AZSKIN(kAccentGlow):AZSKIN(kPanelRaised),gOn?green():AZSKIN(kFiligreeDim),5);label(gOn?@"ON":@"OFF",NSMakeRect(pxCard+18,cyCard+20,72,16),10,gOn?onText():cream(),true);}
-    label(@"CLICK: WET / OFF     SHIFT-CLICK: LATCH RELEASE",NSMakeRect(pxCard+760,cyCard+8,500,16),9,muted(),true);
-    for(int i=0;i<16;++i){double gx=pxCard+32+i*78.;int state=owner->value(aztec::kGaterState0+i)>=.25?1:0;if(owner->value(aztec::kGaterEnabled)>.5&&owner->value(aztec::kGaterStepRnd)>.5)state=owner->value(aztec::kUiGaterState0+i)>=.5?1:0;bool release=owner->value(aztec::kGaterRelease0+i)>=.5;double length=owner->value(aztec::kGaterLengthRnd)>.5?owner->value(aztec::kUiGaterLength0+i):.05+.95*owner->value(aztec::kGaterLength0+i);double sustain=owner->value(aztec::kGaterSustain0+i);NSColor* color=release?AZSKIN(kRelease):state?green():muted();
-      box(NSMakeRect(gx,cyCard+26,70,40),dark(),selectedGate==i?cream():color,5);
-      label([NSString stringWithFormat:@"%02d  %@",i+1,release?@"REL":state?@"WET":owner->value(aztec::kGaterLatch)>.5?@"HOLD":@"OFF"],NSMakeRect(gx+2,cyCard+27,66,17),10,color,true);
-      box(NSMakeRect(gx+5,cyCard+48,60,4),AZSKIN(kBorderDark),nil,1);box(NSMakeRect(gx+5,cyCard+48,60*length,4),color,nil,1);
-      box(NSMakeRect(gx+5,cyCard+56,60,4),AZSKIN(kBorderDark),nil,1);box(NSMakeRect(gx+5,cyCard+56,60*sustain,4),AZSKIN(kViolet),nil,1);
-      if(owner->value(aztec::kGaterEnabled)>.5&&i==int(std::round(owner->value(aztec::kUiGaterStep)*15.)))box(NSMakeRect(gx+5,cyCard+64,60,2),cream(),nil,1);}
-  }
-  bool gaterInCard=topTab==4;
-  if(!gaterInCard){
-  [self panel:NSMakeRect(16,886,1288,108)];label(@"GATER",NSMakeRect(32,901,104,24),14,muted());
-  label(@"CLICK: WET / OFF     SHIFT-CLICK: LATCH RELEASE",NSMakeRect(760,876,500,16),9,muted(),true);
-  for(int i=0;i<16;++i){double x=32+i*78.;int state=owner->value(aztec::kGaterState0+i)>=.25?1:0;if(owner->value(aztec::kGaterEnabled)>.5&&owner->value(aztec::kGaterStepRnd)>.5)state=owner->value(aztec::kUiGaterState0+i)>=.5?1:0;bool release=owner->value(aztec::kGaterRelease0+i)>=.5;double length=owner->value(aztec::kGaterLengthRnd)>.5?owner->value(aztec::kUiGaterLength0+i):.05+.95*owner->value(aztec::kGaterLength0+i);double sustain=owner->value(aztec::kGaterSustain0+i);NSColor* color=release?AZSKIN(kRelease):state?green():muted();
-    box(NSMakeRect(x,943,70,40),dark(),selectedGate==i?cream():color,5);
-    label([NSString stringWithFormat:@"%02d  %@",i+1,release?@"REL":state?@"WET":owner->value(aztec::kGaterLatch)>.5?@"HOLD":@"OFF"],NSMakeRect(x+2,944,66,17),10,color,true);
-    box(NSMakeRect(x+5,965,60,4),AZSKIN(kBorderDark),nil,1);box(NSMakeRect(x+5,965,60*length,4),color,nil,1);
-    box(NSMakeRect(x+5,973,60,4),AZSKIN(kBorderDark),nil,1);box(NSMakeRect(x+5,973,60*sustain,4),AZSKIN(kViolet),nil,1);
-    // Tie badge removed from the Gater UI.
-    if(owner->value(aztec::kGaterEnabled)>.5&&i==int(std::round(owner->value(aztec::kUiGaterStep)*15.)))box(NSMakeRect(x+5,981,60,2),cream(),nil,1);
-  }
-  // Tie wrap-around badge removed (Tie feature dropped).
-  }
-  [self panel:NSMakeRect(16,1006,540,136)];
-  label(@"FILTER",NSMakeRect(32,1017,100,22),13,cream());
-  [self panel:NSMakeRect(568,1006,736,136)];
-  label(@"REVERB",NSMakeRect(584,1017,100,22),13,cream());
-  if(owner->value(aztec::kReverbSource)>=.5){box(NSMakeRect(592,1110,8,8),owner->value(aztec::kUiReverbGate)>.5?green():muted(),nil,4);label(@"RANDOM IMPULSE  ·  50% CHANCE  ·  TAIL CONTINUES",NSMakeRect(614,1102,650,28),11,cream());}
-
-  [self panel:NSMakeRect(16,1154,1288,128)];
-  label(@"FILTER SEQUENCER",NSMakeRect(32,1173,180,22),13,cream());
-  if(owner->value(aztec::kFilterSeqMode)>.5)label(@"SAMPLE & GLIDE — smooth random cutoff",NSMakeRect(32,1230,704,24),14,green(),true);
-  else for(int i=0;i<32;++i){double x=32+i*22.;double v=::qg::filterPattern(int(std::round(owner->value(aztec::kFilterSeqPattern)*63.)),i);bool active=owner->value(aztec::kFilterSeqOn)>.5&&i==int(std::round(owner->value(aztec::kUiFilterSeqStep)*31.));box(NSMakeRect(x,1223,18,37),dark(),active?green():muted(),3);box(NSMakeRect(x+3,1255-25*(v+1)*.5,12,3+25*(v+1)*.5),active?green():AZSKIN(kAccentTrack),nil,1);}
-  [self panel:NSMakeRect(16,1294,1288,56)];
-  label(@"MASTER",NSMakeRect(32,1312,78,22),13,cream());
-  label(@"OUTPUT",NSMakeRect(994,1304,106,16),10,cream());
-  double level=owner->value(aztec::kUiLevel);
-  for(int j=0;j<24;++j)box(NSMakeRect(994+j*4,1326,2,12),level>j/24.?(j>20?AZSKIN(kHot):AZSKIN(kMeter)):AZSKIN(kMeterOff),nil,1);
-  for(const auto& c:controls)[self drawControl:c];
-  box(NSMakeRect(982,1312,144,26),dark(),AZSKIN(kFiligreeDim),5);label([NSString stringWithFormat:@"SKIN: %@ ▾",[NSString stringWithUTF8String:aztec::theme::skinLabel().c_str()]],NSMakeRect(990,1318,128,15),10,cream(),true);
-  box(NSMakeRect(1140,1312,144,26),dark(),AZSKIN(kFiligreeDim),5);label(@"UI SIZE ▾",NSMakeRect(1148,1318,128,15),10,cream(),true);
+  [NSGraphicsContext saveGraphicsState];NSAffineTransform* transform=[NSAffineTransform transform];
+  [transform scaleXBy:self.bounds.size.width/aztec::canvasW yBy:self.bounds.size.height/aztec::canvasH];[transform concat];
+  using namespace aztec;
+  mockup::Painter painter;
+  painter.box=[](mockup::Rect r,skin::Rgb fill,skin::Rgb edge,double radius){box(NSMakeRect(r.x,r.y,r.w,r.h),C(fill),C(edge),radius);};
+  painter.text=[](const std::string& text,mockup::Rect r,double size,skin::Rgb color,bool center){
+    NSString* str=[NSString stringWithUTF8String:text.c_str()];
+    NSMutableParagraphStyle* style=[[NSMutableParagraphStyle alloc] init];style.alignment=center?NSTextAlignmentCenter:NSTextAlignmentLeft;style.lineBreakMode=NSLineBreakByTruncatingTail;
+    NSFont* font=[NSFont fontWithName:@"Arial-Black" size:size];if(!font)font=[NSFont systemFontOfSize:size weight:NSFontWeightHeavy];
+    NSShadow* shadow=[[NSShadow alloc] init];shadow.shadowColor=rgb(.04,.03,.08,.8);shadow.shadowOffset=NSMakeSize(0,-1);shadow.shadowBlurRadius=1;
+    [str drawInRect:NSMakeRect(r.x,r.y+(r.h-size*1.2)/2,r.w,size*1.4) withAttributes:@{NSFontAttributeName:font,NSForegroundColorAttributeName:C(color),NSParagraphStyleAttributeName:style,NSShadowAttributeName:shadow}];
+  };
+  painter.line=[](double x,double y,double xx,double yy,skin::Rgb col,double width){NSBezierPath* path=[NSBezierPath bezierPath];[path moveToPoint:NSMakePoint(x,y)];[path lineToPoint:NSMakePoint(xx,yy)];[C(col) setStroke];path.lineWidth=width;[path stroke];};
+  painter.knob=[&](mockup::Rect r,double value){
+    if(!knobFace){box(NSMakeRect(r.x,r.y,r.w,r.h),rgb(.7,.7,.7),cream(),r.w/2);return;}
+    CGImageRef face=[knobFace CGImageForProposedRect:nullptr context:nil hints:nil];
+    CGContextRef ctx=[NSGraphicsContext currentContext].CGContext;CGContextSaveGState(ctx);
+    CGContextTranslateCTM(ctx,r.x+r.w/2,r.y+r.h/2);CGContextRotateCTM(ctx,(270*value-135)*::qg::tau/360.);
+    CGContextScaleCTM(ctx,1,-1);CGContextSetInterpolationQuality(ctx,kCGInterpolationHigh);
+    CGContextDrawImage(ctx,CGRectMake(-r.w/2,-r.h/2,r.w,r.h),face);CGContextRestoreGState(ctx);
+  };
+  mockup::render(painter,[&](ParamID id){return owner->value(id);},[&](ParamID id,double v){return std::string([owner->display(id,v) UTF8String]);},std::string([presetName UTF8String]),[self tab],selectedLfo,selectedRepeat,selectedGate,selectedReslice);
   [NSGraphicsContext restoreGraphicsState];
 }
 - (void)chooseSkin:(NSMenuItem*)item {
@@ -743,44 +500,34 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
 }
 - (void)mouseDown:(NSEvent*)event {
   if(!owner)return;[self.window makeFirstResponder:self];NSPoint p=[self logical:event];[self layoutControls];
-  if(NSPointInRect(p,NSMakeRect(806,22,38,30))){[self stepPreset:-1];return;}// PRESET <
-  {int tabHit=[self hitTab:p];if(tabHit>=0){[self chooseTab:tabHit];return;}}// TAB STRIP
-  if(NSPointInRect(p,NSMakeRect(848,22,38,30))){[self stepPreset:1];return;}// PRESET >
-  if(NSPointInRect(p,NSMakeRect(420,22,380,30))){[self presetMenu:event];return;}
-  if(NSPointInRect(p,NSMakeRect(548,56,130,28))){// SENSITIVITY drag
-    owner->edit(aztec::kDeclickSensitivity,std::clamp((p.x-552.)/122.,0.,1.));[self setNeedsDisplay:YES];return;}
-  if(NSPointInRect(p,NSMakeRect(684,56,56,28))){owner->edit(aztec::kInputDeclick,owner->value(aztec::kInputDeclick)>=.5?0.:1.);[self setNeedsDisplay:YES];return;}// DE-CLICK ON/OFF
-  if(NSPointInRect(p,NSMakeRect(982,1312,144,26))){[self skinMenu:event];return;}
-  if(NSPointInRect(p,NSMakeRect(748,56,46,28))){[self preset:NO];return;}// LOAD
-  if(NSPointInRect(p,NSMakeRect(800,56,46,28))){[self preset:YES];return;}// SAVE
-  if(NSPointInRect(p,NSMakeRect(1140,1312,144,26))){
+  using namespace aztec;
+  auto hit=[&](mockup::Rect r){return r.contains(p.x,p.y);};
+  if(hit(mockup::previous)){[self stepPreset:-1];return;}
+  if(hit(mockup::next)){[self stepPreset:1];return;}
+  if(hit(mockup::preset)){[self presetMenu:event];return;}
+  if(hit(mockup::load)){[self preset:NO];return;}
+  if(hit(mockup::save)){[self preset:YES];return;}
+  if(hit(mockup::skinMenu)){[self skinMenu:event];return;}
+  if(hit(mockup::zoomMenu)){
     NSMenu* menu=[[NSMenu alloc] initWithTitle:@"UI size"];
     for(int percent:{50,60,70,75,80,90,100}){NSMenuItem* item=[[NSMenuItem alloc] initWithTitle:[NSString stringWithFormat:@"%d%%",percent] action:@selector(chooseZoom:) keyEquivalent:@""];item.target=self;item.tag=percent;[menu addItem:item];}
     [NSMenu popUpContextMenu:menu withEvent:event forView:self];return;
   }
-  {double hx=[self pxHitCard],hy=[self pyHitCard];
-  if([self tab]==3){ if(NSPointInRect(p,NSMakeRect(hx+18,hy+14,72,28))){owner->edit(aztec::kResliceEnabled,owner->value(aztec::kResliceEnabled)>=.5?0.:1.);[self setNeedsDisplay:YES];return;}
-  if(NSPointInRect(p,NSMakeRect(hx+1052,hy+14,216,28))){if(event.clickCount>=2)owner->edit(aztec::kResliceEnabled,owner->value(aztec::kResliceEnabled)>=.5?0.:1.);aztec::randomizeReslice(randomSeed,[&](aztec::ParamID id){return owner->value(id);},[&](aztec::ParamID id,double v){owner->edit(id,v);});[self setNeedsDisplay:YES];return;}
-    for(int i=0;i<16;++i)if(NSPointInRect(p,NSMakeRect(hx+32+i*78,hy+74,70,40))){selectedReslice=i;if(event.clickCount>=2)owner->edit(aztec::kResliceStep0+i,owner->value(aztec::kResliceStep0+i)>.5?0.:1.);[self setNeedsDisplay:YES];return;} }
-  else if(NSPointInRect(p,NSMakeRect(1052,778,216,28))){aztec::randomizeReslice(randomSeed,[&](aztec::ParamID id){return owner->value(id);},[&](aztec::ParamID id,double v){owner->edit(id,v);});[self setNeedsDisplay:YES];return;}
-  else if([self tab]!=3)for(int i=0;i<16;++i)if(NSPointInRect(p,NSMakeRect(32+i*78,823,70,40))){selectedReslice=i;if(event.clickCount>=2)owner->edit(aztec::kResliceStep0+i,owner->value(aztec::kResliceStep0+i)>.5?0.:1.);[self setNeedsDisplay:YES];return;}}
-  {double hx=[self pxHitCard],hy=[self pyHitCard];
-  auto gateAction=[&](int i){selectedGate=i;if(event.modifierFlags & NSEventModifierFlagShift){double next=owner->value(aztec::kGaterRelease0+i)>.5?0.:1.;owner->edit(aztec::kGaterRelease0+i,next);if(next>.5)owner->edit(aztec::kGaterState0+i,0.);}else{owner->edit(aztec::kGaterRelease0+i,0.);owner->edit(aztec::kGaterState0+i,owner->value(aztec::kGaterState0+i)>=.25?0.:1.);}[self setNeedsDisplay:YES];};
-  if([self tab]==4){if(NSPointInRect(p,NSMakeRect(hx+18,hy+14,72,28))){owner->edit(aztec::kGaterEnabled,owner->value(aztec::kGaterEnabled)>=.5?0.:1.);[self setNeedsDisplay:YES];return;}
-  for(int i=0;i<16;++i)if(NSPointInRect(p,NSMakeRect(hx+32+i*78,hy+26,70,40))){gateAction(i);return;}}
-  else if([self tab]!=4){for(int i=0;i<16;++i)if(NSPointInRect(p,NSMakeRect(32+i*78,943,70,40))){gateAction(i);return;}}
+  int tabHit=mockup::hitTab(p.x,p.y);if(tabHit>=0){[self chooseTab:tabHit];return;}
+  int lfoHit=mockup::hitLfo(p.x,p.y);if(lfoHit>=0){selectedLfo=lfoHit;[self setNeedsDisplay:YES];return;}
+  if(hit(mockup::random)){
+    int t=[self tab];if(t<3)randomizeModule(t,selectedRepeat,randomSeed,[&](ParamID id,double v){owner->edit(id,v);});
+    else if(t==3)randomizeReslice(randomSeed,[&](ParamID id){return owner->value(id);},[&](ParamID id,double v){owner->edit(id,v);});
+    else {for(int i=0;i<16;++i){randomSeed=randomSeed*1664525u+1013904223u;owner->edit(kGaterState0+i,(randomSeed>>31)?1.:0.);}}
+    [self setNeedsDisplay:YES];return;
   }
-  {double hx=[self pxHitCard],hy=[self pyHitCard];int t=[self tab];
-   if(t<3&&NSPointInRect(p,NSMakeRect(hx+316,106,87,28))){aztec::randomizeModule(t,selectedRepeat,randomSeed,[&](aztec::ParamID id,double v){owner->edit(id,v);});[self setNeedsDisplay:YES];return;}}
-  // Card model: no per-slot drag/reorder widgets anymore (single full-width card).
-  if([self tab]==2){double rx=[self pxHitCard];
-  for(int i=0;i<16;++i)if(NSPointInRect(p,NSMakeRect(rx+19+(i%8)*48,271+(i/8)*39,43,32))){
-    selectedRepeat=i;if(event.clickCount>=2){auto id=aztec::ParamID(aztec::kRepeatStep0+i);owner->edit(id,owner->value(id)>=.5?0.:1.);}[self setNeedsDisplay:YES];return;
-  }}
-  for(int i=0;i<4;++i)if(NSPointInRect(p,NSMakeRect(171+i*133,528,120,28))){selectedLfo=i;[self setNeedsDisplay:YES];return;}
-  if(NSPointInRect(p,NSMakeRect(880,566,168,166))){
-    dragXY=true;owner->begin(aztec::kXYX);owner->begin(aztec::kXYY);owner->change(aztec::kXYX,(p.x-880)/168.);owner->change(aztec::kXYY,1.-(p.y-566)/166.);[self setNeedsDisplay:YES];return;
+  int step=mockup::hitStep(p.x,p.y);if([self tab]>=2&&step>=0){
+    if([self tab]==2){selectedRepeat=step;if(event.clickCount>=2)owner->edit(kRepeatStep0+step,owner->value(kRepeatStep0+step)>.5?0.:1.);}
+    if([self tab]==3){selectedReslice=step;if(event.clickCount>=2)owner->edit(kResliceStep0+step,owner->value(kResliceStep0+step)>.5?0.:1.);}
+    if([self tab]==4){selectedGate=step;if(event.modifierFlags&NSEventModifierFlagShift){double v=owner->value(kGaterRelease0+step)>.5?0.:1.;owner->edit(kGaterRelease0+step,v);if(v>.5)owner->edit(kGaterState0+step,0.);}else{owner->edit(kGaterRelease0+step,0.);owner->edit(kGaterState0+step,owner->value(kGaterState0+step)>.25?0.:1.);}}
+    [self setNeedsDisplay:YES];return;
   }
+  if(hit(mockup::xy)){dragXY=true;owner->begin(kXYX);owner->begin(kXYY);owner->change(kXYX,(p.x-mockup::xy.x-12)/(mockup::xy.w-24));owner->change(kXYY,1-(p.y-mockup::xy.y-12)/(mockup::xy.h-24));[self setNeedsDisplay:YES];return;}
   for(const auto& c:controls)if(NSPointInRect(p,c.rect)){
     if(c.kind==aztec::PanMode)owner->edit(c.id,std::clamp(int((p.x-c.rect.origin.x)/(c.rect.size.width/3.)),0,2)/2.);
     else if(c.kind==aztec::Pad||c.kind==aztec::Toggle)owner->edit(c.id,owner->value(c.id)>=.5?0.:1.);
@@ -802,7 +549,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
 - (void)mouseDragged:(NSEvent*)event {
   if(!owner)return;NSPoint p=[self logical:event];
   if(dragSlot>=0){[self setNeedsDisplay:YES];return;} // card model: no slot reorder
-  if(dragXY){owner->change(aztec::kXYX,(p.x-880)/168.);owner->change(aztec::kXYY,1.-(p.y-566)/166.);[self setNeedsDisplay:YES];return;}
+  if(dragXY){owner->change(aztec::kXYX,(p.x-aztec::mockup::xy.x-12)/(aztec::mockup::xy.w-24));owner->change(aztec::kXYY,1.-(p.y-aztec::mockup::xy.y-12)/(aztec::mockup::xy.h-24));[self setNeedsDisplay:YES];return;}
   if(dragID<0)return;double delta=(dragKind==aztec::Slider||dragKind==aztec::Pan)?(p.x-origin.x)/dragRect.size.width:(origin.y-p.y)/180.;
   if(event.modifierFlags&NSEventModifierFlagShift)delta*=.1;
   starting=std::clamp(starting+delta,0.,1.);origin=p;
@@ -825,7 +572,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
 namespace aztec {
 // No "using namespace qg" here: inside this namespace an unqualified qg would
 // find aztec::qg first (shadowing), so global qg names must stay ::qg-qualified.
-Editor::Editor(EditController* c):controller_(c){controller_->addRef();rect=ViewRect(0,0,792,816);(void)::qg::waveBank();}
+Editor::Editor(EditController* c):controller_(c){controller_->addRef();rect=ViewRect(0,0,979,911);(void)::qg::waveBank();}
 Editor::~Editor(){removed();controller_->release();}
 NSString* Editor::display(ParamID id,double v,bool units) const {
   String128 text{};controller_->getParamStringByValue(id,v,text);
@@ -853,3 +600,4 @@ tresult Editor::checkSizeConstraint(ViewRect* size){if(!size)return kInvalidArgu
 void Editor::zoom(double scale){if(plugFrame){ViewRect next(0,0,int32(canvasW*scale),int32(canvasH*scale));plugFrame->resizeView(this,&next);}}
 IPlugView* createEditor(EditController* controller){return new Editor(controller);}
 }
+
