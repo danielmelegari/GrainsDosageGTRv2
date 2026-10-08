@@ -3,7 +3,7 @@ on:
   push:
     branches: ['work/mockup-purple-skin']
   pull_request:
-    paths: ['src/**', 'assets/mockup/**', 'test_*.cpp', 'CMakeLists.txt', '.github/workflows/mockup-skin.yml']
+    paths: ['src/**', 'assets/mockup/**', 'assets/approved-rack/**', 'test_*.cpp', 'CMakeLists.txt', '.github/workflows/mockup-skin.yml']
 permissions:
   contents: read
 jobs:

@@ -20,7 +20,12 @@ int main(int argc,char** argv){
  for(int i=0;i<128;++i)state[kUiWave0+i]=.12+.65*std::abs(std::sin(i*1.74)*std::cos(i*.183));
  for(int i=0;i<waveformBins;++i){double h=.12+.65*std::abs(std::sin(i*.87)*std::cos(i*.0915));state[kUiWaveLow0+i]=.5-h*.5;state[kUiWaveHigh0+i]=.5+h*.5;}
  mockup::Painter p;
- std::cout<<"<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='1744' height='1860' viewBox='0 0 1744 1860'>";
+ std::cout<<"<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='1083' height='1452' viewBox='0 0 1083 1452'>";
+ const char* assets[]={"assets/approved-rack/backplate.png","assets/approved-rack/controls.png"};
+ std::cout<<"<defs>";
+ for(int n=0;n<2;++n){std::ifstream f(assets[n],std::ios::binary);std::string data((std::istreambuf_iterator<char>(f)),{}),encoded;unsigned acc=0;int bits=0;for(unsigned char c:data){acc=(acc<<8)|c;bits+=8;while(bits>=6){bits-=6;encoded+=alphabet[(acc>>bits)&63];}}if(bits)encoded+=alphabet[(acc<<(6-bits))&63];while(encoded.size()%4)encoded+='=';std::cout<<"<image id='art"<<n<<"' width='"<<(n?1254:1083)<<"' height='"<<(n?1254:1452)<<"' xlink:href='data:image/png;base64,"<<encoded<<"'/>";}
+ std::cout<<"</defs>";
+ p.image=[](int art,mockup::Rect r,mockup::Rect source){std::cout<<"<svg x='"<<r.x<<"' y='"<<r.y<<"' width='"<<r.w<<"' height='"<<r.h<<"' viewBox='"<<source.x<<" "<<source.y<<" "<<source.w<<" "<<source.h<<"' preserveAspectRatio='none'><use xlink:href='#art"<<art<<"'/></svg>";};
  p.box=[](mockup::Rect r,skin::Rgb fill,skin::Rgb edge,double radius){std::cout<<"<rect x='"<<r.x<<"' y='"<<r.y<<"' width='"<<r.w<<"' height='"<<r.h<<"' rx='"<<radius<<"' fill='"<<colour(fill)<<"' stroke='"<<colour(edge)<<"'/>";};
  p.text=[](const std::string& s,mockup::Rect r,double size,skin::Rgb c,bool center){std::cout<<"<text x='"<<(center?r.x+r.w/2:r.x)<<"' y='"<<r.y+r.h/2+size*.35<<"' font-family='DejaVu Sans' font-weight='900' font-size='"<<size<<"' text-anchor='"<<(center?"middle":"start")<<"' fill='"<<colour(c)<<"'>"<<escape(s)<<"</text>";};
  p.line=[](double x,double y,double xx,double yy,skin::Rgb c,double w){std::cout<<"<path d='M "<<x<<" "<<y<<" L "<<xx<<" "<<yy<<"' stroke='"<<colour(c)<<"' stroke-width='"<<w<<"'/>";};

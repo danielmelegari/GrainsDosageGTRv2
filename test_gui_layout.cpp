@@ -12,7 +12,7 @@ int main(){
  int selectedLfo=step%4,selectedRepeat=step,selectedGate=step,selectedReslice=step;
  auto value=[&](int id){if(id==kFilterModel)return model/18.; if(id==kPanMode)return double(mode&1); if(id==kReverbModel)return double((mode>>1)&1); if(id==kReverbSource)return double((mode>>2)&1); if(id==kFilterSeqMode)return double((mode>>3)&1); if(id==kModuleOrder)return order/5.; return 0.;};
  std::vector<R> rects;
- #define ADD(id,x,y,w,h,kind,label) do {double a=(x),b=(y),c=(w),d=(h);if(c<=0||d<=0||a<0||b<0||a+c>1632||b+d>mockup::height){std::cerr<<label<<" out of bounds "<<a<<","<<b<<"\n";return 1;}if(int(id)<0||int(id)>=kCount||isMonitor(int(id))){std::cerr<<"Invalid editable parameter "<<int(id)<<"\n";return 1;}rects.push_back({a,b,c,d,int(id),label});}while(0)
+ #define ADD(id,x,y,w,h,kind,label) do {double a=(x),b=(y),c=(w),d=(h);if(c<=0||d<=0||a<0||b<0||a+c>mockup::width||b+d>mockup::height){std::cerr<<label<<" out of bounds "<<a<<","<<b<<"\n";return 1;}if(int(id)<0||int(id)>=kCount||isMonitor(int(id))){std::cerr<<"Invalid editable parameter "<<int(id)<<"\n";return 1;}rects.push_back({a,b,c,d,int(id),label});}while(0)
  #include "src/editor_layout_win.inl"
  #undef ADD
  int reverbPads=0;for(const auto& r:rects)if(r.id>=kReverbStep0&&r.id<kReverbStep0+16)++reverbPads;

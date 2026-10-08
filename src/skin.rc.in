@@ -7,3 +7,6 @@
 207 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/assets/sprites/xy-nebula.png"
 
 208 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/assets/mockup/knob.png"
+
+209 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/assets/approved-rack/backplate.png"
+210 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/assets/approved-rack/controls.png"

@@ -137,6 +137,8 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
   // be edited/swapped without touching code; missing layers fall back to the
   // current vector-on-background rendering, pixel-for-pixel as before.
   NSMutableArray<NSImage*>* moduleLayers;
+  NSImage* rackBackplate;
+  NSImage* rackAtlas;
   NSImage* knobFace;   // user-supplied knobOK.png face (assets/sprites/knob.png)
   NSString* skinDir;   // runtime skin folder: <bundle Resources>/GrainsDosage-skin
                        // (or ./GrainsDosage-skin next to the binary). Drop your
@@ -282,6 +284,12 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
     NSString* face=[[NSBundle bundleForClass:[GrainsSurface class]] pathForResource:@"mockup-knob" ofType:@"png"];
     if(!exists(face))face=@"assets/mockup/knob.png";
     knobFace=[[NSImage alloc] initWithContentsOfFile:face];
+    NSString* back=[[NSBundle bundleForClass:[GrainsSurface class]] pathForResource:@"approved-backplate" ofType:@"png"];
+    if(!exists(back))back=@"assets/approved-rack/backplate.png";
+    rackBackplate=[[NSImage alloc] initWithContentsOfFile:back];
+    NSString* atlas=[[NSBundle bundleForClass:[GrainsSurface class]] pathForResource:@"approved-controls" ofType:@"png"];
+    if(!exists(atlas))atlas=@"assets/approved-rack/controls.png";
+    rackAtlas=[[NSImage alloc] initWithContentsOfFile:atlas];
     self.toolTip=@"Drag knobs vertically; Shift gives fine control. Double-click resets. Drag the module tabs to change audio order.";
     timer=[NSTimer timerWithTimeInterval:1./60. target:self selector:@selector(tick:) userInfo:nil repeats:YES];
     [[NSRunLoop mainRunLoop] addTimer:timer forMode:NSRunLoopCommonModes];
@@ -290,7 +298,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
 - (BOOL)isFlipped{return YES;}
 - (BOOL)isOpaque{return YES;}
 - (BOOL)acceptsFirstResponder{return YES;}
-- (BOOL)skinLoaded{return knobFace!=nil;}
+- (BOOL)skinLoaded{return rackBackplate!=nil&&rackAtlas!=nil;}
 - (void)stop {
   if(owner&&dragID>=0)owner->end(aztec::ParamID(dragID));
   if(owner&&dragXY){owner->end(aztec::kXYX);owner->end(aztec::kXYY);}
@@ -402,6 +410,10 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
   [transform scaleXBy:self.bounds.size.width/aztec::canvasW yBy:self.bounds.size.height/aztec::canvasH];[transform concat];
   using namespace aztec;
   mockup::Painter painter;
+  painter.image=[&](int asset,mockup::Rect r,mockup::Rect source){
+    NSImage* image=asset==mockup::Backplate?rackBackplate:rackAtlas;if(!image)return;
+    [image drawInRect:NSMakeRect(r.x,r.y,r.w,r.h) fromRect:NSMakeRect(source.x,image.size.height-source.y-source.h,source.w,source.h) operation:NSCompositingOperationSourceOver fraction:1. respectFlipped:YES hints:@{NSImageHintInterpolation:@(NSImageInterpolationHigh)}];
+  };
   painter.box=[](mockup::Rect r,skin::Rgb fill,skin::Rgb edge,double radius){box(NSMakeRect(r.x,r.y,r.w,r.h),C(fill),C(edge),radius);};
   painter.text=[](const std::string& text,mockup::Rect r,double size,skin::Rgb color,bool center){
     NSString* str=[NSString stringWithUTF8String:text.c_str()];
@@ -562,7 +574,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
   if(!owner)return;NSPoint p=[self logical:event];
   if(dragSlot>=0){if(std::hypot(p.x-origin.x,p.y-origin.y)>8)routeMoved=true;if(routeMoved)dropSlot=aztec::mockup::routeInsertion(p.x,p.y);[self setNeedsDisplay:YES];return;}
   if(dragXY){owner->change(aztec::kXYX,(p.x-aztec::mockup::xy.x-12)/(aztec::mockup::xy.w-24));owner->change(aztec::kXYY,1.-(p.y-aztec::mockup::xy.y-12)/(aztec::mockup::xy.h-24));[self setNeedsDisplay:YES];return;}
-  if(dragID<0)return;double delta=(dragKind==aztec::Slider||dragKind==aztec::Pan)?(p.x-origin.x)/dragRect.size.width:(origin.y-p.y)/(dragKind==aztec::VSlider?std::max(1.,dragRect.size.height-55):180.);
+  if(dragID<0)return;double delta=(dragKind==aztec::Slider||dragKind==aztec::Pan)?(p.x-origin.x)/dragRect.size.width:(origin.y-p.y)/(dragKind==aztec::VSlider?std::max(1.,dragRect.size.height-42):180.);
   if(event.modifierFlags&NSEventModifierFlagShift)delta*=.1;
   starting=std::clamp(starting+delta,0.,1.);origin=p;
   owner->change(aztec::ParamID(dragID),starting);[self setNeedsDisplay:YES];
@@ -585,7 +597,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
 namespace aztec {
 // No "using namespace qg" here: inside this namespace an unqualified qg would
 // find aztec::qg first (shadowing), so global qg names must stay ::qg-qualified.
-Editor::Editor(EditController* c):controller_(c){controller_->addRef();rect=ViewRect(0,0,int(mockup::width*.5),int(mockup::height*.5));(void)::qg::waveBank();}
+Editor::Editor(EditController* c):controller_(c){controller_->addRef();rect=ViewRect(0,0,int(mockup::width*.65),int(mockup::height*.65));(void)::qg::waveBank();}
 Editor::~Editor(){removed();controller_->release();}
 NSString* Editor::display(ParamID id,double v,bool units) const {
   String128 text{};controller_->getParamStringByValue(id,v,text);

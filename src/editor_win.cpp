@@ -45,7 +45,7 @@ class WinEditor final:public CPluginView{
   std::array<int,5> routingAtDrag;
   double originX=0,originY=0,dragValue=0,dragWidth=1,dragHeight=180;Kind dragKind=Knob;bool dragXY=false,routeMoved=false;
   uint32_t seed=0;HDC dc=nullptr;
-  std::unique_ptr<Gdiplus::Bitmap> mockupKnob;
+  std::unique_ptr<Gdiplus::Bitmap> mockupKnob, rackBackplate, rackAtlas;
   ULONG_PTR imaging=0;HBITMAP skin=nullptr;HDC skinDC=nullptr;HGDIOBJ oldSkin=nullptr;std::array<HBITMAP,6> sprites{};std::array<HDC,6> spriteDC{};std::array<HGDIOBJ,6> oldSprite{};
   void loadSprite(int id,int index){
     // Runtime skin folder first: <plugin dir>\GrainsDosage-spriteNN.png lets
@@ -113,6 +113,16 @@ class WinEditor final:public CPluginView{
         }else GlobalFree(mem);}}
       if(!mockupKnob)mockupKnob.reset(Gdiplus::Bitmap::FromFile(L"assets/mockup/knob.png"));
     }
+    auto loadRack=[&](int id,const wchar_t* fallback,std::unique_ptr<Gdiplus::Bitmap>& target){
+      HRSRC res=FindResourceW(module,MAKEINTRESOURCEW(id),MAKEINTRESOURCEW(10));
+      if(res){DWORD n=SizeofResource(module,res);const void* bytes=LockResource(LoadResource(module,res));
+        HGLOBAL mem=GlobalAlloc(GMEM_MOVEABLE,n);if(mem){void* ptr=GlobalLock(mem);if(ptr){std::memcpy(ptr,bytes,n);GlobalUnlock(mem);IStream* stream=nullptr;
+          if(SUCCEEDED(CreateStreamOnHGlobal(mem,TRUE,&stream))){Gdiplus::Bitmap image(stream);if(image.GetLastStatus()==Gdiplus::Ok)target.reset(image.Clone(Gdiplus::Rect(0,0,int(image.GetWidth()),int(image.GetHeight())),PixelFormat32bppPARGB));stream->Release();}else GlobalFree(mem);
+        }else GlobalFree(mem);}}
+      if(!target)target.reset(Gdiplus::Bitmap::FromFile(fallback));
+    };
+    loadRack(209,L"assets/approved-rack/backplate.png",rackBackplate);
+    loadRack(210,L"assets/approved-rack/controls.png",rackAtlas);
     // Skin-folder background.png wins over the bundled artwork.
     if(std::wstring bg=skinPath(201);!bg.empty()){
       Gdiplus::Bitmap* bitmap=Gdiplus::Bitmap::FromFile(bg.c_str());
@@ -262,6 +272,12 @@ class WinEditor final:public CPluginView{
   static std::string utf8(const std::wstring& s){int n=WideCharToMultiByte(CP_UTF8,0,s.data(),int(s.size()),nullptr,0,nullptr,nullptr);std::string out(size_t(n),' ');if(n)WideCharToMultiByte(CP_UTF8,0,s.data(),int(s.size()),out.data(),n,nullptr,nullptr);return out;}
   void draw(){
     layout();mockup::Painter painter;
+    painter.image=[&](int asset,mockup::Rect r,mockup::Rect source){
+      auto* image=asset==mockup::Backplate?rackBackplate.get():rackAtlas.get();if(!image||image->GetLastStatus()!=Gdiplus::Ok)return;
+      Gdiplus::Graphics g(dc);SIZE viewport{},logical{};GetViewportExtEx(dc,&viewport);GetWindowExtEx(dc,&logical);
+      g.ScaleTransform(float(viewport.cx)/logical.cx,float(viewport.cy)/logical.cy);g.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
+      g.DrawImage(image,Gdiplus::RectF(float(r.x),float(r.y),float(r.w),float(r.h)),float(source.x),float(source.y),float(source.w),float(source.h),Gdiplus::UnitPixel);
+    };
     painter.box=[&](mockup::Rect r,skin::Rgb fill,skin::Rgb edge,double radius){
       // GDI+ gives rounded plates and transparent image edges at every zoom.
       Gdiplus::Graphics g(dc);SIZE viewport{},logical{};GetViewportExtEx(dc,&viewport);GetWindowExtEx(dc,&logical);
@@ -316,22 +332,22 @@ class WinEditor final:public CPluginView{
   static LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp){auto* e=reinterpret_cast<WinEditor*>(GetWindowLongPtrW(hwnd,GWLP_USERDATA));if(msg==WM_NCCREATE){e=static_cast<WinEditor*>(reinterpret_cast<CREATESTRUCTW*>(lp)->lpCreateParams);SetWindowLongPtrW(hwnd,GWLP_USERDATA,reinterpret_cast<LONG_PTR>(e));e->window=hwnd;}if(!e)return DefWindowProcW(hwnd,msg,wp,lp);
     double x=0,y=0;
     switch(msg){
-      case WM_APP+71:return e->mockupKnob&&e->mockupKnob->GetLastStatus()==Gdiplus::Ok;
+      case WM_APP+71:return e->rackBackplate&&e->rackAtlas&&e->rackBackplate->GetLastStatus()==Gdiplus::Ok&&e->rackAtlas->GetLastStatus()==Gdiplus::Ok;
       case WM_ERASEBKGND:return 1;
       case WM_TIMER:{// Modulation arcs removed: nothing per-frame to pull from
         // the audio thread any more; the timer just keeps playhead/meter fresh.
         e->waveVisual.update([&](ParamID id){return e->value(id);});InvalidateRect(hwnd,nullptr,FALSE);return 0;}
       case WM_PAINT:{PAINTSTRUCT ps;HDC screen=BeginPaint(hwnd,&ps);RECT r;GetClientRect(hwnd,&r);HDC mem=CreateCompatibleDC(screen);auto bitmap=CreateCompatibleBitmap(screen,r.right*2,r.bottom*2);auto old=SelectObject(mem,bitmap);SetMapMode(mem,MM_ANISOTROPIC);SetWindowExtEx(mem,int(mockup::width),int(mockup::height),nullptr);SetViewportExtEx(mem,r.right*2,r.bottom*2,nullptr);e->dc=mem;e->draw();SetMapMode(mem,MM_TEXT);SetStretchBltMode(screen,HALFTONE);SetBrushOrgEx(screen,0,0,nullptr);StretchBlt(screen,0,0,r.right,r.bottom,mem,0,0,r.right*2,r.bottom*2,SRCCOPY);SelectObject(mem,old);DeleteObject(bitmap);DeleteDC(mem);EndPaint(hwnd,&ps);return 0;}
       case WM_LBUTTONDOWN:case WM_LBUTTONDBLCLK:e->point(lp,x,y);e->down(x,y,msg==WM_LBUTTONDBLCLK);return 0;
-      case WM_MOUSEMOVE:e->point(lp,x,y);if(e->dragSlot>=0){if(std::hypot(x-e->originX,y-e->originY)>8)e->routeMoved=true;if(e->routeMoved)e->dropSlot=mockup::routeInsertion(x,y);InvalidateRect(hwnd,nullptr,FALSE);}else if(e->dragXY){e->change(kXYX,(x-mockup::xy.x-12)/(mockup::xy.w-24));e->change(kXYY,1-(y-mockup::xy.y-12)/(mockup::xy.h-24));}else if(e->dragID>=0){double delta=(e->dragKind==Slider||e->dragKind==Pan)?(x-e->originX)/e->dragWidth:(e->originY-y)/(e->dragKind==VSlider?std::max(1.,e->dragHeight-55):180.);if(GetKeyState(VK_SHIFT)&0x8000)delta*=.1;e->dragValue=std::clamp(e->dragValue+delta,0.,1.);e->originX=x;e->originY=y;e->change(ParamID(e->dragID),e->dragValue);}return 0;
+      case WM_MOUSEMOVE:e->point(lp,x,y);if(e->dragSlot>=0){if(std::hypot(x-e->originX,y-e->originY)>8)e->routeMoved=true;if(e->routeMoved)e->dropSlot=mockup::routeInsertion(x,y);InvalidateRect(hwnd,nullptr,FALSE);}else if(e->dragXY){e->change(kXYX,(x-mockup::xy.x-12)/(mockup::xy.w-24));e->change(kXYY,1-(y-mockup::xy.y-12)/(mockup::xy.h-24));}else if(e->dragID>=0){double delta=(e->dragKind==Slider||e->dragKind==Pan)?(x-e->originX)/e->dragWidth:(e->originY-y)/(e->dragKind==VSlider?std::max(1.,e->dragHeight-42):180.);if(GetKeyState(VK_SHIFT)&0x8000)delta*=.1;e->dragValue=std::clamp(e->dragValue+delta,0.,1.);e->originX=x;e->originY=y;e->change(ParamID(e->dragID),e->dragValue);}return 0;
       case WM_LBUTTONUP:if(e->dragSlot>=0&&!e->routeMoved)e->chooseTab(e->routingAtDrag[e->dragSlot]);if(e->dragSlot>=0&&e->dropSlot>=0&&e->dropSlot!=e->dragSlot&&e->dropSlot!=e->dragSlot+1)e->edit(kRoutingOrder,mockup::moveRoute(e->routingAtDrag,e->dragSlot,e->dropSlot));e->end();ReleaseCapture();InvalidateRect(hwnd,nullptr,FALSE);return 0;
       case WM_CAPTURECHANGED:e->end();return 0;
       case WM_MOUSEWHEEL:{POINT p{GET_X_LPARAM(lp),GET_Y_LPARAM(lp)};ScreenToClient(hwnd,&p);e->point(MAKELPARAM(p.x,p.y),x,y);e->layout();for(const auto& c:e->controls)if(inside(x,y,c.x,c.y,c.w,c.h)&&(c.kind==Knob||c.kind==Slider||c.kind==VSlider)){int n=e->info(c.id).stepCount;double d=n?1./n:.01;if(GetKeyState(VK_SHIFT)&0x8000)d*=.1;e->edit(c.id,e->value(c.id)+(GET_WHEEL_DELTA_WPARAM(wp)>0?d:-d));break;}return 0;}
     }return DefWindowProcW(hwnd,msg,wp,lp);
   }
 public:
-  explicit WinEditor(EditController* c):controller(c){controller->addRef();rect=ViewRect(0,0,int(mockup::width*.5),int(mockup::height*.5));seed=uint32_t(GetTickCount64())^uint32_t(reinterpret_cast<uintptr_t>(this));seed|=1;loadSkin();}
-  ~WinEditor()override{removed();mockupKnob.reset();if(skinDC){SelectObject(skinDC,oldSkin);DeleteDC(skinDC);}if(skin)DeleteObject(skin);for(size_t i=0;i<sprites.size();++i){if(spriteDC[i]){SelectObject(spriteDC[i],oldSprite[i]);DeleteDC(spriteDC[i]);}if(sprites[i])DeleteObject(sprites[i]);}if(imaging)Gdiplus::GdiplusShutdown(imaging);controller->release();}
+  explicit WinEditor(EditController* c):controller(c){controller->addRef();rect=ViewRect(0,0,int(mockup::width*.65),int(mockup::height*.65));seed=uint32_t(GetTickCount64())^uint32_t(reinterpret_cast<uintptr_t>(this));seed|=1;loadSkin();}
+  ~WinEditor()override{removed();mockupKnob.reset();rackBackplate.reset();rackAtlas.reset();if(skinDC){SelectObject(skinDC,oldSkin);DeleteDC(skinDC);}if(skin)DeleteObject(skin);for(size_t i=0;i<sprites.size();++i){if(spriteDC[i]){SelectObject(spriteDC[i],oldSprite[i]);DeleteDC(spriteDC[i]);}if(sprites[i])DeleteObject(sprites[i]);}if(imaging)Gdiplus::GdiplusShutdown(imaging);controller->release();}
   tresult PLUGIN_API isPlatformTypeSupported(FIDString type)override{return type&&std::strcmp(type,kPlatformTypeHWND)==0?kResultTrue:kResultFalse;}
   tresult PLUGIN_API attached(void* parent,FIDString type)override{if(!parent||window||isPlatformTypeSupported(type)!=kResultTrue)return kResultFalse;HINSTANCE instance=nullptr;GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,reinterpret_cast<LPCWSTR>(&proc),&instance);WNDCLASSW wc{};wc.style=CS_DBLCLKS;wc.lpfnWndProc=proc;wc.hInstance=instance;wc.hCursor=LoadCursor(nullptr,IDC_ARROW);wc.lpszClassName=L"GrainsDosage070";RegisterClassW(&wc);window=CreateWindowExW(0,wc.lpszClassName,L"GrainsDosage",WS_CHILD|WS_VISIBLE,0,0,rect.getWidth(),rect.getHeight(),static_cast<HWND>(parent),nullptr,instance,this);if(!window)return kResultFalse;SetTimer(window,1,16,nullptr);return CPluginView::attached(parent,type);}
   tresult PLUGIN_API removed()override{end();if(window){KillTimer(window,1);DestroyWindow(window);window=nullptr;}return CPluginView::removed();}

@@ -15,7 +15,7 @@ int main(int argc,char** argv){@autoreleasepool {try{
  NSWindow* window=[[NSWindow alloc] initWithContentRect:NSMakeRect(0,0,size.getWidth(),size.getHeight()) styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];window.releasedWhenClosed=NO;
  checkGui(view->attached((__bridge void*)window.contentView,kPlatformTypeNSView)==kResultOk,"Attach");
  NSView* surface=window.contentView.subviews.firstObject;checkGui(surface,"Native view");
- checkGui([(id<GrainsGuiInspection>)surface skinLoaded],"Supplied knob PNG loaded");
+ checkGui([(id<GrainsGuiInspection>)surface skinLoaded],"Approved rack PNG assets loaded");
  auto send=[&](NSEventType type,double x,double y,int clicks=1){
   NSPoint point=[surface convertPoint:NSMakePoint((x+aztec::mockup::rackInset)*surface.bounds.size.width/aztec::mockup::width,y*surface.bounds.size.height/aztec::mockup::height) toView:nil];
   NSEvent* e=[NSEvent mouseEventWithType:type location:point modifierFlags:0 timestamp:0 windowNumber:window.windowNumber context:nil eventNumber:1 clickCount:clicks pressure:1.];
@@ -24,34 +24,39 @@ int main(int argc,char** argv){@autoreleasepool {try{
  auto click=[&](double x,double y,int n=1){send(NSEventTypeLeftMouseDown,x,y,n);send(NSEventTypeLeftMouseUp,x,y,n);};
  auto toggle=[&](int id,double x,double y){double before=c->getParamNormalized(id);click(x,y);checkGui(c->getParamNormalized(id)==(before>=.5?0.:1.),"Toggle binding");c->setParamNormalized(id,before);};
  using namespace aztec;
- toggle(kFreeze,440,442);toggle(kInputDeclick,1350,66);toggle(kXYEnable,1545,703);toggle(kMasterFilter,209,1158);toggle(kMasterLimiter,1505,1717);
- c->setParamNormalized(kSize,.25);send(NSEventTypeLeftMouseDown,158,290);send(NSEventTypeLeftMouseDragged,158,245);send(NSEventTypeLeftMouseUp,158,245);
- checkGui(std::abs(c->getParamNormalized(kSize)-.5)<1e-6,"Grain knob drag");click(158,290,2);checkGui(std::abs(c->getParamNormalized(kSize)-.25)<1e-6,"Double click reset");
+ auto controlRect=[&](ParamID id){auto list=mockup::controls([&](ParamID p){return c->getParamNormalized(p);},tabFromValue(c->getParamNormalized(kUiTab)),id==lfoID(2,lEnabled)?2:0,0,0,0);for(const auto& item:list)if(item.id==id)return item.r;throw std::runtime_error("Missing control");};
+ auto toggleControl=[&](ParamID id){auto r=controlRect(id);toggle(id,r.x+r.w/2,r.y+r.h/2);};
+ auto clickRect=[&](mockup::Rect r){click(r.x+r.w/2,r.y+r.h/2);};
+ auto chooseTab=[&](int t){auto r=mockup::tabRect(t);click(r.x+r.w*.4,r.y+r.h/2);};
+ toggleControl(kFreeze);toggleControl(kInputDeclick);toggleControl(kXYEnable);toggleControl(kMasterFilter);toggleControl(kMasterLimiter);
+ auto sizeRect=controlRect(kSize);double knobX=sizeRect.x+sizeRect.w/2,knobY=sizeRect.y+sizeRect.h/2;
+ c->setParamNormalized(kSize,.25);send(NSEventTypeLeftMouseDown,knobX,knobY);send(NSEventTypeLeftMouseDragged,knobX,knobY-45);send(NSEventTypeLeftMouseUp,knobX,knobY-45);
+ checkGui(std::abs(c->getParamNormalized(kSize)-.5)<1e-6,"Grain knob drag");click(knobX,knobY,2);checkGui(std::abs(c->getParamNormalized(kSize)-.25)<1e-6,"Double click reset");
  const ParamID enabled[]={kGrainEnabled,kGlitchEnabled,kRepeatEnabled,kResliceEnabled,kGaterEnabled};
- for(int t=0;t<5;++t){click(140+252*t,135);checkGui(tabFromValue(c->getParamNormalized(kUiTab))==t,"Tab hit target");checkGui([(id<GrainsGuiInspection>)surface controlsFit],"Controls fit each tab");toggle(enabled[t],1300,(t==3?597:t==2?410:442));auto led=mockup::ledRect(t);toggle(enabled[t],led.x+led.w/2,led.y+led.h/2);[surface display];}
- click(140+3*252,135);toggle(kResliceRndOn,750,248);click(57+81*5+22,400);// single click selects without toggling
+ for(int t=0;t<5;++t){chooseTab(t);checkGui(tabFromValue(c->getParamNormalized(kUiTab))==t,"Tab hit target");checkGui([(id<GrainsGuiInspection>)surface controlsFit],"Controls fit each tab");toggleControl(enabled[t]);auto led=mockup::ledRect(t);toggle(enabled[t],led.x+led.w/2,led.y+led.h/2);[surface display];}
+ chooseTab(3);toggleControl(kResliceRndOn);clickRect(mockup::stepRect(5,3));// single click selects without toggling
  // Double-click a reslice step toggles its stored enabled state.
- double old=c->getParamNormalized(kResliceStep0+5);click(57+81*5+22,400,2);checkGui(c->getParamNormalized(kResliceStep0+5)==(old>.5?0.:1.),"Reslice step toggle");
- click(140+4*252,135);toggle(kGaterState0,77,536);
- click(140,135);click(688+105*2,703);toggle(lfoID(2,lEnabled),540,703);
+ double old=c->getParamNormalized(kResliceStep0+5);click(mockup::stepRect(5,3).x+12,mockup::stepRect(5,3).y+30,2);checkGui(c->getParamNormalized(kResliceStep0+5)==(old>.5?0.:1.),"Reslice step toggle");
+ chooseTab(4);toggle(kGaterState0,mockup::stepRect(0,4).x+12,mockup::stepRect(0,4).y+20);
+ chooseTab(0);clickRect(mockup::lfoRect(2));toggleControl(lfoID(2,lEnabled));
  click(aztec::mockup::xy.x+12,aztec::mockup::xy.y+12);checkGui(c->getParamNormalized(kXYX)==0&&c->getParamNormalized(kXYY)==1,"XY corner");
  c->setParamNormalized(kXYX,.5);c->setParamNormalized(kXYY,.5);
  auto routeValue=[&](ParamID id){return c->getParamNormalized(id);};
  auto original=mockup::routeChain(routeValue);
- send(NSEventTypeLeftMouseDown,1140,138);send(NSEventTypeLeftMouseDragged,138,138);send(NSEventTypeLeftMouseUp,138,138);
+ send(NSEventTypeLeftMouseDown,mockup::tabRect(4).x+40,175);send(NSEventTypeLeftMouseDragged,mockup::tabRect(0).x+20,175);send(NSEventTypeLeftMouseUp,mockup::tabRect(0).x+20,175);
  auto moved=mockup::routeChain(routeValue);checkGui(moved[0]==original[4]&&moved[1]==original[0],"Routing inserts before first");
- click(138,138);checkGui(tabFromValue(c->getParamNormalized(kUiTab))==original[4],"Moved top button selects its module");
+ click(mockup::tabRect(0).x+20,175);checkGui(tabFromValue(c->getParamNormalized(kUiTab))==original[4],"Moved top button selects its module");
  auto led0=mockup::ledRect(0);toggle(enabled[original[4]],led0.x+led0.w/2,led0.y+led0.h/2);
- send(NSEventTypeLeftMouseDown,138,138);send(NSEventTypeLeftMouseDragged,1270,138);send(NSEventTypeLeftMouseUp,1270,138);
+ send(NSEventTypeLeftMouseDown,mockup::tabRect(0).x+20,175);send(NSEventTypeLeftMouseDragged,mockup::tabRect(4).x+mockup::tabRect(4).w-3,175);send(NSEventTypeLeftMouseUp,mockup::tabRect(4).x+mockup::tabRect(4).w-3,175);
  checkGui(mockup::routeChain(routeValue)==original,"Routing inserts after last");
  double beforeCancel=c->getParamNormalized(kRoutingOrder);
- send(NSEventTypeLeftMouseDown,138,138);send(NSEventTypeLeftMouseDragged,100,100);send(NSEventTypeLeftMouseUp,100,100);
+ send(NSEventTypeLeftMouseDown,mockup::tabRect(0).x+20,175);send(NSEventTypeLeftMouseDragged,100,100);send(NSEventTypeLeftMouseUp,100,100);
  checkGui(c->getParamNormalized(kRoutingOrder)==beforeCancel,"Routing outside drop cancels");
  // Locks bind to their mixes and only intercept randomisation.
- click(140,135);c->setParamNormalized(kGrainMix,.271);c->setParamNormalized(kMixLock0,0.);click(1220,404);checkGui(c->getParamNormalized(kMixLock0)==1.,"Mix lock click");
- click(1000,442);checkGui(c->getParamNormalized(kGrainMix)==.271,"Locked mix survives Random");click(1220,404);click(1000,442);checkGui(c->getParamNormalized(kGrainMix)!=.271,"Unlocked mix randomises");
- c->setParamNormalized(kReverbMix,.25);send(NSEventTypeLeftMouseDown,116,1650);send(NSEventTypeLeftMouseDragged,116,1620);send(NSEventTypeLeftMouseUp,116,1620);checkGui(c->getParamNormalized(kReverbMix)>.4,"Vertical reverb fader");
- click(987,52);checkGui(c->getParamNormalized(kRoutingOrder)==factoryPreset(0)[kRoutingOrder],"First categorised preset");click(987,52);checkGui(c->getParamNormalized(kRoutingOrder)==factoryPreset(1)[kRoutingOrder],"Next categorised preset");
+ chooseTab(0);c->setParamNormalized(kGrainMix,.271);c->setParamNormalized(kMixLock0,0.);clickRect(controlRect(kMixLock0));checkGui(c->getParamNormalized(kMixLock0)==1.,"Mix lock click");
+ clickRect(mockup::randomRect(0));checkGui(c->getParamNormalized(kGrainMix)==.271,"Locked mix survives Random");clickRect(controlRect(kMixLock0));clickRect(mockup::randomRect(0));checkGui(c->getParamNormalized(kGrainMix)!=.271,"Unlocked mix randomises");
+ c->setParamNormalized(kReverbMix,.25);send(NSEventTypeLeftMouseDown,113,1310);send(NSEventTypeLeftMouseDragged,113,1280);send(NSEventTypeLeftMouseUp,113,1280);checkGui(c->getParamNormalized(kReverbMix)>.4,"Vertical reverb fader");
+ clickRect(mockup::next);checkGui(c->getParamNormalized(kRoutingOrder)==factoryPreset(0)[kRoutingOrder],"First categorised preset");clickRect(mockup::next);checkGui(c->getParamNormalized(kRoutingOrder)==factoryPreset(1)[kRoutingOrder],"Next categorised preset");
  c->setParamNormalized(kReverbSource,1.);
  ViewRect resized(0,0,816,759);checkGui(view->checkSizeConstraint(&resized)==kResultOk,"Resize constraints");view->onSize(&resized);checkGui([(id<GrainsGuiInspection>)surface controlsFit],"Resize keeps controls visible");
  [surface display];NSBitmapImageRep* bitmap=[surface bitmapImageRepForCachingDisplayInRect:surface.bounds];[surface cacheDisplayInRect:surface.bounds toBitmapImageRep:bitmap];

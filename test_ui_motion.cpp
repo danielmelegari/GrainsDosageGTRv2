@@ -14,7 +14,7 @@ int main(){using namespace aztec;
  auto b=a;b.pitch=24;b.position=.7;qg::Engine one,two;one.set(a);two.set(b);one.prepare(8000);two.prepare(8000);one.set(a);two.set(b);
  for(int n=0;n<12000;++n){float l,r,x=.2f*std::sin(n*.071);one.process(x,-x,n/4000.,l,r);two.process(x,-x,n/4000.,l,r);}
  auto w1=one.grainView(),w2=two.grainView();assert(w1.low==w2.low&&w1.high==w2.high&&w1.seconds==w2.seconds);
- assert(mockup::routeInsertion(100,100)==-1&&mockup::routeInsertion(138,138)==0&&mockup::routeInsertion(1270,138)==5);
+ assert(mockup::routeInsertion(100,100)==-1&&mockup::routeInsertion(mockup::tabRect(0).x,175)==0&&mockup::routeInsertion(mockup::tabRect(4).x+mockup::tabRect(4).w,175)==5);
  for(double rate:{1.5,.75}){qg::StepReverb reverb;reverb.prepare(8000);reverb.set(true,0,rate,0x5555,1.,1.,false,false,rate);
   for(int i=0;i<100;++i){double beat=i*.071;float l=0,r=0;reverb.process(l,r,beat);assert(reverb.gateOpen()==(int(std::floor(beat/rate))%2==0));}
   reverb.set(true,0,rate,0,1.,1.,false,true,rate);
