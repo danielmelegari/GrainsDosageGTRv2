@@ -214,7 +214,7 @@ class WinEditor final:public CPluginView{
     for(int category=0;category<factoryCategoryCount+2;++category){HMENU group=CreatePopupMenu();int count=0;
       for(size_t i=0;i<names.size();++i){auto label=names[i].substr(0,names[i].find_last_of(L'.'));if(presetCategory(label)!=category)continue;
         AppendMenuW(group,MF_STRING|(label==presetName?MF_CHECKED:0),UINT_PTR(i+1),label.c_str());++count;}
-      if(count){std::string title=factoryCategories[category];std::wstring wide(title.begin(),title.end());AppendMenuW(menu,MF_POPUP,UINT_PTR(group),wide.c_str());}else DestroyMenu(group);
+      if(count){std::string title=factoryCategories[category];std::wstring wide;for(char ch:title){wide+=wchar_t(ch);if(ch=='&')wide+=L'&';}AppendMenuW(menu,MF_POPUP,UINT_PTR(group),wide.c_str());}else DestroyMenu(group);
     }
     AppendMenuW(menu,MF_SEPARATOR,0,nullptr);AppendMenuW(menu,MF_STRING,UINT_PTR(names.size()+1),L"Open Preset Folder…");POINT point;GetCursorPos(&point);int choice=TrackPopupMenu(menu,TPM_RETURNCMD,point.x,point.y,0,window,nullptr);DestroyMenu(menu);
     if(choice==int(names.size()+1))ShellExecuteW(window,L"open",folder.c_str(),nullptr,nullptr,SW_SHOWNORMAL);

@@ -137,6 +137,8 @@ int main() {
   assert(processor->process(data)==kResultOk);assert(std::abs(outL[127])<=qg::MasterFx::ceiling+1e-6);
   for(double selected:{0.,.5,1.}){changes.clearQueue();put(kLimiterCeiling,selected);assert(processor->process(data)==kResultOk);double db=selected==0?0:selected==.5?-6:-10;for(int i=0;i<128;++i){assert(std::abs(double(outL[i]))<=std::pow(10.,db/20.));assert(std::abs(double(outR[i]))<=std::pow(10.,db/20.));}}
   changes.clearQueue();put(kMasterLimiter,0.);assert(processor->process(data)==kResultOk);assert(outL[127]==2.f&&outR[127]==.5f);
+  // RMS monitor channels reflect distinct actual host outputs.
+  {double rms[2]={-1.,-1.};for(int i=0;i<meters.getParameterCount();++i){auto* q=meters.getParameterData(i);int id=int(q->getParameterId());if(id==kUiOutputL||id==kUiOutputR){int32 offset=0;double v=0;assert(q->getPoint(q->getPointCount()-1,offset,v)==kResultOk);rms[id-kUiOutputL]=v;}}assert(rms[0]==1.&&std::abs(rms[1]-.5)<1e-6);}
   changes.clearQueue();put(kMasterFilter,1.);put(kMix,1.);put(kGrainMix,0.);put(kFilterType,1.);put(kFilterCutoff,std::log(50.)/std::log(1000.));
   for(int i=0;i<80;++i)assert(processor->process(data)==kResultOk);
   assert(std::abs(outL[127])<1e-4); // HP rejects a DC source through real VST queues.
@@ -157,6 +159,11 @@ int main() {
     in64L[64]=.987654321123;assert(processor->process(data)==kResultOk);
     assert(std::abs(out64L[96])<1e-10); // wet path active (mix=0 => silent), not dry passthrough
     assert(out64R[96]==0.);
+  }
+  // The host's Randomize All trigger uses the same lock policy as the GUI.
+  {changes.clearQueue();for(int i=0;i<6;++i)put(lockableMixes[i],.271);assert(processor->process(data)==kResultOk);
+   changes.clearQueue();for(int i=0;i<6;++i)put(kMixLock0+i,1.);put(kRandomAll,1.);assert(processor->process(data)==kResultOk);
+   MemoryStream stored;assert(processor->getState(&stored)==kResultOk);stored.seek(0,IBStream::kIBSeekSet,nullptr);auto locked=defaults();assert(loadState(&stored,locked));for(int i=0;i<6;++i){assert(locked[lockableMixes[i]]==.271);assert(locked[kMixLock0+i]==1.);}
   }
   // Roundtrip: dirty the legacy kBypassReserved slot through a real VST queue, then
   // save/reload and verify getState->setState->getState is byte-for-byte stable even
