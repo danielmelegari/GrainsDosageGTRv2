@@ -62,10 +62,15 @@ inline std::vector<std::wstring> presetFilesIn(const std::wstring& utf16director
 #endif
  return names;
 }
+inline bool presetFileLess(const std::wstring& a,const std::wstring& b){
+ auto stem=[](std::wstring s){if(s.size()>=presetExtLen)s.resize(s.size()-presetExtLen);return s;};
+ int ca=presetCategory(stem(a)),cb=presetCategory(stem(b));if(ca!=cb)return ca<cb;
+ auto lower=[](std::wstring s){for(auto& c:s)c=wchar_t(towlower(c));return s;};return lower(a)<lower(b);
+}
 inline std::wstring nextPresetFile(const std::wstring& utf16directory,int direction,const std::wstring& current){
  auto lower=[](std::wstring s){for(auto& c:s)c=wchar_t(towlower(c));return s;};
  auto names=presetFilesIn(utf16directory);
- std::sort(names.begin(),names.end(),[&](const std::wstring&a,const std::wstring&b){return lower(a)<lower(b);});
+ std::sort(names.begin(),names.end(),presetFileLess);
  if(names.empty())return {};
  auto hasExt=[&](const std::wstring&n){return n.size()>=presetExtLen&&lower(n.substr(n.size()-presetExtLen))==L".gdspreset";};
  auto stem=[&](std::wstring n){if(hasExt(n))n.resize(n.size()-presetExtLen);return lower(n);};

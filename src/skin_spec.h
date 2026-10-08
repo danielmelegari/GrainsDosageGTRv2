@@ -240,10 +240,10 @@ inline Palette midnight(){
 // Purple panels, white type and cyan indicators from GRAINSDOSAGE_ALL.jpg.
 inline Palette purple(){
  static const ThemeDef e[]={
-  {kBgDeep,{13,10,28}},{kPanel,{99,53,176}},{kPanelRaised,{47,24,92}},
-  {kPanelInset,{40,36,58}},{kWell,{15,11,28}},{kFiligree,{216,213,229}},
-  {kFiligreeDim,{145,111,201}},{kBorderDark,{54,29,114}},{kHairline,{81,72,101}},
-  {kAccent,{0,241,222}},{kAccentGlow,{0,81,77}},{kAccentBright,{114,255,239}},
+  {kBgDeep,{12,11,16}},{kPanel,{50,34,72}},{kPanelRaised,{62,43,85}},
+  {kPanelInset,{18,34,33}},{kWell,{14,15,18}},{kFiligree,{151,139,163}},
+  {kFiligreeDim,{145,111,201}},{kBorderDark,{16,12,24}},{kHairline,{81,72,101}},
+  {kAccent,{45,240,197}},{kAccentGlow,{0,81,77}},{kAccentBright,{114,255,239}},
   {kTitle,{255,255,255}},{kCream,{255,255,255}},{kMuted,{158,153,169}},
   {kFaint,{84,79,102}},{kReadout,{255,255,255}},{kOnText,{255,255,255}}};
  return makeTheme(e,sizeof(e)/sizeof(*e),"purple");

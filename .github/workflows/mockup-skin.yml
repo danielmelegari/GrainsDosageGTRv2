@@ -44,21 +44,29 @@ jobs:
         if: runner.os == 'Windows'
         shell: bash
         run: build/gui-test/Release/aztec_gui_smoke_win.exe
+      - name: Export preset bank
+        shell: bash
+        run: |
+          mkdir -p GrainsDosage-Routing-Bank-128
+          build/preset-bank/Release/grains_export_presets GrainsDosage-Routing-Bank-128
       - name: Package Mac VST3
         if: runner.os == 'macOS'
         shell: bash
         run: |
           lipo build/VST3/Release/GrainsDosage.vst3/Contents/MacOS/GrainsDosage -verify_arch x86_64 arm64
           codesign --force --sign - --timestamp=none build/VST3/Release/GrainsDosage.vst3
+          ditto -c -k --keepParent GrainsDosage-Routing-Bank-128 GrainsDosage-Purple-Presets-128.zip
           ditto -c -k --sequesterRsrc --keepParent build/VST3/Release/GrainsDosage.vst3 GrainsDosage-Purple-macOS-Universal.vst3.zip
       - name: Package Windows VST3
         if: runner.os == 'Windows'
         shell: pwsh
-        run: Compress-Archive -Path build/VST3/Release/GrainsDosage.vst3 -DestinationPath GrainsDosage-Purple-Windows.vst3.zip
+        run: |
+          Compress-Archive -Path build/VST3/Release/GrainsDosage.vst3 -DestinationPath GrainsDosage-Purple-Windows.vst3.zip
+          Compress-Archive -Path GrainsDosage-Routing-Bank-128 -DestinationPath GrainsDosage-Purple-Presets-128.zip
       - uses: actions/upload-artifact@v4
         with:
           name: GrainsDosage-Purple-${{ runner.os }}
           path: |
             GrainsDosage-Purple-*.zip
-            mockup-native-mac.png
+            mockup-native-mac*.png
           if-no-files-found: error

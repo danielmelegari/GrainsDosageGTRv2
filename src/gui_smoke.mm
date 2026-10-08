@@ -17,14 +17,14 @@ int main(int argc,char** argv){@autoreleasepool {try{
  NSView* surface=window.contentView.subviews.firstObject;checkGui(surface,"Native view");
  checkGui([(id<GrainsGuiInspection>)surface skinLoaded],"Supplied knob PNG loaded");
  auto send=[&](NSEventType type,double x,double y,int clicks=1){
-  NSPoint point=[surface convertPoint:NSMakePoint(x*surface.bounds.size.width/aztec::mockup::width,y*surface.bounds.size.height/aztec::mockup::height) toView:nil];
+  NSPoint point=[surface convertPoint:NSMakePoint((x+aztec::mockup::rackInset)*surface.bounds.size.width/aztec::mockup::width,y*surface.bounds.size.height/aztec::mockup::height) toView:nil];
   NSEvent* e=[NSEvent mouseEventWithType:type location:point modifierFlags:0 timestamp:0 windowNumber:window.windowNumber context:nil eventNumber:1 clickCount:clicks pressure:1.];
   if(type==NSEventTypeLeftMouseDown)[surface mouseDown:e];else if(type==NSEventTypeLeftMouseDragged)[surface mouseDragged:e];else [surface mouseUp:e];
  };
  auto click=[&](double x,double y,int n=1){send(NSEventTypeLeftMouseDown,x,y,n);send(NSEventTypeLeftMouseUp,x,y,n);};
  auto toggle=[&](int id,double x,double y){double before=c->getParamNormalized(id);click(x,y);checkGui(c->getParamNormalized(id)==(before>=.5?0.:1.),"Toggle binding");c->setParamNormalized(id,before);};
  using namespace aztec;
- toggle(kFreeze,440,442);toggle(kInputDeclick,1350,66);toggle(kXYEnable,1545,703);toggle(kMasterFilter,209,1158);toggle(kMasterLimiter,700,1481);
+ toggle(kFreeze,440,442);toggle(kInputDeclick,1350,66);toggle(kXYEnable,1545,703);toggle(kMasterFilter,209,1158);toggle(kMasterLimiter,1505,1717);
  c->setParamNormalized(kSize,.25);send(NSEventTypeLeftMouseDown,158,290);send(NSEventTypeLeftMouseDragged,158,245);send(NSEventTypeLeftMouseUp,158,245);
  checkGui(std::abs(c->getParamNormalized(kSize)-.5)<1e-6,"Grain knob drag");click(158,290,2);checkGui(std::abs(c->getParamNormalized(kSize)-.25)<1e-6,"Double click reset");
  const ParamID enabled[]={kGrainEnabled,kGlitchEnabled,kRepeatEnabled,kResliceEnabled,kGaterEnabled};
@@ -47,10 +47,17 @@ int main(int argc,char** argv){@autoreleasepool {try{
  double beforeCancel=c->getParamNormalized(kRoutingOrder);
  send(NSEventTypeLeftMouseDown,138,138);send(NSEventTypeLeftMouseDragged,100,100);send(NSEventTypeLeftMouseUp,100,100);
  checkGui(c->getParamNormalized(kRoutingOrder)==beforeCancel,"Routing outside drop cancels");
+ // Locks bind to their mixes and only intercept randomisation.
+ click(140,135);c->setParamNormalized(kGrainMix,.271);c->setParamNormalized(kMixLock0,0.);click(1220,404);checkGui(c->getParamNormalized(kMixLock0)==1.,"Mix lock click");
+ click(1000,442);checkGui(c->getParamNormalized(kGrainMix)==.271,"Locked mix survives Random");click(1220,404);click(1000,442);checkGui(c->getParamNormalized(kGrainMix)!=.271,"Unlocked mix randomises");
+ c->setParamNormalized(kReverbMix,.25);send(NSEventTypeLeftMouseDown,116,1650);send(NSEventTypeLeftMouseDragged,116,1620);send(NSEventTypeLeftMouseUp,116,1620);checkGui(c->getParamNormalized(kReverbMix)>.4,"Vertical reverb fader");
+ click(987,52);checkGui(c->getParamNormalized(kRoutingOrder)==factoryPreset(0)[kRoutingOrder],"First categorised preset");click(987,52);checkGui(c->getParamNormalized(kRoutingOrder)==factoryPreset(1)[kRoutingOrder],"Next categorised preset");
  c->setParamNormalized(kReverbSource,1.);
  ViewRect resized(0,0,816,759);checkGui(view->checkSizeConstraint(&resized)==kResultOk,"Resize constraints");view->onSize(&resized);checkGui([(id<GrainsGuiInspection>)surface controlsFit],"Resize keeps controls visible");
  [surface display];NSBitmapImageRep* bitmap=[surface bitmapImageRepForCachingDisplayInRect:surface.bounds];[surface cacheDisplayInRect:surface.bounds toBitmapImageRep:bitmap];
  NSString* path=argc>1?[NSString stringWithUTF8String:argv[1]]:@"GrainsDosage-GUI.png";
  checkGui([[bitmap representationUsingType:NSBitmapImageFileTypePNG properties:@{}] writeToFile:path atomically:YES],"Native screenshot");
+ for(int t=0;t<5;++t){c->setParamNormalized(kUiTab,tabToValue(t));[surface display];NSBitmapImageRep* shot=[surface bitmapImageRepForCachingDisplayInRect:surface.bounds];[surface cacheDisplayInRect:surface.bounds toBitmapImageRep:shot];NSString* name=[path.stringByDeletingPathExtension stringByAppendingFormat:@"-tab-%d.png",t];checkGui([[shot representationUsingType:NSBitmapImageFileTypePNG properties:@{}] writeToFile:name atomically:YES],"Module screenshot");}
+
  view->removed();view->release();c->terminate();c->release();[window close];std::cout<<"PASS: native skin, tabs, controls, step editing, XY, resize and screenshot\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}}

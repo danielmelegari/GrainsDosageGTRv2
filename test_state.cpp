@@ -71,6 +71,11 @@ int main() {
     actual[kReverbRateV2]=5./6.;s=settings(actual,120.,48000.);assert(s.reverbGrid==1.5&&s.reverbRandomGrid==1.5);
     actual[kReverbRateV2]=1.;s=settings(actual,120.,48000.);assert(s.reverbGrid==.75&&s.reverbRandomGrid==.75);
   }
+  // The pre-lock v47 state loads without reading the appended lock/meter IDs.
+  {auto expected=defaults();expected[kReverbRateV2]=1.;MemoryStream old;IBStreamer out(&old,kLittleEndian);out.writeInt32(0x51473147);
+   for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);
+   for(int i=kFreeze+1;i<kMixLock0;++i)out.writeDouble(expected[i]);old.seek(0,IBStream::kIBSeekSet,nullptr);auto actual=defaults();assert(loadState(&old,actual)&&actual==expected);
+  }
   MemoryStream bad; IBStreamer writer(&bad,kLittleEndian);
   writer.writeInt32(0x51473132); writer.writeDouble(std::numeric_limits<double>::quiet_NaN());
   bad.seek(0,IBStream::kIBSeekSet,nullptr); auto state=defaults(); const auto before=state;
@@ -166,7 +171,7 @@ int main() {
     MemoryStream rt3; assert(p2.getState(&rt3)==kResultOk);
     rt.seek(0,IBStream::kIBSeekSet,nullptr); rt3.seek(0,IBStream::kIBSeekSet,nullptr);
     int32 m1=0,m2=0;IBStreamer r1(&rt,kLittleEndian),r2(&rt3,kLittleEndian);
-    r1.readInt32(m1);r2.readInt32(m2);assert(m1==m2&&m1==0x51473147);
+    r1.readInt32(m1);r2.readInt32(m2);assert(m1==m2&&m1==0x51473148);
     // getState layout: kParamEnd values, buffer size, freeze flag, then the tail
     // (kBypassReserved lives in this region) up to kCount.
     const int fields=kParamEnd+2+(int(kCount)-int(kFreeze)-1);

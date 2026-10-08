@@ -34,7 +34,7 @@ static inline skin::Rgb C2(int role){return skin::active().at(role);}
 #define AZSKIN(k) C(int(aztec::skin::k))  // COLORREF from live palette role
 #define ONTEXT() AZSKIN(kOnText)             // dark text for lit green fills
 constexpr double slotX[]={16,452,888};
-enum Kind{Knob,Slider,Toggle,Select,Pad,Pan,PanMode};
+enum Kind{Knob,Slider,Toggle,Select,Pad,Pan,PanMode,VSlider};
 struct Control{ParamID id;double x,y,w,h;Kind kind;const char* label;};
 class WinEditor final:public CPluginView{
   EditController* controller;HWND window=nullptr;std::vector<Control> controls;
@@ -43,7 +43,7 @@ class WinEditor final:public CPluginView{
   mockup::WaveVisual waveVisual;
   aztec::mockup::Motion motion;
   std::array<int,5> routingAtDrag;
-  double originX=0,originY=0,dragValue=0,dragWidth=1;Kind dragKind=Knob;bool dragXY=false,routeMoved=false;
+  double originX=0,originY=0,dragValue=0,dragWidth=1,dragHeight=180;Kind dragKind=Knob;bool dragXY=false,routeMoved=false;
   uint32_t seed=0;HDC dc=nullptr;
   std::unique_ptr<Gdiplus::Bitmap> mockupKnob;
   ULONG_PTR imaging=0;HBITMAP skin=nullptr;HDC skinDC=nullptr;HGDIOBJ oldSkin=nullptr;std::array<HBITMAP,6> sprites{};std::array<HDC,6> spriteDC{};std::array<HGDIOBJ,6> oldSprite{};
@@ -210,7 +210,12 @@ class WinEditor final:public CPluginView{
     auto folder=presetFolder();if(folder.empty()){MessageBoxW(window,L"Cannot create or populate the preset folder.",L"GrainsDosage",MB_OK|MB_ICONERROR);return;}
     std::vector<std::wstring> names;WIN32_FIND_DATAW data{};HANDLE search=FindFirstFileW((folder+L"\\*.gdspreset").c_str(),&data);
     if(search!=INVALID_HANDLE_VALUE){do{if(!(data.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY))names.emplace_back(data.cFileName);}while(FindNextFileW(search,&data));FindClose(search);}
-    std::sort(names.begin(),names.end());HMENU menu=CreatePopupMenu();for(size_t i=0;i<names.size();++i){auto label=names[i].substr(0,names[i].find_last_of(L'.'));AppendMenuW(menu,MF_STRING,UINT_PTR(i+1),label.c_str());}
+    std::sort(names.begin(),names.end(),presetFileLess);HMENU menu=CreatePopupMenu();
+    for(int category=0;category<factoryCategoryCount+2;++category){HMENU group=CreatePopupMenu();int count=0;
+      for(size_t i=0;i<names.size();++i){auto label=names[i].substr(0,names[i].find_last_of(L'.'));if(presetCategory(label)!=category)continue;
+        AppendMenuW(group,MF_STRING|(label==presetName?MF_CHECKED:0),UINT_PTR(i+1),label.c_str());++count;}
+      if(count){std::string title=factoryCategories[category];std::wstring wide(title.begin(),title.end());AppendMenuW(menu,MF_POPUP,UINT_PTR(group),wide.c_str());}else DestroyMenu(group);
+    }
     AppendMenuW(menu,MF_SEPARATOR,0,nullptr);AppendMenuW(menu,MF_STRING,UINT_PTR(names.size()+1),L"Open Preset Folder…");POINT point;GetCursorPos(&point);int choice=TrackPopupMenu(menu,TPM_RETURNCMD,point.x,point.y,0,window,nullptr);DestroyMenu(menu);
     if(choice==int(names.size()+1))ShellExecuteW(window,L"open",folder.c_str(),nullptr,nullptr,SW_SHOWNORMAL);
     else if(choice>0&&choice<=int(names.size())&&!loadPresetPath(folder+L"\\"+names[size_t(choice-1)]))MessageBoxW(window,L"Invalid or incompatible preset. No settings changed.",L"GrainsDosage",MB_OK|MB_ICONERROR);
@@ -248,10 +253,10 @@ class WinEditor final:public CPluginView{
 #undef ADD
   }
   static bool inside(double x,double y,double a,double b,double w,double h){return x>=a&&x<a+w&&y>=b&&y<b+h;}
-  void point(LPARAM lp,double& x,double& y){RECT r;GetClientRect(window,&r);x=GET_X_LPARAM(lp)*1632./std::max(1L,r.right);y=GET_Y_LPARAM(lp)*1518./std::max(1L,r.bottom);}
+  void point(LPARAM lp,double& x,double& y){RECT r;GetClientRect(window,&r);x=GET_X_LPARAM(lp)*mockup::width/std::max(1L,r.right)-mockup::rackInset;y=GET_Y_LPARAM(lp)*mockup::height/std::max(1L,r.bottom);}
   static COLORREF green(){return AZSKIN(kAccent);}static COLORREF cream(){return AZSKIN(kCream);}static COLORREF dark(){return AZSKIN(kBgDeep);}
   void box(double x,double y,double w,double h,COLORREF fill,COLORREF stroke){HBRUSH b=CreateSolidBrush(fill);HPEN p=CreatePen(PS_SOLID,1,stroke);auto ob=SelectObject(dc,b),op=SelectObject(dc,p);RoundRect(dc,int(x),int(y),int(x+w),int(y+h),8,8);SelectObject(dc,ob);SelectObject(dc,op);DeleteObject(b);DeleteObject(p);}
-  void text(std::wstring s,double x,double y,double w,double h,int size,COLORREF color,bool center=false,int minimumSize=14){HFONT f=CreateFontW(-std::max(minimumSize,size),0,0,0,FW_HEAVY,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,ANTIALIASED_QUALITY,DEFAULT_PITCH,L"Arial Black");auto old=SelectObject(dc,f);SetTextColor(dc,color);SetBkMode(dc,TRANSPARENT);int extra=std::max(0,minimumSize-size);RECT r{int(x),int(y)-extra/2,int(x+w),int(y+h)+extra/2};DrawTextW(dc,s.c_str(),-1,&r,DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS|(center?DT_CENTER:DT_LEFT));SelectObject(dc,old);DeleteObject(f);}
+  void text(std::wstring s,double x,double y,double w,double h,int size,COLORREF color,bool center=false,int minimumSize=14){HFONT f=CreateFontW(-std::max(minimumSize,size),0,0,0,FW_HEAVY,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,ANTIALIASED_QUALITY,DEFAULT_PITCH,L"Arial");auto old=SelectObject(dc,f);SetTextColor(dc,color);SetBkMode(dc,TRANSPARENT);int extra=std::max(0,minimumSize-size);RECT r{int(x),int(y)-extra/2,int(x+w),int(y+h)+extra/2};DrawTextW(dc,s.c_str(),-1,&r,DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS|(center?DT_CENTER:DT_LEFT));SelectObject(dc,old);DeleteObject(f);}
   void line(double x,double y,double xx,double yy,COLORREF color,int width=1){auto p=CreatePen(PS_SOLID,width,color);auto old=SelectObject(dc,p);MoveToEx(dc,int(x),int(y),nullptr);LineTo(dc,int(xx),int(yy));SelectObject(dc,old);DeleteObject(p);}
   static std::wstring wide(const std::string& s){int n=MultiByteToWideChar(CP_UTF8,0,s.data(),int(s.size()),nullptr,0);std::wstring out(size_t(n),L' ');if(n)MultiByteToWideChar(CP_UTF8,0,s.data(),int(s.size()),out.data(),n);return out;}
   static std::string utf8(const std::wstring& s){int n=WideCharToMultiByte(CP_UTF8,0,s.data(),int(s.size()),nullptr,0,nullptr,nullptr);std::string out(size_t(n),' ');if(n)WideCharToMultiByte(CP_UTF8,0,s.data(),int(s.size()),out.data(),n,nullptr,nullptr);return out;}
@@ -292,7 +297,7 @@ class WinEditor final:public CPluginView{
     int led=mockup::hitLed(x,y);if(led>=0){int stage=mockup::routeChain([&](ParamID id){return value(id);})[led];auto id=mockup::stageEnabled[stage];edit(id,value(id)>=.5?0.:1.);return;}
     int route=mockup::hitRoute(x,y);if(route>=0){dragSlot=route;dropSlot=-1;routeMoved=false;originX=x;originY=y;routingAtDrag=mockup::routeChain([&](ParamID id){return value(id);});SetCapture(window);InvalidateRect(window,nullptr,FALSE);return;}
     int lfo=mockup::hitLfo(x,y);if(lfo>=0){selectedLfo=lfo;InvalidateRect(window,nullptr,FALSE);return;}
-    if(hit(mockup::randomRect(tab()))){if(tab()<3)randomizeModule(tab(),selectedRepeat,seed,[&](ParamID id,double v){edit(id,v);});else if(tab()==3)randomizeReslice(seed,[&](ParamID id){return value(id);},[&](ParamID id,double v){edit(id,v);});else for(int i=0;i<16;++i){seed=seed*1664525u+1013904223u;edit(kGaterState0+i,(seed>>31)?1.:0.);}return;}
+    if(hit(mockup::randomRect(tab()))){if(tab()<3)randomizeModule(tab(),selectedRepeat,seed,[&](ParamID id){return value(id);},[&](ParamID id,double v){edit(id,v);});else if(tab()==3)randomizeReslice(seed,[&](ParamID id){return value(id);},[&](ParamID id,double v){edit(id,v);});else for(int i=0;i<16;++i){seed=seed*1664525u+1013904223u;edit(kGaterState0+i,(seed>>31)?1.:0.);}return;}
     int step=mockup::hitStep(x,y,tab());if(tab()>=2&&step>=0){
       if(tab()==2){selectedRepeat=step;if(dbl)edit(kRepeatStep0+step,value(kRepeatStep0+step)>.5?0.:1.);}
       if(tab()==3){selectedReslice=step;if(dbl)edit(kResliceStep0+step,value(kResliceStep0+step)>.5?0.:1.);}
@@ -305,7 +310,7 @@ class WinEditor final:public CPluginView{
       if(c.kind==Toggle||c.kind==Pad){edit(c.id,value(c.id)>.5?0:1);return;}
       if(dbl){edit(c.id,info(c.id).defaultNormalizedValue);return;}
       if(c.kind==Select){HMENU m=CreatePopupMenu();int count=info(c.id).stepCount;for(int i=0;i<=count;++i)AppendMenuW(m,MF_STRING|(int(std::round(value(c.id)*count))==i?MF_CHECKED:0),i+1,display(c.id,i/double(std::max(1,count))).c_str());POINT p;GetCursorPos(&p);int chosen=TrackPopupMenu(m,TPM_RETURNCMD,p.x,p.y,0,window,nullptr);DestroyMenu(m);if(chosen)edit(c.id,(chosen-1)/double(std::max(1,count)));return;}
-      dragID=int(c.id);dragKind=c.kind;dragWidth=c.w;originX=x;originY=y;dragValue=value(c.id);controller->beginEdit(c.id);SetCapture(window);return;
+      dragID=int(c.id);dragKind=c.kind;dragWidth=c.w;dragHeight=c.h;originX=x;originY=y;dragValue=value(c.id);controller->beginEdit(c.id);SetCapture(window);return;
     }
   }
   static LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp){auto* e=reinterpret_cast<WinEditor*>(GetWindowLongPtrW(hwnd,GWLP_USERDATA));if(msg==WM_NCCREATE){e=static_cast<WinEditor*>(reinterpret_cast<CREATESTRUCTW*>(lp)->lpCreateParams);SetWindowLongPtrW(hwnd,GWLP_USERDATA,reinterpret_cast<LONG_PTR>(e));e->window=hwnd;}if(!e)return DefWindowProcW(hwnd,msg,wp,lp);
@@ -316,23 +321,23 @@ class WinEditor final:public CPluginView{
       case WM_TIMER:{// Modulation arcs removed: nothing per-frame to pull from
         // the audio thread any more; the timer just keeps playhead/meter fresh.
         e->waveVisual.update([&](ParamID id){return e->value(id);});InvalidateRect(hwnd,nullptr,FALSE);return 0;}
-      case WM_PAINT:{PAINTSTRUCT ps;HDC screen=BeginPaint(hwnd,&ps);RECT r;GetClientRect(hwnd,&r);HDC mem=CreateCompatibleDC(screen);auto bitmap=CreateCompatibleBitmap(screen,r.right*2,r.bottom*2);auto old=SelectObject(mem,bitmap);SetMapMode(mem,MM_ANISOTROPIC);SetWindowExtEx(mem,1632,1518,nullptr);SetViewportExtEx(mem,r.right*2,r.bottom*2,nullptr);e->dc=mem;e->draw();SetMapMode(mem,MM_TEXT);SetStretchBltMode(screen,HALFTONE);SetBrushOrgEx(screen,0,0,nullptr);StretchBlt(screen,0,0,r.right,r.bottom,mem,0,0,r.right*2,r.bottom*2,SRCCOPY);SelectObject(mem,old);DeleteObject(bitmap);DeleteDC(mem);EndPaint(hwnd,&ps);return 0;}
+      case WM_PAINT:{PAINTSTRUCT ps;HDC screen=BeginPaint(hwnd,&ps);RECT r;GetClientRect(hwnd,&r);HDC mem=CreateCompatibleDC(screen);auto bitmap=CreateCompatibleBitmap(screen,r.right*2,r.bottom*2);auto old=SelectObject(mem,bitmap);SetMapMode(mem,MM_ANISOTROPIC);SetWindowExtEx(mem,int(mockup::width),int(mockup::height),nullptr);SetViewportExtEx(mem,r.right*2,r.bottom*2,nullptr);e->dc=mem;e->draw();SetMapMode(mem,MM_TEXT);SetStretchBltMode(screen,HALFTONE);SetBrushOrgEx(screen,0,0,nullptr);StretchBlt(screen,0,0,r.right,r.bottom,mem,0,0,r.right*2,r.bottom*2,SRCCOPY);SelectObject(mem,old);DeleteObject(bitmap);DeleteDC(mem);EndPaint(hwnd,&ps);return 0;}
       case WM_LBUTTONDOWN:case WM_LBUTTONDBLCLK:e->point(lp,x,y);e->down(x,y,msg==WM_LBUTTONDBLCLK);return 0;
-      case WM_MOUSEMOVE:e->point(lp,x,y);if(e->dragSlot>=0){if(std::hypot(x-e->originX,y-e->originY)>8)e->routeMoved=true;if(e->routeMoved)e->dropSlot=mockup::routeInsertion(x,y);InvalidateRect(hwnd,nullptr,FALSE);}else if(e->dragXY){e->change(kXYX,(x-mockup::xy.x-12)/(mockup::xy.w-24));e->change(kXYY,1-(y-mockup::xy.y-12)/(mockup::xy.h-24));}else if(e->dragID>=0){double delta=(e->dragKind==Slider||e->dragKind==Pan)?(x-e->originX)/e->dragWidth:(e->originY-y)/180.;if(GetKeyState(VK_SHIFT)&0x8000)delta*=.1;e->dragValue=std::clamp(e->dragValue+delta,0.,1.);e->originX=x;e->originY=y;e->change(ParamID(e->dragID),e->dragValue);}return 0;
+      case WM_MOUSEMOVE:e->point(lp,x,y);if(e->dragSlot>=0){if(std::hypot(x-e->originX,y-e->originY)>8)e->routeMoved=true;if(e->routeMoved)e->dropSlot=mockup::routeInsertion(x,y);InvalidateRect(hwnd,nullptr,FALSE);}else if(e->dragXY){e->change(kXYX,(x-mockup::xy.x-12)/(mockup::xy.w-24));e->change(kXYY,1-(y-mockup::xy.y-12)/(mockup::xy.h-24));}else if(e->dragID>=0){double delta=(e->dragKind==Slider||e->dragKind==Pan)?(x-e->originX)/e->dragWidth:(e->originY-y)/(e->dragKind==VSlider?std::max(1.,e->dragHeight-55):180.);if(GetKeyState(VK_SHIFT)&0x8000)delta*=.1;e->dragValue=std::clamp(e->dragValue+delta,0.,1.);e->originX=x;e->originY=y;e->change(ParamID(e->dragID),e->dragValue);}return 0;
       case WM_LBUTTONUP:if(e->dragSlot>=0&&!e->routeMoved)e->chooseTab(e->routingAtDrag[e->dragSlot]);if(e->dragSlot>=0&&e->dropSlot>=0&&e->dropSlot!=e->dragSlot&&e->dropSlot!=e->dragSlot+1)e->edit(kRoutingOrder,mockup::moveRoute(e->routingAtDrag,e->dragSlot,e->dropSlot));e->end();ReleaseCapture();InvalidateRect(hwnd,nullptr,FALSE);return 0;
       case WM_CAPTURECHANGED:e->end();return 0;
-      case WM_MOUSEWHEEL:{POINT p{GET_X_LPARAM(lp),GET_Y_LPARAM(lp)};ScreenToClient(hwnd,&p);e->point(MAKELPARAM(p.x,p.y),x,y);e->layout();for(const auto& c:e->controls)if(inside(x,y,c.x,c.y,c.w,c.h)&&(c.kind==Knob||c.kind==Slider)){int n=e->info(c.id).stepCount;double d=n?1./n:.01;if(GetKeyState(VK_SHIFT)&0x8000)d*=.1;e->edit(c.id,e->value(c.id)+(GET_WHEEL_DELTA_WPARAM(wp)>0?d:-d));break;}return 0;}
+      case WM_MOUSEWHEEL:{POINT p{GET_X_LPARAM(lp),GET_Y_LPARAM(lp)};ScreenToClient(hwnd,&p);e->point(MAKELPARAM(p.x,p.y),x,y);e->layout();for(const auto& c:e->controls)if(inside(x,y,c.x,c.y,c.w,c.h)&&(c.kind==Knob||c.kind==Slider||c.kind==VSlider)){int n=e->info(c.id).stepCount;double d=n?1./n:.01;if(GetKeyState(VK_SHIFT)&0x8000)d*=.1;e->edit(c.id,e->value(c.id)+(GET_WHEEL_DELTA_WPARAM(wp)>0?d:-d));break;}return 0;}
     }return DefWindowProcW(hwnd,msg,wp,lp);
   }
 public:
-  explicit WinEditor(EditController* c):controller(c){controller->addRef();rect=ViewRect(0,0,979,911);seed=uint32_t(GetTickCount64())^uint32_t(reinterpret_cast<uintptr_t>(this));seed|=1;loadSkin();}
+  explicit WinEditor(EditController* c):controller(c){controller->addRef();rect=ViewRect(0,0,int(mockup::width*.5),int(mockup::height*.5));seed=uint32_t(GetTickCount64())^uint32_t(reinterpret_cast<uintptr_t>(this));seed|=1;loadSkin();}
   ~WinEditor()override{removed();mockupKnob.reset();if(skinDC){SelectObject(skinDC,oldSkin);DeleteDC(skinDC);}if(skin)DeleteObject(skin);for(size_t i=0;i<sprites.size();++i){if(spriteDC[i]){SelectObject(spriteDC[i],oldSprite[i]);DeleteDC(spriteDC[i]);}if(sprites[i])DeleteObject(sprites[i]);}if(imaging)Gdiplus::GdiplusShutdown(imaging);controller->release();}
   tresult PLUGIN_API isPlatformTypeSupported(FIDString type)override{return type&&std::strcmp(type,kPlatformTypeHWND)==0?kResultTrue:kResultFalse;}
   tresult PLUGIN_API attached(void* parent,FIDString type)override{if(!parent||window||isPlatformTypeSupported(type)!=kResultTrue)return kResultFalse;HINSTANCE instance=nullptr;GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,reinterpret_cast<LPCWSTR>(&proc),&instance);WNDCLASSW wc{};wc.style=CS_DBLCLKS;wc.lpfnWndProc=proc;wc.hInstance=instance;wc.hCursor=LoadCursor(nullptr,IDC_ARROW);wc.lpszClassName=L"GrainsDosage070";RegisterClassW(&wc);window=CreateWindowExW(0,wc.lpszClassName,L"GrainsDosage",WS_CHILD|WS_VISIBLE,0,0,rect.getWidth(),rect.getHeight(),static_cast<HWND>(parent),nullptr,instance,this);if(!window)return kResultFalse;SetTimer(window,1,16,nullptr);return CPluginView::attached(parent,type);}
   tresult PLUGIN_API removed()override{end();if(window){KillTimer(window,1);DestroyWindow(window);window=nullptr;}return CPluginView::removed();}
   tresult PLUGIN_API onSize(ViewRect* r)override{if(!r)return kInvalidArgument;auto result=CPluginView::onSize(r);if(window)SetWindowPos(window,nullptr,0,0,r->getWidth(),r->getHeight(),SWP_NOZORDER|SWP_NOMOVE);return result;}
   tresult PLUGIN_API canResize()override{return kResultTrue;}
-  tresult PLUGIN_API checkSizeConstraint(ViewRect* r)override{if(!r)return kInvalidArgument;double f=std::clamp(r->getWidth()/1632.,.5,1.);r->right=r->left+int(std::round(1632*f));r->bottom=r->top+int(std::round(1518*f));return kResultTrue;}
+  tresult PLUGIN_API checkSizeConstraint(ViewRect* r)override{if(!r)return kInvalidArgument;double f=std::clamp(r->getWidth()/mockup::width,.5,1.);r->right=r->left+int(std::round(mockup::width*f));r->bottom=r->top+int(std::round(mockup::height*f));return kResultTrue;}
 };
 IPlugView* createEditor(EditController* controller){return new WinEditor(controller);}
 }

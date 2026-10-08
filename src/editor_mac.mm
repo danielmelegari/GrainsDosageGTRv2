@@ -28,7 +28,7 @@
 namespace aztec {
 using namespace Steinberg;using namespace Steinberg::Vst;
 constexpr double canvasW=mockup::width,canvasH=mockup::height;
-enum Kind {Knob,Slider,Toggle,Select,Pad,Pan,PanMode};
+enum Kind {Knob,Slider,Toggle,Select,Pad,Pan,PanMode,VSlider};
 struct Control {ParamID id;NSRect rect;Kind kind;std::string label;};
 class Editor final:public CPluginView {
   EditController* controller_;
@@ -305,7 +305,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
   [self setNeedsDisplay:YES];
 }
 - (NSPoint)logical:(NSEvent*)event {
-  NSPoint p=[self convertPoint:event.locationInWindow fromView:nil];return NSMakePoint(p.x*aztec::canvasW/self.bounds.size.width,p.y*aztec::canvasH/self.bounds.size.height);
+  NSPoint p=[self convertPoint:event.locationInWindow fromView:nil];return NSMakePoint(p.x*aztec::canvasW/self.bounds.size.width-aztec::mockup::rackInset,p.y*aztec::canvasH/self.bounds.size.height);
 }
 - (int)order {return std::clamp(int(std::round(owner->value(aztec::kModuleOrder)*6.)),0,6);}
 - (int)tab {return aztec::tabFromValue(owner->value(aztec::kUiTab));}
@@ -406,7 +406,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
   painter.text=[](const std::string& text,mockup::Rect r,double size,skin::Rgb color,bool center){
     NSString* str=[NSString stringWithUTF8String:text.c_str()];
     NSMutableParagraphStyle* style=[[NSMutableParagraphStyle alloc] init];style.alignment=center?NSTextAlignmentCenter:NSTextAlignmentLeft;style.lineBreakMode=NSLineBreakByTruncatingTail;
-    NSFont* font=[NSFont fontWithName:@"Arial-Black" size:size];if(!font)font=[NSFont systemFontOfSize:size weight:NSFontWeightHeavy];
+    NSFont* font=[NSFont fontWithName:@"HelveticaNeue-Bold" size:size];if(!font)font=[NSFont systemFontOfSize:size weight:NSFontWeightHeavy];
     NSShadow* shadow=[[NSShadow alloc] init];shadow.shadowColor=rgb(.04,.03,.08,.8);shadow.shadowOffset=NSMakeSize(0,-1);shadow.shadowBlurRadius=1;
     [str drawInRect:NSMakeRect(r.x,r.y+(r.h-size*1.2)/2,r.w,size*1.4) withAttributes:@{NSFontAttributeName:font,NSForegroundColorAttributeName:C(color),NSParagraphStyleAttributeName:style,NSShadowAttributeName:shadow}];
   };
@@ -469,9 +469,15 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
 - (void)presetMenu:(NSEvent*)event {
   NSURL* folder=[self presetFolder];if(!folder)return;
   NSArray<NSURL*>* files=[[NSFileManager defaultManager] contentsOfDirectoryAtURL:folder includingPropertiesForKeys:nil options:NSDirectoryEnumerationSkipsHiddenFiles error:nil];
-  files=[files sortedArrayUsingComparator:^NSComparisonResult(NSURL* a,NSURL* b){return [a.lastPathComponent localizedStandardCompare:b.lastPathComponent];}];
+  files=[files sortedArrayUsingComparator:^NSComparisonResult(NSURL* a,NSURL* b){int ca=aztec::presetCategory(std::string(a.lastPathComponent.stringByDeletingPathExtension.UTF8String)),cb=aztec::presetCategory(std::string(b.lastPathComponent.stringByDeletingPathExtension.UTF8String));if(ca!=cb)return ca<cb?NSOrderedAscending:NSOrderedDescending;return [a.lastPathComponent localizedStandardCompare:b.lastPathComponent];}];
   NSMenu* menu=[[NSMenu alloc] initWithTitle:@"Presets"];
-  for(NSURL* url in files)if([url.pathExtension.lowercaseString isEqualToString:@"gdspreset"]){NSMenuItem* item=[[NSMenuItem alloc] initWithTitle:[url.lastPathComponent stringByDeletingPathExtension] action:@selector(choosePreset:) keyEquivalent:@""];item.target=self;item.representedObject=url;[menu addItem:item];}
+  for(int category=0;category<aztec::factoryCategoryCount+2;++category){
+    NSMenu* group=[[NSMenu alloc] initWithTitle:[NSString stringWithUTF8String:aztec::factoryCategories[category]]];
+    for(NSURL* url in files)if([url.pathExtension.lowercaseString isEqualToString:@"gdspreset"]){NSString* name=url.lastPathComponent.stringByDeletingPathExtension;
+      if(aztec::presetCategory(std::string(name.UTF8String))!=category)continue;
+      NSMenuItem* item=[[NSMenuItem alloc] initWithTitle:name action:@selector(choosePreset:) keyEquivalent:@""];item.target=self;item.representedObject=url;item.state=[name isEqualToString:presetName]?NSControlStateValueOn:NSControlStateValueOff;[group addItem:item];}
+    if(group.numberOfItems){NSMenuItem* parent=[[NSMenuItem alloc] initWithTitle:group.title action:nullptr keyEquivalent:@""];parent.submenu=group;[menu addItem:parent];}
+  }
   [menu addItem:[NSMenuItem separatorItem]];NSMenuItem* open=[[NSMenuItem alloc] initWithTitle:@"Open Preset Folder…" action:@selector(choosePreset:) keyEquivalent:@""];open.target=self;open.tag=-1;open.representedObject=folder;[menu addItem:open];[NSMenu popUpContextMenu:menu withEvent:event forView:self];
 }
 - (void)preset:(BOOL)save {
@@ -522,7 +528,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
   int route=mockup::hitRoute(p.x,p.y);if(route>=0){dragSlot=route;dropSlot=-1;routeMoved=false;origin=p;routingAtDrag=mockup::routeChain([&](ParamID id){return owner->value(id);});[self setNeedsDisplay:YES];return;}
   int lfoHit=mockup::hitLfo(p.x,p.y);if(lfoHit>=0){selectedLfo=lfoHit;[self setNeedsDisplay:YES];return;}
   if(hit(mockup::randomRect([self tab]))){
-    int t=[self tab];if(t<3)randomizeModule(t,selectedRepeat,randomSeed,[&](ParamID id,double v){owner->edit(id,v);});
+    int t=[self tab];if(t<3)randomizeModule(t,selectedRepeat,randomSeed,[&](ParamID id){return owner->value(id);},[&](ParamID id,double v){owner->edit(id,v);});
     else if(t==3)randomizeReslice(randomSeed,[&](ParamID id){return owner->value(id);},[&](ParamID id,double v){owner->edit(id,v);});
     else {for(int i=0;i<16;++i){randomSeed=randomSeed*1664525u+1013904223u;owner->edit(kGaterState0+i,(randomSeed>>31)?1.:0.);}}
     [self setNeedsDisplay:YES];return;
@@ -556,7 +562,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
   if(!owner)return;NSPoint p=[self logical:event];
   if(dragSlot>=0){if(std::hypot(p.x-origin.x,p.y-origin.y)>8)routeMoved=true;if(routeMoved)dropSlot=aztec::mockup::routeInsertion(p.x,p.y);[self setNeedsDisplay:YES];return;}
   if(dragXY){owner->change(aztec::kXYX,(p.x-aztec::mockup::xy.x-12)/(aztec::mockup::xy.w-24));owner->change(aztec::kXYY,1.-(p.y-aztec::mockup::xy.y-12)/(aztec::mockup::xy.h-24));[self setNeedsDisplay:YES];return;}
-  if(dragID<0)return;double delta=(dragKind==aztec::Slider||dragKind==aztec::Pan)?(p.x-origin.x)/dragRect.size.width:(origin.y-p.y)/180.;
+  if(dragID<0)return;double delta=(dragKind==aztec::Slider||dragKind==aztec::Pan)?(p.x-origin.x)/dragRect.size.width:(origin.y-p.y)/(dragKind==aztec::VSlider?std::max(1.,dragRect.size.height-55):180.);
   if(event.modifierFlags&NSEventModifierFlagShift)delta*=.1;
   starting=std::clamp(starting+delta,0.,1.);origin=p;
   owner->change(aztec::ParamID(dragID),starting);[self setNeedsDisplay:YES];
@@ -570,7 +576,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
 }
 - (void)scrollWheel:(NSEvent*)event {
   if(!owner)return;NSPoint p=[self logical:event];[self layoutControls];
-  for(const auto& c:controls)if(NSPointInRect(p,c.rect)&&(c.kind==aztec::Knob||c.kind==aztec::Slider)){
+  for(const auto& c:controls)if(NSPointInRect(p,c.rect)&&(c.kind==aztec::Knob||c.kind==aztec::Slider||c.kind==aztec::VSlider)){
     int n=owner->info(c.id).stepCount;double step=n?1./n:.01;if(event.modifierFlags&NSEventModifierFlagShift)step*=.1;
     if(event.scrollingDeltaY!=0.)owner->edit(c.id,owner->value(c.id)+(event.scrollingDeltaY>0?step:-step));[self setNeedsDisplay:YES];return;
   }
@@ -579,7 +585,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
 namespace aztec {
 // No "using namespace qg" here: inside this namespace an unqualified qg would
 // find aztec::qg first (shadowing), so global qg names must stay ::qg-qualified.
-Editor::Editor(EditController* c):controller_(c){controller_->addRef();rect=ViewRect(0,0,979,911);(void)::qg::waveBank();}
+Editor::Editor(EditController* c):controller_(c){controller_->addRef();rect=ViewRect(0,0,int(mockup::width*.5),int(mockup::height*.5));(void)::qg::waveBank();}
 Editor::~Editor(){removed();controller_->release();}
 NSString* Editor::display(ParamID id,double v,bool units) const {
   String128 text{};controller_->getParamStringByValue(id,v,text);
