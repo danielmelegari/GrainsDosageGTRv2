@@ -28,7 +28,7 @@ int main(int argc,char** argv){@autoreleasepool {try{
  c->setParamNormalized(kSize,.25);send(NSEventTypeLeftMouseDown,158,290);send(NSEventTypeLeftMouseDragged,158,245);send(NSEventTypeLeftMouseUp,158,245);
  checkGui(std::abs(c->getParamNormalized(kSize)-.5)<1e-6,"Grain knob drag");click(158,290,2);checkGui(std::abs(c->getParamNormalized(kSize)-.25)<1e-6,"Double click reset");
  const ParamID enabled[]={kGrainEnabled,kGlitchEnabled,kRepeatEnabled,kResliceEnabled,kGaterEnabled};
- for(int t=0;t<5;++t){click(140+252*t,135);checkGui(tabFromValue(c->getParamNormalized(kUiTab))==t,"Tab hit target");checkGui([(id<GrainsGuiInspection>)surface controlsFit],"Controls fit each tab");toggle(enabled[t],1190,442);auto led=mockup::ledRect(t);toggle(enabled[t],led.x+led.w/2,led.y+led.h/2);[surface display];}
+ for(int t=0;t<5;++t){click(140+252*t,135);checkGui(tabFromValue(c->getParamNormalized(kUiTab))==t,"Tab hit target");checkGui([(id<GrainsGuiInspection>)surface controlsFit],"Controls fit each tab");toggle(enabled[t],1300,442);auto led=mockup::ledRect(t);toggle(enabled[t],led.x+led.w/2,led.y+led.h/2);[surface display];}
  click(140+3*252,135);toggle(kResliceRndOn,700,273);click(61+76*5+16,536);// single click selects without toggling
  // Double-click a reslice step toggles its stored enabled state.
  double old=c->getParamNormalized(kResliceStep0+5);click(61+76*5+16,536,2);checkGui(c->getParamNormalized(kResliceStep0+5)==(old>.5?0.:1.),"Reslice step toggle");
@@ -47,6 +47,7 @@ int main(int argc,char** argv){@autoreleasepool {try{
  double beforeCancel=c->getParamNormalized(kRoutingOrder);
  send(NSEventTypeLeftMouseDown,138,138);send(NSEventTypeLeftMouseDragged,100,100);send(NSEventTypeLeftMouseUp,100,100);
  checkGui(c->getParamNormalized(kRoutingOrder)==beforeCancel,"Routing outside drop cancels");
+ c->setParamNormalized(kReverbSource,1.);
  ViewRect resized(0,0,816,759);checkGui(view->checkSizeConstraint(&resized)==kResultOk,"Resize constraints");view->onSize(&resized);checkGui([(id<GrainsGuiInspection>)surface controlsFit],"Resize keeps controls visible");
  [surface display];NSBitmapImageRep* bitmap=[surface bitmapImageRepForCachingDisplayInRect:surface.bounds];[surface cacheDisplayInRect:surface.bounds toBitmapImageRep:bitmap];
  NSString* path=argc>1?[NSString stringWithUTF8String:argv[1]]:@"GrainsDosage-GUI.png";

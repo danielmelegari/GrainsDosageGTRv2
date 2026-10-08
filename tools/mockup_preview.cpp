@@ -15,7 +15,7 @@ int main(int argc,char** argv){
  unsigned buffer=0;int bits=0;for(unsigned char c:bytes){buffer=(buffer<<8)|c;bits+=8;while(bits>=6){bits-=6;base64+=alphabet[(buffer>>bits)&63];}}
  if(bits)base64+=alphabet[(buffer<<(6-bits))&63];while(base64.size()%4)base64+='=';
  auto state=factoryPreset(0);state[kUiTab]=tabToValue(tab);state[kXYX]=state[kXYY]=.5;
- state[kUiGrainActive]=1;state[kUiGrainStart]=.25;state[kUiGrainEnd]=.4;state[kUiGrainHead]=.31;state[kUiLfoPhase0]=.3;state[kFilterSeqOn]=1;state[kUiFilterSeqStep]=7./31;state[kPitch]=state[kTranspose]=.5;state[kStretchSpeed]=.2;state[kGrainMix]=.5;
+ state[kUiGrainActive]=1;state[kUiGrainStart]=.25;state[kUiGrainEnd]=.4;state[kUiGrainHead]=.31;state[kUiLfoPhase0]=.3;state[kReverbSource]=1;state[kFilterSeqOn]=1;state[kUiFilterSeqStep]=7./31;state[kPitch]=state[kTranspose]=.5;state[kStretchSpeed]=.2;state[kGrainMix]=.5;
  // Representative incoming audio for this offline preview; the editor reads live monitor parameters.
  for(int i=0;i<128;++i)state[kUiWave0+i]=.12+.65*std::abs(std::sin(i*1.74)*std::cos(i*.183));
  for(int i=0;i<waveformBins;++i){double h=.12+.65*std::abs(std::sin(i*.87)*std::cos(i*.0915));state[kUiWaveLow0+i]=.5-h*.5;state[kUiWaveHigh0+i]=.5+h*.5;}

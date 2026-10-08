@@ -16,9 +16,9 @@ struct Rect {double x,y,w,h; bool contains(double px,double py)const{return px>=
 constexpr Rect preset{532,31,364,43}, previous{911,31,50,43}, next{964,31,50,43};
 constexpr Rect load{1032,31,105,43}, save{1150,31,105,43};
 constexpr Rect skinMenu{1040,1466,142,31}, zoomMenu{1192,1466,50,31};
-constexpr Rect xy{1112,735,480,260}, scope{40,775,390,250}, wave{42,510,1220,112};
+constexpr Rect xy{1112,735,480,260}, scope{40,775,390,250}, wave{27,510,1331,112};
 constexpr Rect random{918,421,195,42};
-inline Rect tabRect(int i){return {28.+i*252,115,246,50};}
+inline Rect tabRect(int i){return {28.+i*269,115,263,50};}
 inline Rect lfoRect(int i){return {628.+i*105,680,90,46};}
 inline Rect stepRect(int i){return {61.+i*76,506,32,60};}
 constexpr ParamID stageEnabled[]={kGrainEnabled,kGlitchEnabled,kRepeatEnabled,kResliceEnabled,kGaterEnabled};
@@ -31,7 +31,7 @@ using Value=std::function<double(ParamID)>;
 using Display=std::function<std::string(ParamID,double)>;
 // Shared insertion semantics: moving a stage shifts its neighbours, never swaps.
 inline int hitRoute(double x,double y){return hitTab(x,y);}
-inline int routeInsertion(double x,double y){if(y<108||y>173||x<20||x>1290)return -1;for(int i=0;i<5;++i)if(x<tabRect(i).x+tabRect(i).w/2)return i;return 5;}
+inline int routeInsertion(double x,double y){if(y<108||y>173||x<20||x>1377)return -1;for(int i=0;i<5;++i)if(x<tabRect(i).x+tabRect(i).w/2)return i;return 5;}
 inline std::array<int,5> routeChain(const Value& value){int n=int(std::round(value(kRoutingOrder)*120))-1;if(n>=0)return fiveModuleOrder(n);std::array<int,5> c{{0,1,2,3,4}};int old=int(std::round(value(kModuleOrder)*6));if(old<6){auto a=moduleOrders[std::clamp(old,0,5)];std::copy(a.begin(),a.end(),c.begin());}return c;}
 inline double moveRoute(std::array<int,5> c,int from,int insertion){int to=insertion-(insertion>from?1:0);int stage=c[from];if(to>from)for(int i=from;i<to;++i)c[i]=c[i+1];else for(int i=from;i>to;--i)c[i]=c[i-1];c[to]=stage;for(int i=0;i<120;++i)if(fiveModuleOrder(i)==c)return (i+1)/120.;return 0;}
 struct WaveVisual {
@@ -80,7 +80,7 @@ inline void renderControl(Painter& p,const Control& c,const Value& value,const D
   if(c.id==kFreeze&&on)title="FROZEN";
   double dot=r.h>35?8:6;
   p.box({r.x+std::min(26.,r.w*.13),r.y+(r.h-dot)/2,dot,dot},on?accent:muted,on?accent:muted,dot/2);
-  p.text(title,{r.x+20,r.y,r.w-26,r.h},r.h>35?24:16,white,true);
+  p.text(title,{r.x+20,r.y,r.w-26,r.h},c.id==kStretchOn?18:(r.h>35?24:16),white,true);
  }else if(c.kind==Select){
   p.box(r,screen,edge,r.h/2);
   double shown=c.id==lfoID(lfo,lWave)&&value(kModWaveRnd0+lfo)>0?value(kUiModWave0+lfo):v;
@@ -123,7 +123,7 @@ inline void render(Painter& p,const Value& value,const Display& display,const st
  p.text("GRAINSDOSAGE",{40,18,475,62},48,white,false);
  button(preset,presetName);button(previous,"<");button(next,">");button(load,"LOAD");button(save,"SAVE");
  p.text("INPUT DE-CLICKER",{1315,19,286,29},22,white,true);
- plate({15,103,1280,541});
+ plate({15,103,1365,541});
  const char* tabs[]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLICE","GATER"};
  auto chain=routeChain(value);
  int moving=drag>=0?chain[drag]:-1;
@@ -136,8 +136,8 @@ inline void render(Painter& p,const Value& value,const Display& display,const st
   p.box({led.x+6,led.y+(led.h-10)/2,10,10},on?accent:skin::C(skin::kHairline),on?accent:muted,5);
  }
  if(drag>=0&&insertion>=0){double x=insertion==5?tabRect(4).x+tabRect(4).w+3:tabRect(insertion).x-3;p.line(x,118,x,162,accent,3);}
- p.box({1302,103,312,541},skin::C(skin::kPanelRaised),edge,16);
- p.box({1309,115,297,46},panel,edge,18);p.text("MASTER OPTIONS",{1309,115,297,46},24,white,true);
+ p.box({1384,103,234,541},skin::C(skin::kPanelRaised),edge,16);
+ p.box({1391,115,220,46},panel,edge,18);p.text("MASTER OPTIONS",{1391,115,220,46},19,white,true);
  button(random,tab==3?"RANDOM ONCE":"RANDOM");
  if(tab==0){
   p.box(wave,screen,edge,18);
