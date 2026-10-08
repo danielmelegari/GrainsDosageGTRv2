@@ -65,10 +65,15 @@ int main(int argc,char** argv){@autoreleasepool {try{
  c->setParamNormalized(kReverbSource,1.);
  // A host can call onSize without first honouring checkSizeConstraint.
  ViewRect staleHostSize(0,0,900,600);view->onSize(&staleHostSize);for(int slot=0;slot<5;++slot)chooseTab(slot);
- [surface display];NSUInteger before=[(id<GrainsGuiInspection>)surface staticBuilds];
- auto benchmark=[&](bool full){if(full)[(id<GrainsGuiInspection>)surface setFullRedrawForInspection:YES];auto start=std::chrono::steady_clock::now();for(int frame=0;frame<12;++frame){c->setParamNormalized(kUiLfoPhase0,frame/12.);[surface display];}return std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count()/12.;};
+ ViewRect performanceSize(0,0,int(mockup::width*.70),int(mockup::height*.70));view->onSize(&performanceSize);
+ NSBitmapImageRep* performanceBitmap=[surface bitmapImageRepForCachingDisplayInRect:surface.bounds];
+ // CI windows are offscreen. cacheDisplay explicitly invokes drawing even when
+ // AppKit suppresses display for an occluded window (as the production timer does).
+ auto paint=[&](){[surface cacheDisplayInRect:surface.bounds toBitmapImageRep:performanceBitmap];};
+ paint();NSUInteger before=[(id<GrainsGuiInspection>)surface staticBuilds];checkGui(before>0,"Benchmark actually paints the native view");
+ auto benchmark=[&](bool full){if(full)[(id<GrainsGuiInspection>)surface setFullRedrawForInspection:YES];auto start=std::chrono::steady_clock::now();for(int frame=0;frame<12;++frame){c->setParamNormalized(kUiLfoPhase0,frame/12.);paint();}return std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count()/12.;};
  double cachedMs=benchmark(false);checkGui([(id<GrainsGuiInspection>)surface staticBuilds]==before,"Monitor frames reuse static artwork cache");
- c->setParamNormalized(kMix,.37);[surface display];checkGui([(id<GrainsGuiInspection>)surface staticBuilds]==before+1,"Control edit refreshes cached readout");
+ c->setParamNormalized(kMix,.37);paint();std::cout<<"Static cache builds: "<<before<<" -> "<<[(id<GrainsGuiInspection>)surface staticBuilds]<<" after a control edit\n";checkGui([(id<GrainsGuiInspection>)surface staticBuilds]==before+1,"Control edit refreshes cached readout");
  double fullMs=benchmark(true);[(id<GrainsGuiInspection>)surface setFullRedrawForInspection:NO];std::cout<<"GUI paint benchmark: cached="<<cachedMs<<" ms/frame; full="<<fullMs<<" ms/frame; static artwork reused across monitor frames\n";
  ViewRect resized(0,0,816,759);checkGui(view->checkSizeConstraint(&resized)==kResultOk,"Resize constraints");view->onSize(&resized);checkGui([(id<GrainsGuiInspection>)surface controlsFit],"Resize keeps controls visible");
  [surface display];NSBitmapImageRep* bitmap=[surface bitmapImageRepForCachingDisplayInRect:surface.bounds];[surface cacheDisplayInRect:surface.bounds toBitmapImageRep:bitmap];
