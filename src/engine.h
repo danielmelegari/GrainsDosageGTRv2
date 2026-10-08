@@ -138,6 +138,7 @@ class Engine {
     const double length=double(grainWindow_);
     const double end=double(write_)+(settings_.freeze?0.:1.);
     const double start=end-length;
+    if(pos>=std::max(0.,start)&&pos<end-1.)return rawRead(ch,pos);
     double p=std::fmod(pos-start,length);if(p<0.)p+=length;
     const double base=std::floor(p),fraction=p-base;
     auto sample=[&](double offset){const auto at=int64_t(start+offset);return at<0.?0.:double(buffer_[ch][size_t(at%int64_t(buffer_[ch].size()))]);};
