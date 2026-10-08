@@ -1,23 +1,28 @@
 #import <Cocoa/Cocoa.h>
 #include "plugin.cpp"
 #include "mockup_ui.h"
+#include "gui_host_guard.h"
 #include <stdexcept>
 #include <iostream>
 @protocol GrainsGuiInspection
 - (BOOL)skinLoaded;
 - (BOOL)controlsFit;
+- (NSUInteger)staticBuilds;
+- (void)invalidateStaticScene;
 @end
 static void checkGui(bool ok,const char* why){if(!ok)throw std::runtime_error(why);}
 int main(int argc,char** argv){@autoreleasepool {try{
  [NSApplication sharedApplication];[NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
  auto* c=new Controller;checkGui(c->initialize(nullptr)==kResultOk,"Controller init");
+ aztec::GuiHostGuard hostGuard;c->setComponentHandler(&hostGuard);
  auto* view=c->createView(ViewType::kEditor);checkGui(view,"Editor factory");ViewRect size;view->getSize(&size);
  NSWindow* window=[[NSWindow alloc] initWithContentRect:NSMakeRect(0,0,size.getWidth(),size.getHeight()) styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];window.releasedWhenClosed=NO;
  checkGui(view->attached((__bridge void*)window.contentView,kPlatformTypeNSView)==kResultOk,"Attach");
  NSView* surface=window.contentView.subviews.firstObject;checkGui(surface,"Native view");
  checkGui([(id<GrainsGuiInspection>)surface skinLoaded],"Approved rack PNG assets loaded");
  auto send=[&](NSEventType type,double x,double y,int clicks=1){
-  NSPoint point=[surface convertPoint:NSMakePoint((x+aztec::mockup::rackInset)*surface.bounds.size.width/aztec::mockup::width,y*surface.bounds.size.height/aztec::mockup::height) toView:nil];
+  aztec::mockup::Viewport fit(surface.bounds.size.width,surface.bounds.size.height);
+  NSPoint point=[surface convertPoint:NSMakePoint(fit.x+x*fit.scale,fit.y+y*fit.scale) toView:nil];
   NSEvent* e=[NSEvent mouseEventWithType:type location:point modifierFlags:0 timestamp:0 windowNumber:window.windowNumber context:nil eventNumber:1 clickCount:clicks pressure:1.];
   if(type==NSEventTypeLeftMouseDown)[surface mouseDown:e];else if(type==NSEventTypeLeftMouseDragged)[surface mouseDragged:e];else [surface mouseUp:e];
  };
@@ -27,7 +32,7 @@ int main(int argc,char** argv){@autoreleasepool {try{
  auto controlRect=[&](ParamID id){auto list=mockup::controls([&](ParamID p){return c->getParamNormalized(p);},tabFromValue(c->getParamNormalized(kUiTab)),id==lfoID(2,lEnabled)?2:0,0,0,0);for(const auto& item:list)if(item.id==id)return item.r;throw std::runtime_error("Missing control");};
  auto toggleControl=[&](ParamID id){auto r=controlRect(id);toggle(id,r.x+r.w/2,r.y+r.h/2);};
  auto clickRect=[&](mockup::Rect r){click(r.x+r.w/2,r.y+r.h/2);};
- auto chooseTab=[&](int t){auto r=mockup::tabRect(t);click(r.x+r.w*.4,r.y+r.h/2);};
+ auto chooseTab=[&](int t){auto r=mockup::tabRect(t);send(NSEventTypeLeftMouseDown,r.x+r.w*.4,r.y+r.h/2);checkGui(tabFromValue(c->getParamNormalized(kUiTab))==mockup::routeChain([&](ParamID id){return c->getParamNormalized(id);})[t],"Module selects on mouse down");send(NSEventTypeLeftMouseUp,r.x+r.w*.4,r.y+r.h/2);};
  toggleControl(kFreeze);toggleControl(kInputDeclick);toggleControl(kXYEnable);toggleControl(kMasterFilter);toggleControl(kMasterLimiter);
  auto sizeRect=controlRect(kSize);double knobX=sizeRect.x+sizeRect.w/2,knobY=sizeRect.y+sizeRect.h/2;
  c->setParamNormalized(kSize,.25);send(NSEventTypeLeftMouseDown,knobX,knobY);send(NSEventTypeLeftMouseDragged,knobX,knobY-45);send(NSEventTypeLeftMouseUp,knobX,knobY-45);
@@ -58,11 +63,19 @@ int main(int argc,char** argv){@autoreleasepool {try{
  c->setParamNormalized(kReverbMix,.25);send(NSEventTypeLeftMouseDown,113,1310);send(NSEventTypeLeftMouseDragged,113,1280);send(NSEventTypeLeftMouseUp,113,1280);checkGui(c->getParamNormalized(kReverbMix)>.4,"Vertical reverb fader");
  clickRect(mockup::next);checkGui(c->getParamNormalized(kRoutingOrder)==factoryPreset(0)[kRoutingOrder],"First categorised preset");clickRect(mockup::next);checkGui(c->getParamNormalized(kRoutingOrder)==factoryPreset(1)[kRoutingOrder],"Next categorised preset");
  c->setParamNormalized(kReverbSource,1.);
+ // A host can call onSize without first honouring checkSizeConstraint.
+ ViewRect staleHostSize(0,0,900,600);view->onSize(&staleHostSize);for(int slot=0;slot<5;++slot)chooseTab(slot);
+ [surface display];NSUInteger before=[(id<GrainsGuiInspection>)surface staticBuilds];
+ auto benchmark=[&](bool full){auto start=std::chrono::steady_clock::now();for(int frame=0;frame<12;++frame){c->setParamNormalized(kUiLfoPhase0,frame/12.);if(full)[(id<GrainsGuiInspection>)surface invalidateStaticScene];[surface display];}return std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count()/12.;};
+ double cachedMs=benchmark(false);checkGui([(id<GrainsGuiInspection>)surface staticBuilds]==before,"Monitor frames reuse static artwork cache");
+ c->setParamNormalized(kMix,.37);[surface display];checkGui([(id<GrainsGuiInspection>)surface staticBuilds]==before+1,"Control edit refreshes cached readout");
+ double fullMs=benchmark(true);std::cout<<"GUI paint benchmark: cached="<<cachedMs<<" ms/frame; full="<<fullMs<<" ms/frame; static artwork reused across monitor frames\n";
  ViewRect resized(0,0,816,759);checkGui(view->checkSizeConstraint(&resized)==kResultOk,"Resize constraints");view->onSize(&resized);checkGui([(id<GrainsGuiInspection>)surface controlsFit],"Resize keeps controls visible");
  [surface display];NSBitmapImageRep* bitmap=[surface bitmapImageRepForCachingDisplayInRect:surface.bounds];[surface cacheDisplayInRect:surface.bounds toBitmapImageRep:bitmap];
  NSString* path=argc>1?[NSString stringWithUTF8String:argv[1]]:@"GrainsDosage-GUI.png";
  checkGui([[bitmap representationUsingType:NSBitmapImageFileTypePNG properties:@{}] writeToFile:path atomically:YES],"Native screenshot");
  for(int t=0;t<5;++t){c->setParamNormalized(kUiTab,tabToValue(t));[surface display];NSBitmapImageRep* shot=[surface bitmapImageRepForCachingDisplayInRect:surface.bounds];[surface cacheDisplayInRect:surface.bounds toBitmapImageRep:shot];NSString* name=[path.stringByDeletingPathExtension stringByAppendingFormat:@"-tab-%d.png",t];checkGui([[shot representationUsingType:NSBitmapImageFileTypePNG properties:@{}] writeToFile:name atomically:YES],"Module screenshot");}
 
- view->removed();view->release();c->terminate();c->release();[window close];std::cout<<"PASS: native skin, tabs, controls, step editing, XY, resize and screenshot\n";return 0;
+ checkGui(hostGuard.rejectedTabEdits==0,"Module selection never edits a host read-only parameter");
+ view->removed();view->release();c->setComponentHandler(nullptr);c->terminate();c->release();[window close];std::cout<<"PASS: native skin, tabs, controls, step editing, XY, resize and screenshot\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}}

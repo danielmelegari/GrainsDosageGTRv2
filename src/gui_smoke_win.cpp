@@ -2,15 +2,16 @@
 #include <windows.h>
 #include "plugin.cpp"
 #include "mockup_ui.h"
+#include "gui_host_guard.h"
 #include <stdexcept>
 #include <iostream>
 static void check(bool ok,const char* why){if(!ok)throw std::runtime_error(why);}
 int main(){try{
- auto* c=new Controller;check(c->initialize(nullptr)==kResultOk,"Controller init");auto* view=c->createView(ViewType::kEditor);check(view,"Editor factory");
+ auto* c=new Controller;check(c->initialize(nullptr)==kResultOk,"Controller init");aztec::GuiHostGuard hostGuard;c->setComponentHandler(&hostGuard);auto* view=c->createView(ViewType::kEditor);check(view,"Editor factory");
  HWND parent=CreateWindowExW(0,L"STATIC",L"GrainsDosage smoke",WS_OVERLAPPEDWINDOW,0,0,1100,1020,nullptr,nullptr,GetModuleHandle(nullptr),nullptr);check(parent,"Window");
  check(view->attached(parent,kPlatformTypeHWND)==kResultOk,"Attach");HWND child=GetWindow(parent,GW_CHILD);check(child,"Native child");
  check(SendMessageW(child,WM_APP+71,0,0)==1,"Approved rack assets decoded");ShowWindow(parent,SW_SHOW);UpdateWindow(parent);UpdateWindow(child);
- auto send=[&](UINT msg,double x,double y){RECT r;GetClientRect(child,&r);SendMessageW(child,msg,msg==WM_LBUTTONUP?0:MK_LBUTTON,MAKELPARAM(int((x+aztec::mockup::rackInset)*r.right/aztec::mockup::width),int(y*r.bottom/aztec::mockup::height)));};
+ auto send=[&](UINT msg,double x,double y){RECT r;GetClientRect(child,&r);SendMessageW(child,msg,msg==WM_LBUTTONUP?0:MK_LBUTTON,MAKELPARAM(int(aztec::mockup::Viewport(r.right,r.bottom).x+x*aztec::mockup::Viewport(r.right,r.bottom).scale),int(aztec::mockup::Viewport(r.right,r.bottom).y+y*aztec::mockup::Viewport(r.right,r.bottom).scale)));};
  auto click=[&](double x,double y){send(WM_LBUTTONDOWN,x,y);send(WM_LBUTTONUP,x,y);};
  auto toggle=[&](int id,double x,double y){double old=c->getParamNormalized(id);click(x,y);check(c->getParamNormalized(id)==(old>=.5?0.:1.),"Toggle binding");c->setParamNormalized(id,old);};
  using namespace aztec;
@@ -43,6 +44,8 @@ int main(){try{
  c->setParamNormalized(kReverbMix,.25);send(WM_LBUTTONDOWN,113,1310);send(WM_MOUSEMOVE,113,1280);send(WM_LBUTTONUP,113,1280);check(c->getParamNormalized(kReverbMix)>.4,"Vertical reverb fader");
  clickRect(mockup::next);check(c->getParamNormalized(kRoutingOrder)==factoryPreset(0)[kRoutingOrder],"First categorised preset");clickRect(mockup::next);check(c->getParamNormalized(kRoutingOrder)==factoryPreset(1)[kRoutingOrder],"Next categorised preset");
  c->setParamNormalized(kReverbSource,1.);
+ ViewRect staleHostSize(0,0,900,600);view->onSize(&staleHostSize);for(int slot=0;slot<5;++slot)chooseTab(slot);
  ViewRect resized(0,0,816,759);check(view->checkSizeConstraint(&resized)==kResultOk,"Resize constraint");check(view->onSize(&resized)==kResultOk,"Resize");UpdateWindow(child);
- view->removed();view->release();c->terminate();c->release();DestroyWindow(parent);std::cout<<"PASS: native skin, tabs, controls, XY and resize\n";return 0;
+ check(hostGuard.rejectedTabEdits==0,"Module selection never edits a host read-only parameter");
+ view->removed();view->release();c->setComponentHandler(nullptr);c->terminate();c->release();DestroyWindow(parent);std::cout<<"PASS: native skin, tabs, controls, XY and resize\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

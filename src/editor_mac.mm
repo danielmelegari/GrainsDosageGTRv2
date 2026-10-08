@@ -61,6 +61,7 @@ public:
     if(id==kRandomAll&&surface_)dispatch_async(dispatch_get_main_queue(),^{[(NSView*)surface_ setNeedsDisplay:YES];});
   }
   void edit(ParamID id,double v) {begin(id);change(id,v);end(id);}
+  void selectTab(int tab){controller_->setParamNormalized(kUiTab,tabToValue(tab));}
   void zoom(double scale);
 };
 }  // namespace aztec (closed before the Objective-C section; ObjC classes and
@@ -139,6 +140,13 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
   NSMutableArray<NSImage*>* moduleLayers;
   NSImage* rackBackplate;
   NSImage* rackAtlas;
+  NSImage* staticScene;
+  NSString* scenePreset;
+  std::array<double,aztec::kCount> sceneValues;
+  std::array<int,5> sceneSelection;
+  int animationFrames;
+  NSUInteger staticBuilds;
+  NSMutableDictionary<NSString*,NSAttributedString*>* textCache;
   NSImage* knobFace;   // user-supplied knobOK.png face (assets/sprites/knob.png)
   NSString* skinDir;   // runtime skin folder: <bundle Resources>/GrainsDosage-skin
                        // (or ./GrainsDosage-skin next to the binary). Drop your
@@ -161,6 +169,8 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
   uint32_t randomSeed;
 }
 - (BOOL)skinLoaded;
+- (NSUInteger)staticBuilds;
+- (void)invalidateStaticScene;
 - (void)preset:(BOOL)save;
 - (void)stepPreset:(int)direction;
 - (NSURL*)presetFolder;
@@ -183,7 +193,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
 @implementation GrainsSurface
 - (instancetype)initWithFrame:(NSRect)frame {
   self=[super initWithFrame:frame];if(self){
-    presetName=@"PRESETS ▾";
+    presetName=@"PRESETS ▾";sceneValues.fill(-1.);sceneSelection.fill(-1);animationFrames=0;staticBuilds=0;textCache=[NSMutableDictionary dictionary];
     // Tab strip (Option B): the Cocoa editor owns its own selection state for
     // the per-step step-sequencer widgets (mirrors the Win32 editor). The tab
     // itself lives in kUiTab. These must be initialised before any layout is
@@ -291,13 +301,16 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
     if(!exists(atlas))atlas=@"assets/approved-rack/controls.png";
     rackAtlas=[[NSImage alloc] initWithContentsOfFile:atlas];
     self.toolTip=@"Drag knobs vertically; Shift gives fine control. Double-click resets. Drag the module tabs to change audio order.";
-    timer=[NSTimer timerWithTimeInterval:1./60. target:self selector:@selector(tick:) userInfo:nil repeats:YES];
+    timer=[NSTimer timerWithTimeInterval:1./30. target:self selector:@selector(tick:) userInfo:nil repeats:YES];
+    timer.tolerance=.003;
     [[NSRunLoop mainRunLoop] addTimer:timer forMode:NSRunLoopCommonModes];
   }return self;
 }
 - (BOOL)isFlipped{return YES;}
 - (BOOL)isOpaque{return YES;}
 - (BOOL)acceptsFirstResponder{return YES;}
+- (NSUInteger)staticBuilds{return staticBuilds;}
+- (void)invalidateStaticScene{staticScene=nil;}
 - (BOOL)skinLoaded{return rackBackplate!=nil&&rackAtlas!=nil;}
 - (void)stop {
   if(owner&&dragID>=0)owner->end(aztec::ParamID(dragID));
@@ -305,15 +318,19 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
   dragID=dragSlot=dropSlot=-1;dragXY=false;[timer invalidate];timer=nil;
 }
 - (void)tick:(NSTimer*)tick {
-  (void)tick;if(!owner)return;bool changed=false;
-  // Modulation arcs around the knobs were removed, so live mod depths no
-  // longer drive repaints — only parameter value changes do.
+  (void)tick;if(!owner||self.hiddenOrHasHiddenAncestor||!self.window||!(self.window.occlusionState&NSWindowOcclusionStateVisible))return;
+  bool changed=false;
   for(int id=0;id<aztec::kCount;++id){double v=owner->value(id);if(v!=cached[id]){cached[id]=v;changed=true;}}
-  waveVisual.update([&](aztec::ParamID id){return owner->value(id);});
-  [self setNeedsDisplay:YES];
+  if(changed)animationFrames=60;
+  if(animationFrames>0||dragSlot>=0){
+    --animationFrames;
+    if([self tab]==0)waveVisual.update([&](aztec::ParamID id){return cached[id];});
+    [self setNeedsDisplay:YES];
+  }
 }
 - (NSPoint)logical:(NSEvent*)event {
-  NSPoint p=[self convertPoint:event.locationInWindow fromView:nil];return NSMakePoint(p.x*aztec::canvasW/self.bounds.size.width-aztec::mockup::rackInset,p.y*aztec::canvasH/self.bounds.size.height);
+  NSPoint p=[self convertPoint:event.locationInWindow fromView:nil];
+  aztec::mockup::Viewport viewport(self.bounds.size.width,self.bounds.size.height);auto logical=viewport.logical(p.x,p.y);return NSMakePoint(logical.first,logical.second);
 }
 - (int)order {return std::clamp(int(std::round(owner->value(aztec::kModuleOrder)*6.)),0,6);}
 - (int)tab {return aztec::tabFromValue(owner->value(aztec::kUiTab));}
@@ -322,7 +339,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
 // routing keeps following kModuleOrder (the AUDIO ORDER control), untouched.
 - (void)chooseTab:(int)tab {
   if(!owner||tab<0||tab>=aztec::tabCount)return;
-  owner->edit(aztec::kUiTab,aztec::tabToValue(tab));
+  owner->selectTab(tab);
   [self setNeedsDisplay:YES];
 }
 - (int)stage:(int)slot {int order=[self order];return aztec::moduleOrders[order>=6?0:order][slot];}
@@ -407,7 +424,8 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
 - (void)drawRect:(NSRect)dirty {
   (void)dirty;[dark() setFill];NSRectFill(self.bounds);if(!owner)return;[self layoutControls];
   [NSGraphicsContext saveGraphicsState];NSAffineTransform* transform=[NSAffineTransform transform];
-  [transform scaleXBy:self.bounds.size.width/aztec::canvasW yBy:self.bounds.size.height/aztec::canvasH];[transform concat];
+  aztec::mockup::Viewport viewport(self.bounds.size.width,self.bounds.size.height);
+  [transform translateXBy:viewport.x yBy:viewport.y];[transform scaleXBy:viewport.scale yBy:viewport.scale];[transform concat];
   using namespace aztec;
   mockup::Painter painter;
   painter.image=[&](int asset,mockup::Rect r,mockup::Rect source){
@@ -415,14 +433,21 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
     [image drawInRect:NSMakeRect(r.x,r.y,r.w,r.h) fromRect:NSMakeRect(source.x,image.size.height-source.y-source.h,source.w,source.h) operation:NSCompositingOperationSourceOver fraction:1. respectFlipped:YES hints:@{NSImageHintInterpolation:@(NSImageInterpolationHigh)}];
   };
   painter.box=[](mockup::Rect r,skin::Rgb fill,skin::Rgb edge,double radius){box(NSMakeRect(r.x,r.y,r.w,r.h),C(fill),C(edge),radius);};
-  painter.text=[](const std::string& text,mockup::Rect r,double size,skin::Rgb color,bool center){
+  painter.text=[&](const std::string& text,mockup::Rect r,double size,skin::Rgb color,bool center){
     NSString* str=[NSString stringWithUTF8String:text.c_str()];
-    NSMutableParagraphStyle* style=[[NSMutableParagraphStyle alloc] init];style.alignment=center?NSTextAlignmentCenter:NSTextAlignmentLeft;style.lineBreakMode=NSLineBreakByTruncatingTail;
-    NSFont* font=[NSFont fontWithName:@"HelveticaNeue-Bold" size:size];if(!font)font=[NSFont systemFontOfSize:size weight:NSFontWeightHeavy];
-    NSShadow* shadow=[[NSShadow alloc] init];shadow.shadowColor=rgb(.04,.03,.08,.8);shadow.shadowOffset=NSMakeSize(0,-1);shadow.shadowBlurRadius=1;
-    [str drawInRect:NSMakeRect(r.x,r.y+(r.h-size*1.2)/2,r.w,size*1.4) withAttributes:@{NSFontAttributeName:font,NSForegroundColorAttributeName:C(color),NSParagraphStyleAttributeName:style,NSShadowAttributeName:shadow}];
+    NSString* key=[NSString stringWithFormat:@"%@|%.2f|%d,%d,%d|%d",str,size,color.r,color.g,color.b,center];
+    NSAttributedString* cachedText=textCache[key];
+    if(!cachedText){
+      NSMutableParagraphStyle* style=[[NSMutableParagraphStyle alloc] init];style.alignment=center?NSTextAlignmentCenter:NSTextAlignmentLeft;style.lineBreakMode=NSLineBreakByTruncatingTail;
+      NSFont* font=[NSFont fontWithName:@"HelveticaNeue-Bold" size:size];if(!font)font=[NSFont systemFontOfSize:size weight:NSFontWeightHeavy];
+      NSShadow* shadow=[[NSShadow alloc] init];shadow.shadowColor=rgb(.04,.03,.08,.8);shadow.shadowOffset=NSMakeSize(0,-1);shadow.shadowBlurRadius=1;
+      cachedText=[[NSAttributedString alloc] initWithString:str attributes:@{NSFontAttributeName:font,NSForegroundColorAttributeName:C(color),NSParagraphStyleAttributeName:style,NSShadowAttributeName:shadow}];
+      if(textCache.count>512)[textCache removeAllObjects];textCache[key]=cachedText;
+    }
+    [cachedText drawInRect:NSMakeRect(r.x,r.y+(r.h-size*1.2)/2,r.w,size*1.4)];
   };
   painter.line=[](double x,double y,double xx,double yy,skin::Rgb col,double width){NSBezierPath* path=[NSBezierPath bezierPath];[path moveToPoint:NSMakePoint(x,y)];[path lineToPoint:NSMakePoint(xx,yy)];[C(col) setStroke];path.lineWidth=width;[path stroke];};
+  painter.polyline=[](const std::vector<std::pair<double,double>>& pts,skin::Rgb col,double width){if(pts.empty())return;NSBezierPath* path=[NSBezierPath bezierPath];[path moveToPoint:NSMakePoint(pts[0].first,pts[0].second)];for(size_t i=1;i<pts.size();++i)[path lineToPoint:NSMakePoint(pts[i].first,pts[i].second)];[C(col) setStroke];path.lineWidth=width;[path stroke];};
   painter.polygon=[](const std::vector<std::pair<double,double>>& pts,skin::Rgb col){if(pts.empty())return;NSBezierPath* path=[NSBezierPath bezierPath];[path moveToPoint:NSMakePoint(pts[0].first,pts[0].second)];for(size_t i=1;i<pts.size();++i)[path lineToPoint:NSMakePoint(pts[i].first,pts[i].second)];[path closePath];[C(col) setFill];[path fill];};
   painter.knob=[&](mockup::Rect r,double value){
     if(!knobFace){box(NSMakeRect(r.x,r.y,r.w,r.h),rgb(.7,.7,.7),cream(),r.w/2);return;}
@@ -432,10 +457,22 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
     CGContextScaleCTM(ctx,1,-1);CGContextSetInterpolationQuality(ctx,kCGInterpolationHigh);
     CGContextDrawImage(ctx,CGRectMake(-r.w/2,-r.h/2,r.w,r.h),face);CGContextRestoreGState(ctx);
   };
-  mockup::render(painter,[&](ParamID id){return owner->value(id);},[&](ParamID id,double v){return std::string([owner->display(id,v) UTF8String]);},std::string([presetName UTF8String]),[self tab],selectedLfo,selectedRepeat,selectedGate,selectedReslice,&waveVisual,dragSlot,dropSlot,&motion);
+  bool rebuild=!staticScene||![scenePreset isEqualToString:presetName];
+  std::array<int,5> selection{{[self tab],selectedLfo,selectedRepeat,selectedGate,selectedReslice}};
+  if(selection!=sceneSelection){sceneSelection=selection;rebuild=true;}
+  for(int id=0;id<kCount;++id)if(!isMonitor(id)){double v=owner->value(id);if(sceneValues[id]!=v){sceneValues[id]=v;rebuild=true;}}
+  auto render=[&](mockup::RenderPass pass){mockup::render(painter,[&](ParamID id){return owner->value(id);},[&](ParamID id,double v){return std::string([owner->display(id,v) UTF8String]);},std::string([presetName UTF8String]),[self tab],selectedLfo,selectedRepeat,selectedGate,selectedReslice,&waveVisual,dragSlot,dropSlot,&motion,pass);};
+  if(rebuild){
+    staticScene=[[NSImage alloc] initWithSize:NSMakeSize(canvasW,canvasH)];
+    [staticScene lockFocusFlipped:YES];render(mockup::RenderPass::Static);[staticScene unlockFocus];
+    scenePreset=[presetName copy];++staticBuilds;
+  }
+  [staticScene drawInRect:NSMakeRect(0,0,canvasW,canvasH) fromRect:NSZeroRect operation:NSCompositingOperationCopy fraction:1. respectFlipped:YES hints:nil];
+  render(mockup::RenderPass::Dynamic);
   [NSGraphicsContext restoreGraphicsState];
 }
 - (void)chooseSkin:(NSMenuItem*)item {
+  staticScene=nil;
   if(item.tag==-2){aztec::theme::loadSkinFile(aztec::theme::defaultPath());}
   else if(item.tag==-1){ // Original GUI: Astral Green, drop any persisted skin.
     aztec::theme::applySkin(0,{});
@@ -537,7 +574,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
     [NSMenu popUpContextMenu:menu withEvent:event forView:self];return;
   }
   int led=mockup::hitLed(p.x,p.y);if(led>=0){int stage=mockup::routeChain([&](ParamID id){return owner->value(id);})[led];auto id=mockup::stageEnabled[stage];owner->edit(id,owner->value(id)>=.5?0.:1.);[self setNeedsDisplay:YES];return;}
-  int route=mockup::hitRoute(p.x,p.y);if(route>=0){dragSlot=route;dropSlot=-1;routeMoved=false;origin=p;routingAtDrag=mockup::routeChain([&](ParamID id){return owner->value(id);});[self setNeedsDisplay:YES];return;}
+  int route=mockup::hitRoute(p.x,p.y);if(route>=0){dragSlot=route;dropSlot=-1;routeMoved=false;origin=p;routingAtDrag=mockup::routeChain([&](ParamID id){return owner->value(id);});[self chooseTab:routingAtDrag[route]];[self setNeedsDisplay:YES];return;}
   int lfoHit=mockup::hitLfo(p.x,p.y);if(lfoHit>=0){selectedLfo=lfoHit;[self setNeedsDisplay:YES];return;}
   if(hit(mockup::randomRect([self tab]))){
     int t=[self tab];if(t<3)randomizeModule(t,selectedRepeat,randomSeed,[&](ParamID id){return owner->value(id);},[&](ParamID id,double v){owner->edit(id,v);});
@@ -581,7 +618,6 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
 }
 - (void)mouseUp:(NSEvent*)event {
   (void)event;if(!owner)return;
-  if(dragSlot>=0&&!routeMoved)[self chooseTab:routingAtDrag[dragSlot]];
   if(dragSlot>=0&&dropSlot>=0&&dropSlot!=dragSlot&&dropSlot!=dragSlot+1)owner->edit(aztec::kRoutingOrder,aztec::mockup::moveRoute(routingAtDrag,dragSlot,dropSlot));
   if(dragID>=0)owner->end(aztec::ParamID(dragID));if(dragXY){owner->end(aztec::kXYX);owner->end(aztec::kXYY);}
   dragID=dragSlot=dropSlot=-1;dragXY=routeMoved=false;[self setNeedsDisplay:YES];
@@ -597,7 +633,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
 namespace aztec {
 // No "using namespace qg" here: inside this namespace an unqualified qg would
 // find aztec::qg first (shadowing), so global qg names must stay ::qg-qualified.
-Editor::Editor(EditController* c):controller_(c){controller_->addRef();rect=ViewRect(0,0,int(mockup::width*.65),int(mockup::height*.65));(void)::qg::waveBank();}
+Editor::Editor(EditController* c):controller_(c){controller_->addRef();rect=ViewRect(0,0,int(mockup::width*.70),int(mockup::height*.70));(void)::qg::waveBank();}
 Editor::~Editor(){removed();controller_->release();}
 NSString* Editor::display(ParamID id,double v,bool units) const {
   String128 text{};controller_->getParamStringByValue(id,v,text);

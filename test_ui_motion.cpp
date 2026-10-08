@@ -6,6 +6,12 @@
 #include <iostream>
 int main(){using namespace aztec;
  for(int n=0;n<120;++n)for(int from=0;from<5;++from)for(int gap=0;gap<=5;++gap){auto old=fiveModuleOrder(n);auto actual=fiveModuleOrder(int(std::round(mockup::moveRoute(old,from,gap)*120))-1);std::vector<int> expected(old.begin(),old.end());int moved=expected[from];expected.erase(expected.begin()+from);expected.insert(expected.begin()+gap-(gap>from),moved);assert(std::equal(expected.begin(),expected.end(),actual.begin()));}
+ // Hosts may restore a stale landscape window or an unusual DPI size.
+ for(auto size:std::vector<std::pair<double,double>>{{816,600},{600,1200},{758,1016},{1083,1452}}){
+  mockup::Viewport fit(size.first,size.second);auto circle=fit.screen({100,200,80,80});assert(std::abs(circle.w-circle.h)<1e-9);
+  auto logical=fit.logical(circle.x+circle.w/2,circle.y+circle.h/2);assert(std::abs(logical.first-140)<1e-9&&std::abs(logical.second-240)<1e-9);
+  for(int slot=0;slot<5;++slot){auto b=fit.screen(mockup::tabRect(slot));auto xy=fit.logical(b.x+b.w*.4,b.y+b.h*.5);assert(mockup::hitTab(xy.first,xy.second)==slot);}
+ }
  auto p=initialParameters();auto value=[&](ParamID id){return p[id];};mockup::WaveVisual visual;
  for(int i=0;i<waveformBins;++i){p[kUiWaveLow0+i]=0;p[kUiWaveHigh0+i]=1;}p[kUiGrainActive]=1;
  visual.update(value);assert(std::abs(visual.hi[0]-.06)<1e-12&&std::abs(visual.lo[0]+.06)<1e-12&&visual.active==.06);
