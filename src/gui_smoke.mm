@@ -8,7 +8,7 @@
 - (BOOL)skinLoaded;
 - (BOOL)controlsFit;
 - (NSUInteger)staticBuilds;
-- (void)invalidateStaticScene;
+- (void)setFullRedrawForInspection:(BOOL)enabled;
 @end
 static void checkGui(bool ok,const char* why){if(!ok)throw std::runtime_error(why);}
 int main(int argc,char** argv){@autoreleasepool {try{
@@ -66,10 +66,10 @@ int main(int argc,char** argv){@autoreleasepool {try{
  // A host can call onSize without first honouring checkSizeConstraint.
  ViewRect staleHostSize(0,0,900,600);view->onSize(&staleHostSize);for(int slot=0;slot<5;++slot)chooseTab(slot);
  [surface display];NSUInteger before=[(id<GrainsGuiInspection>)surface staticBuilds];
- auto benchmark=[&](bool full){auto start=std::chrono::steady_clock::now();for(int frame=0;frame<12;++frame){c->setParamNormalized(kUiLfoPhase0,frame/12.);if(full)[(id<GrainsGuiInspection>)surface invalidateStaticScene];[surface display];}return std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count()/12.;};
+ auto benchmark=[&](bool full){if(full)[(id<GrainsGuiInspection>)surface setFullRedrawForInspection:YES];auto start=std::chrono::steady_clock::now();for(int frame=0;frame<12;++frame){c->setParamNormalized(kUiLfoPhase0,frame/12.);[surface display];}return std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count()/12.;};
  double cachedMs=benchmark(false);checkGui([(id<GrainsGuiInspection>)surface staticBuilds]==before,"Monitor frames reuse static artwork cache");
  c->setParamNormalized(kMix,.37);[surface display];checkGui([(id<GrainsGuiInspection>)surface staticBuilds]==before+1,"Control edit refreshes cached readout");
- double fullMs=benchmark(true);std::cout<<"GUI paint benchmark: cached="<<cachedMs<<" ms/frame; full="<<fullMs<<" ms/frame; static artwork reused across monitor frames\n";
+ double fullMs=benchmark(true);[(id<GrainsGuiInspection>)surface setFullRedrawForInspection:NO];std::cout<<"GUI paint benchmark: cached="<<cachedMs<<" ms/frame; full="<<fullMs<<" ms/frame; static artwork reused across monitor frames\n";
  ViewRect resized(0,0,816,759);checkGui(view->checkSizeConstraint(&resized)==kResultOk,"Resize constraints");view->onSize(&resized);checkGui([(id<GrainsGuiInspection>)surface controlsFit],"Resize keeps controls visible");
  [surface display];NSBitmapImageRep* bitmap=[surface bitmapImageRepForCachingDisplayInRect:surface.bounds];[surface cacheDisplayInRect:surface.bounds toBitmapImageRep:bitmap];
  NSString* path=argc>1?[NSString stringWithUTF8String:argv[1]]:@"GrainsDosage-GUI.png";

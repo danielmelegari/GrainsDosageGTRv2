@@ -87,7 +87,7 @@ enum Art {Backplate, Atlas};
 enum Sprite {KnobFace, Pill, Tab, ActiveTab, Scope, XY, Meter, Track, Thumb, Led, Amber, Locked, Unlocked};
 inline Rect spriteRect(Sprite sprite){
  static constexpr Rect frames[]={
- {354,55,238,238},{632,116,297,139},{955,125,284,122},{19,422,309,148},
+ {354,55,238,238},{632,116,297,139},{955,125,284,122},{33,438,283,120},
  {329,344,285,269},{649,345,267,267},{939,405,303,174},
  {630,792,358,75},{1060,738,87,162},{101,1039,137,139},{400,1033,141,147},
  {702,1010,152,194},{996,981,188,224}};

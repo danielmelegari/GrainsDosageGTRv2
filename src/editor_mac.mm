@@ -146,6 +146,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
   std::array<int,5> sceneSelection;
   int animationFrames;
   NSUInteger staticBuilds;
+  bool fullRedrawForInspection;
   NSMutableDictionary<NSString*,NSAttributedString*>* textCache;
   NSImage* knobFace;   // user-supplied knobOK.png face (assets/sprites/knob.png)
   NSString* skinDir;   // runtime skin folder: <bundle Resources>/GrainsDosage-skin
@@ -170,7 +171,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
 }
 - (BOOL)skinLoaded;
 - (NSUInteger)staticBuilds;
-- (void)invalidateStaticScene;
+- (void)setFullRedrawForInspection:(BOOL)enabled;
 - (void)preset:(BOOL)save;
 - (void)stepPreset:(int)direction;
 - (NSURL*)presetFolder;
@@ -310,7 +311,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
 - (BOOL)isOpaque{return YES;}
 - (BOOL)acceptsFirstResponder{return YES;}
 - (NSUInteger)staticBuilds{return staticBuilds;}
-- (void)invalidateStaticScene{staticScene=nil;}
+- (void)setFullRedrawForInspection:(BOOL)enabled{fullRedrawForInspection=enabled;if(!enabled)staticScene=nil;}
 - (BOOL)skinLoaded{return rackBackplate!=nil&&rackAtlas!=nil;}
 - (void)stop {
   if(owner&&dragID>=0)owner->end(aztec::ParamID(dragID));
@@ -461,7 +462,10 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
   std::array<int,5> selection{{[self tab],selectedLfo,selectedRepeat,selectedGate,selectedReslice}};
   if(selection!=sceneSelection){sceneSelection=selection;rebuild=true;}
   for(int id=0;id<kCount;++id)if(!isMonitor(id)){double v=owner->value(id);if(sceneValues[id]!=v){sceneValues[id]=v;rebuild=true;}}
+  const int activeWave=kUiModWave0+selectedLfo;
+  if(owner->value(kModWaveRnd0+selectedLfo)>0&&sceneValues[activeWave]!=owner->value(activeWave)){sceneValues[activeWave]=owner->value(activeWave);rebuild=true;}
   auto render=[&](mockup::RenderPass pass){mockup::render(painter,[&](ParamID id){return owner->value(id);},[&](ParamID id,double v){return std::string([owner->display(id,v) UTF8String]);},std::string([presetName UTF8String]),[self tab],selectedLfo,selectedRepeat,selectedGate,selectedReslice,&waveVisual,dragSlot,dropSlot,&motion,pass);};
+  if(fullRedrawForInspection){render(mockup::RenderPass::All);}else{
   if(rebuild){
     staticScene=[[NSImage alloc] initWithSize:NSMakeSize(canvasW,canvasH)];
     [staticScene lockFocusFlipped:YES];render(mockup::RenderPass::Static);[staticScene unlockFocus];
@@ -469,6 +473,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
   }
   [staticScene drawInRect:NSMakeRect(0,0,canvasW,canvasH) fromRect:NSZeroRect operation:NSCompositingOperationCopy fraction:1. respectFlipped:YES hints:nil];
   render(mockup::RenderPass::Dynamic);
+  }
   [NSGraphicsContext restoreGraphicsState];
 }
 - (void)chooseSkin:(NSMenuItem*)item {
