@@ -4,7 +4,7 @@ const int tab=currentTab;
 ADD(kInputDeclick,1320,52,64,30,Toggle,"ON");
 ADD(kDeclickSensitivity,1394,49,204,33,Slider,"");
 const ParamID stageEnabled[]={kGrainEnabled,kGlitchEnabled,kRepeatEnabled,kResliceEnabled,kGaterEnabled};
-ADD(stageEnabled[tab],1230,421,125,42,Toggle,"ON");
+ADD(stageEnabled[tab],1230,(tab==3?576:tab==2?389:421),125,42,Toggle,"ON");
 ADD(kTranspose,1420,195,180,182,Knob,"TRANSPOSE");
 ADD(kStretchSpeed,1420,386,180,182,Knob,"STRETCH");
 ADD(kStretchOn,1394,584,210,44,Toggle,"FREE STRETCH");
@@ -35,19 +35,19 @@ if(tab==2){
  ADD(kRepeatInterval,828,226,270,44,Select,"INTERVAL");
  ADD(kRepeatDuration,828,298,170,66,Slider,"DURATION");
  ADD(kRepeatChance,1020,298,170,66,Slider,"CHANCE");
- ADD(kRepeatStep0+selectedRepeat,50,590,210,32,Toggle,"STEP ON");
- ADD(kRepeatRate0+selectedRepeat,292,590,340,32,Select,"STEP DIVISION");
- ADD(kRepeatPitch0+selectedRepeat,670,578,300,58,Slider,"STEP PITCH");
+ ADD(kRepeatStep0+selectedRepeat,50,580,210,38,Toggle,"STEP ON");
+ ADD(kRepeatRate0+selectedRepeat,292,580,340,38,Select,"DIVISION");
+ ADD(kRepeatPitch0+selectedRepeat,670,568,300,66,Slider,"STEP PITCH");
 }
 if(tab==3){
- ADD(kResliceLength,55,240,240,68,Slider,"WINDOW");
- ADD(kResliceMix,330,240,220,68,Slider,"MIX");
- ADD(kResliceRndOn,598,250,210,46,Toggle,"STEP RND");
- ADD(kResliceRndRate,850,250,340,46,Select,"RND RATE");
- ADD(kResliceIndex0+selectedReslice,55,590,370,32,Select,"SOURCE SLICE");
+ ADD(kResliceLength,55,215,250,76,Slider,"WINDOW");
+ ADD(kResliceMix,355,215,230,76,Slider,"MIX");
+ ADD(kResliceRndOn,635,225,230,46,Toggle,"STEP RND");
+ ADD(kResliceRndRate,925,225,390,46,Select,"RND RATE");
+ ADD(kResliceIndex0+selectedReslice,55,490,370,34,Select,"SOURCE SLICE");
 }
 if(tab==4){
- ADD(kGaterGrid,50,230,240,42,Select,"GATE RATE");
+ ADD(kGaterGrid,50,230,240,42,Select,"RATE");
  ADD(kGaterLengthRnd,320,230,242,42,Toggle,"LENGTH RND");
  ADD(kGaterStepRnd,592,230,220,42,Toggle,"STEP RND");
  ADD(kGaterLatch,848,230,200,42,Toggle,"LATCH");
@@ -102,8 +102,7 @@ ADD(kReverbModel,276,1340,202,30,Select,"TYPE");
 if(value(kReverbModel)<.125)ADD(kReverbType,40,1393,218,30,Select,"MODE");
 ADD(kReverbKill,279,1393,180,30,Toggle,"KILL DRY");
 ADD(kReverbSource,498,1340,272,30,Select,"SOURCE");
-if(value(kReverbSource)<.5)ADD(kReverbGrid,795,1340,204,30,Select,"RATE");
-else ADD(kReverbRandomRate,795,1340,204,30,Select,"RATE");
+ADD(kReverbRateV2,795,1340,204,30,Select,"RATE");
 ADD(kReverbMix,543,1386,202,45,Slider,"AMOUNT");
 ADD(kReverbLength,786,1386,211,45,Slider,"LENGTH");
 if(value(kReverbSource)<.5)for(int i=0;i<16;++i)ADD(kReverbStep0+i,1022+i*36,1359,32,49,Pad,"");

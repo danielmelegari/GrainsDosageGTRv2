@@ -9,6 +9,7 @@
 #include <functional>
 #include <string>
 #include <vector>
+#include <chrono>
 
 namespace aztec { namespace mockup {
 constexpr double width=1632, height=1518;
@@ -17,16 +18,16 @@ constexpr Rect preset{532,31,364,43}, previous{911,31,50,43}, next{964,31,50,43}
 constexpr Rect load{1032,31,105,43}, save{1150,31,105,43};
 constexpr Rect skinMenu{1040,1466,142,31}, zoomMenu{1192,1466,50,31};
 constexpr Rect xy{1112,735,480,260}, scope{40,775,390,250}, wave{27,510,1331,112};
-constexpr Rect random{918,421,195,42};
+inline Rect randomRect(int tab){return {918,tab==3?576.:tab==2?389.:421.,tab==3?230.:195.,42};}
 inline Rect tabRect(int i){return {28.+i*269,115,263,50};}
 inline Rect lfoRect(int i){return {628.+i*105,680,90,46};}
-inline Rect stepRect(int i){return {61.+i*76,506,32,60};}
+inline Rect stepRect(int i,int tab=2){return {57.+i*81,tab==3?354.:tab==4?464.:450.,44,tab==3?88.:tab==4?108.:74.};}
 constexpr ParamID stageEnabled[]={kGrainEnabled,kGlitchEnabled,kRepeatEnabled,kResliceEnabled,kGaterEnabled};
 inline Rect ledRect(int i){auto r=tabRect(i);return {r.x+r.w-28,r.y+8,24,r.h-16};}
 inline int hitLed(double x,double y){for(int i=0;i<5;++i)if(ledRect(i).contains(x,y))return i;return -1;}
 inline int hitTab(double x,double y){for(int i=0;i<5;++i)if(tabRect(i).contains(x,y))return i;return -1;}
 inline int hitLfo(double x,double y){for(int i=0;i<4;++i)if(lfoRect(i).contains(x,y))return i;return -1;}
-inline int hitStep(double x,double y){for(int i=0;i<16;++i)if(stepRect(i).contains(x,y))return i;return -1;}
+inline int hitStep(double x,double y,int tab=2){for(int i=0;i<16;++i)if(stepRect(i,tab).contains(x,y))return i;return -1;}
 using Value=std::function<double(ParamID)>;
 using Display=std::function<std::string(ParamID,double)>;
 // Shared insertion semantics: moving a stage shifts its neighbours, never swaps.
@@ -34,10 +35,23 @@ inline int hitRoute(double x,double y){return hitTab(x,y);}
 inline int routeInsertion(double x,double y){if(y<108||y>173||x<20||x>1377)return -1;for(int i=0;i<5;++i)if(x<tabRect(i).x+tabRect(i).w/2)return i;return 5;}
 inline std::array<int,5> routeChain(const Value& value){int n=int(std::round(value(kRoutingOrder)*120))-1;if(n>=0)return fiveModuleOrder(n);std::array<int,5> c{{0,1,2,3,4}};int old=int(std::round(value(kModuleOrder)*6));if(old<6){auto a=moduleOrders[std::clamp(old,0,5)];std::copy(a.begin(),a.end(),c.begin());}return c;}
 inline double moveRoute(std::array<int,5> c,int from,int insertion){int to=insertion-(insertion>from?1:0);int stage=c[from];if(to>from)for(int i=from;i<to;++i)c[i]=c[i+1];else for(int i=from;i>to;--i)c[i]=c[i-1];c[to]=stage;for(int i=0;i<120;++i)if(fiveModuleOrder(i)==c)return (i+1)/120.;return 0;}
+struct Motion {
+ std::array<double,5> x{};std::array<double,16> gate{};bool ready=false;
+ std::chrono::steady_clock::time_point last{};
+ void update(const Value& value,int drag,int insertion){
+  auto now=std::chrono::steady_clock::now();double dt=ready?std::clamp(std::chrono::duration<double>(now-last).count(),0.,.1):0.;last=now;
+  auto chain=routeChain(value);if(drag>=0&&insertion>=0)chain=fiveModuleOrder(int(std::round(moveRoute(chain,drag,insertion)*120))-1);
+  double ease=1-std::exp(-dt/.07);
+  for(int i=0;i<5;++i){double target=tabRect(i).x;int stage=chain[i];x[stage]=ready?x[stage]+ease*(target-x[stage]):target;}
+  int playing=int(std::round(value(kUiGaterStep)*15));
+  for(int i=0;i<16;++i){double target=i==playing&&value(kGaterEnabled)>.5?std::min(value(kUiGaterPhase),value(kUiGaterLength0+i)):0.;gate[i]+=(1-std::exp(-dt/.025))*(target-gate[i]);}
+  ready=true;
+ }
+};
 struct WaveVisual {
  std::array<double,waveformBins> lo{},hi{};
  double active=0;
- void update(const Value& value){for(int i=0;i<waveformBins;++i){lo[i]+=.12*((value(kUiWaveLow0+i)*2-1)-lo[i]);hi[i]+=.12*((value(kUiWaveHigh0+i)*2-1)-hi[i]);}active+=.12*((value(kUiGrainActive)>.5?1.:0.)-active);}
+ void update(const Value& value){for(int i=0;i<waveformBins;++i){lo[i]+=.06*((value(kUiWaveLow0+i)*2-1)-lo[i]);hi[i]+=.06*((value(kUiWaveHigh0+i)*2-1)-hi[i]);}active+=.06*((value(kUiGrainActive)>.5?1.:0.)-active);}
 };
 using skin::Rgb;
 struct Painter {
@@ -84,10 +98,11 @@ inline void renderControl(Painter& p,const Control& c,const Value& value,const D
  }else if(c.kind==Select){
   p.box(r,screen,edge,r.h/2);
   double shown=c.id==lfoID(lfo,lWave)&&value(kModWaveRnd0+lfo)>0?value(kUiModWave0+lfo):v;
-  if(c.label.empty())p.text(display(c.id,shown),{r.x+8,r.y,r.w-16,r.h},18,white,true);
+  auto shownText=display(c.id,shown);if(c.id==kReverbRateV2&&v<.5/6){int old=value(kReverbSource)>=.5?kReverbRandomRate:kReverbGrid;shownText=display(old,value(old));}
+  if(c.label.empty())p.text(shownText,{r.x+8,r.y,r.w-16,r.h},18,white,true);
   else{double split=c.label=="DEST"?50.:std::min(r.w*.44,118.);p.line(r.x+split,r.y+1,r.x+split,r.y+r.h-1,edge,1);
    p.text(c.label,{r.x+4,r.y,split-8,r.h},r.h>35?18:14,muted,true);
-   p.text(display(c.id,shown),{r.x+split+3,r.y,r.w-split-7,r.h},r.h>35?22:16,white,true);}
+   p.text(shownText,{r.x+split+3,r.y,r.w-split-7,r.h},r.h>35?22:16,white,true);}
  }else if(c.kind==Slider||c.kind==Pan){
   // Compact routing amounts use segmented meters, like the mockup.
   if(c.id>=kLfoSlots0&&c.id<kLfoSpeed0){
@@ -101,9 +116,9 @@ inline void renderControl(Painter& p,const Control& c,const Value& value,const D
   p.box({r.x,ty-5,track,10},ink,skin::C(skin::kBorderDark),5);
   p.box({r.x+4,ty-2,track-8,3},skin::C(skin::kHairline),skin::C(skin::kHairline),1);
   double knobX=r.x+5+v*(track-10);
-  double thumb=c.label.empty()?std::min(24.,r.h-2):14.;
-  p.box({knobX-6,ty-thumb/2,12,thumb},ink,skin::C(skin::kBorderDark),6);
-  p.box({knobX-2,ty-thumb/2+5,4,thumb-10},edge,edge,2);
+  double thumb=c.label.empty()?std::min(26.,r.h-2):20.;
+  p.box({knobX-9,ty-thumb/2,18,thumb},white,accent,4);
+  p.box({knobX-2,ty-thumb/2+3,4,thumb-6},ink,ink,1);
   if(compact)p.text(display(c.id,v),{r.x+track+4,ty-12,44,24},14,white,false);
   else p.text(display(c.id,v),{r.x,r.y+r.h-18,r.w,18},15,white,false);
  }else if(c.kind==Pad){
@@ -112,7 +127,7 @@ inline void renderControl(Painter& p,const Control& c,const Value& value,const D
    p.line(r.x+7,r.y+r.h-7,r.x+r.w-7,r.y+r.h-7,white,2);
  }
 }
-inline void render(Painter& p,const Value& value,const Display& display,const std::string& presetName,int tab,int lfo,int repeat,int gate,int reslice,WaveVisual* visual=nullptr,int drag=-1,int insertion=-1){
+inline void render(Painter& p,const Value& value,const Display& display,const std::string& presetName,int tab,int lfo,int repeat,int gate,int reslice,WaveVisual* visual=nullptr,int drag=-1,int insertion=-1,Motion* motion=nullptr){
  auto panel=skin::C(skin::kPanel),edge=skin::C(skin::kFiligree),border=skin::C(skin::kBorderDark);
  auto white=skin::C(skin::kCream),muted=skin::C(skin::kMuted),ink=skin::C(skin::kWell),screen=skin::C(skin::kPanelInset),accent=skin::C(skin::kAccent);
  auto plate=[&](Rect r){p.box(r,panel,border,16);p.line(r.x+14,r.y+3,r.x+r.w-14,r.y+3,skin::C(skin::kFiligreeDim),1);};
@@ -125,20 +140,21 @@ inline void render(Painter& p,const Value& value,const Display& display,const st
  p.text("INPUT DE-CLICKER",{1315,19,286,29},22,white,true);
  plate({15,103,1365,541});
  const char* tabs[]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLICE","GATER"};
+ if(motion)motion->update(value,drag,insertion);
  auto chain=routeChain(value);
  int moving=drag>=0?chain[drag]:-1;
  if(drag>=0&&insertion>=0&&insertion!=drag&&insertion!=drag+1)
   chain=fiveModuleOrder(int(std::round(moveRoute(chain,drag,insertion)*120.))-1);
- for(int i=0;i<5;++i){int stage=chain[i];Rect r=tabRect(i);bool selected=stage==tab;
+ for(int i=0;i<5;++i){int stage=chain[i];Rect r=tabRect(i);if(motion)r.x=motion->x[stage];bool selected=stage==tab;
   p.box(r,selected?panel:skin::C(skin::kPanelRaised),stage==moving?accent:(selected?edge:border),12);
   p.text(tabs[stage],{r.x+5,r.y,r.w-37,r.h},21,white,true);
-  auto led=ledRect(i);bool on=value(stageEnabled[stage])>=.5;
+  auto led=ledRect(i);led.x+=r.x-tabRect(i).x;bool on=value(stageEnabled[stage])>=.5;
   p.box({led.x+6,led.y+(led.h-10)/2,10,10},on?accent:skin::C(skin::kHairline),on?accent:muted,5);
  }
  if(drag>=0&&insertion>=0){double x=insertion==5?tabRect(4).x+tabRect(4).w+3:tabRect(insertion).x-3;p.line(x,118,x,162,accent,3);}
  p.box({1384,103,234,541},skin::C(skin::kPanelRaised),edge,16);
  p.box({1391,115,220,46},panel,edge,18);p.text("MASTER OPTIONS",{1391,115,220,46},19,white,true);
- button(random,tab==3?"RANDOM ONCE":"RANDOM");
+ button(randomRect(tab),tab==3?"RANDOM ONCE":"RANDOM");
  if(tab==0){
   p.box(wave,screen,edge,18);
   WaveVisual direct;if(!visual){for(int i=0;i<waveformBins;++i){direct.lo[i]=value(kUiWaveLow0+i)*2-1;direct.hi[i]=value(kUiWaveHigh0+i)*2-1;}direct.active=value(kUiGrainActive);visual=&direct;}
@@ -158,18 +174,25 @@ inline void render(Painter& p,const Value& value,const Display& display,const st
   p.text("SLICE LENGTH / TRIGGER INTERVAL / PROBABILITY",{52,510,1150,36},24,white,true);
   p.text(value(kUiGlitch)>.5?"PROCESSING SLICE":"WAITING FOR TRIGGER",{52,569,1150,36},22,accent,true);
  }else{
-  for(int i=0;i<16;++i){Rect r=stepRect(i);bool on=false,selected=false;std::string s=std::to_string(i+1);
+  for(int i=0;i<16;++i){Rect r=stepRect(i,tab);bool on=false,selected=false;std::string s=std::to_string(i+1);
    if(tab==2){on=value(kRepeatStep0+i)>.5;selected=i==repeat;}
    if(tab==3){on=value(kResliceStep0+i)>.5;selected=i==reslice;s+=" > "+std::to_string(1+int(std::round(value(value(kResliceRndOn)>.5?kUiResliceSource0+i:kResliceIndex0+i)*15)));}
    if(tab==4){on=value(value(kGaterStepRnd)>.5?kUiGaterState0+i:kGaterState0+i)>.25;selected=i==gate;}
-   p.box(r,on?accent:ink,selected?white:(on?skin::C(skin::kAccentBright):border),r.w/2);
-   p.text(s,{r.x-20,r.y+r.h+5,r.w+40,20},14,white,true);
+   if(tab==4){
+    p.box(r,ink,selected?white:border,12);
+    double length=std::clamp(value(kUiGaterLength0+i),.05,1.);if(value(kGaterLengthRnd)<.5)length=.05+.95*value(kGaterLength0+i);
+    double h=(r.h-8)*length;
+    if(on)p.box({r.x+4,r.y+r.h-4-h,r.w-8,h},skin::mix(ink,accent,.25),skin::mix(ink,accent,.25),8);
+    double progress=motion?motion->gate[i]:(i==int(std::round(value(kUiGaterStep)*15))?std::min(value(kUiGaterPhase),length):0.);
+    if(on&&progress>.001){double rise=(r.h-8)*progress;p.box({r.x+4,r.y+r.h-4-rise,r.w-8,rise},accent,accent,8);}
+   }else p.box(r,on?accent:ink,selected?white:(on?skin::C(skin::kAccentBright):border),r.w/2);
+   p.text(s,{r.x-20,r.y+r.h+5,r.w+40,26},tab==3?16:20,white,true);
    int play=tab==2?int(std::round(value(kUiStep)*15)):tab==3?int(std::round(value(kUiResliceStep)*15)):int(std::round(value(kUiGaterStep)*15));
    if(i==play)p.line(r.x+6,r.y+r.h-8,r.x+r.w-6,r.y+r.h-8,white,2);
    if(tab==4&&value(kGaterRelease0+i)>.5)p.box({r.x+9,r.y+10,14,14},skin::C(skin::kRelease),white,7);
 
   }
-  if(tab==4)p.text("CLICK: WET / OFF     SHIFT-CLICK: LATCH RELEASE",{50,590,1150,32},20,white,true);
+  if(tab==4)p.text("CLICK: WET / OFF     SHIFT-CLICK: LATCH RELEASE",{50,612,1250,26},17,white,true);
  }
  plate({15,662,1038,451});plate({1072,662,546,451});heading("MODULATION",{58,680,330,35});
  for(int i=0;i<4;++i){Rect r=lfoRect(i);p.box(r,screen,edge,18);p.text(std::to_string(i+1),r,24,i==lfo?white:muted,true);}

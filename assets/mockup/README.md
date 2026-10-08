@@ -35,3 +35,7 @@ The native screenshot from the workflow is the authoritative rendering check.
 The five module buttons directly under the preset header set the audio order. Drag a button left or right to insert its module in the chain; neighbouring buttons shift with it. A click selects that module, and its LED controls that module’s enabled state. Dropping outside cancels. The waveform uses a fixed trailing window and fixed gain, with softened updates and a subdued highlight of the dominant active grain. Each modulation scope has a live phase cursor.
 
 Random Impulse hides the Reverb step controls; switching back to Step Sequencer restores them. The Granulizer waveform spans the widened module pane.
+
+Module routing positions now ease between slots at a 60 Hz editor refresh. Gater bars rise with the current note phase and show its configured length. BeatRepeater steps have dedicated vertical space; Reslice uses controls, steps, and actions on three rows. Slider handles use a wider light thumb with an accent outline.
+
+Reverb RATE adds 1/4D (1.5 beats) and 1/8D (0.75 beats) for both sources. The new appended rate parameter defaults to Preset rate, preserving the original source-specific rate and existing automation. State version 47 reads previous versions, including version 46.

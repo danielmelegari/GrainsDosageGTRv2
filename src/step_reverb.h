@@ -19,7 +19,7 @@ public:
   const double times[]={.0297,.0371,.0411,.0437,.0531,.0613,.0719,.0797};
   for(int i=0;i<8;++i){lines_[i].b.assign(size_t(times[i]*sr)+1,0.);lines_[i].pos=0;lines_[i].low=0.;}send_=mix_=kill_=0.;gateOpen_=false;coefficients();}
  void reset(){for(auto& l:lines_){std::fill(l.b.begin(),l.b.end(),0.);l.pos=0;l.low=0.;}send_=mix_=kill_=0.;gateOpen_=false;}
- void set(bool on,int type,double grid,uint16_t pattern,double amount,double length=0.,bool kill=false,bool random=false,double randomGrid=.25){random_=random;randomGrid_=std::clamp(randomGrid,.25,1.);killTarget_=kill;length_=std::clamp(length,0.,20.);enabled_=on;type_=std::clamp(type,0,4);grid_=grid;pattern_=pattern;amount_=amount;coefficients();}
+ void set(bool on,int type,double grid,uint16_t pattern,double amount,double length=0.,bool kill=false,bool random=false,double randomGrid=.25){random_=random;randomGrid_=std::clamp(randomGrid,.125,1.5);killTarget_=kill;length_=std::clamp(length,0.,20.);enabled_=on;type_=std::clamp(type,0,4);grid_=grid;pattern_=pattern;amount_=amount;coefficients();}
  bool gateOpen()const{return gateOpen_;}
  static bool randomGate(int64_t step){uint64_t h=uint64_t(step)+0x9e3779b97f4a7c15ULL+0x726576657262ULL;h=(h^(h>>30))*0xbf58476d1ce4e5b9ULL;h=(h^(h>>27))*0x94d049bb133111ebULL;return ((h^(h>>31))&1)!=0;}
  double killAmount()const{return kill_;}
@@ -39,3 +39,4 @@ public:
  }
 };
 }
+

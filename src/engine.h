@@ -528,6 +528,7 @@ public:
   int filterSequenceStep()const{return filterSequencer_.step();}
   int resliceSource(int i)const{return reslice_.source(i);}
   int resliceStep()const{return reslice_.step();}bool resliceActive()const{return reslice_.active();}
+  double gaterPhase()const{return gater_.phase();}
   int gaterStep()const{return gater_.step();}int gaterState(int i)const{return gater_.state(i);}double gaterLength(int i)const{return gater_.length(i);}
   bool reverbGate()const{return reverb_.gateOpen();}
   std::atomic<uint64_t> lastModPacked_{0}; // live Size/Density/Pitch/Chaos magnitudes (aztec-packed) for the UI knob bars

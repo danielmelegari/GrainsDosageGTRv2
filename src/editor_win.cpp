@@ -41,6 +41,7 @@ class WinEditor final:public CPluginView{
   int selectedGate=0,selectedReslice=0;
   int selectedLfo=0,selectedRepeat=0,dragID=-1,dragSlot=-1,dropSlot=-1;
   mockup::WaveVisual waveVisual;
+  aztec::mockup::Motion motion;
   std::array<int,5> routingAtDrag;
   double originX=0,originY=0,dragValue=0,dragWidth=1;Kind dragKind=Knob;bool dragXY=false,routeMoved=false;
   uint32_t seed=0;HDC dc=nullptr;
@@ -276,7 +277,7 @@ class WinEditor final:public CPluginView{
       g.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);g.TranslateTransform(float(r.x+r.w/2),float(r.y+r.h/2));g.RotateTransform(float(270*value-135));
       g.DrawImage(mockupKnob.get(),Gdiplus::RectF(float(-r.w/2),float(-r.h/2),float(r.w),float(r.h)));
     };
-    mockup::render(painter,[&](ParamID id){return value(id);},[&](ParamID id,double v){return utf8(display(id,v));},utf8(presetName),tab(),selectedLfo,selectedRepeat,selectedGate,selectedReslice,&waveVisual,dragSlot,dropSlot);
+    mockup::render(painter,[&](ParamID id){return value(id);},[&](ParamID id,double v){return utf8(display(id,v));},utf8(presetName),tab(),selectedLfo,selectedRepeat,selectedGate,selectedReslice,&waveVisual,dragSlot,dropSlot,&motion);
   }
   void end(){if(dragID>=0)controller->endEdit(ParamID(dragID));if(dragXY){controller->endEdit(kXYX);controller->endEdit(kXYY);}dragID=dragSlot=dropSlot=-1;dragXY=routeMoved=false;}
   void down(double x,double y,bool dbl){layout();SetFocus(window);
@@ -291,8 +292,8 @@ class WinEditor final:public CPluginView{
     int led=mockup::hitLed(x,y);if(led>=0){int stage=mockup::routeChain([&](ParamID id){return value(id);})[led];auto id=mockup::stageEnabled[stage];edit(id,value(id)>=.5?0.:1.);return;}
     int route=mockup::hitRoute(x,y);if(route>=0){dragSlot=route;dropSlot=-1;routeMoved=false;originX=x;originY=y;routingAtDrag=mockup::routeChain([&](ParamID id){return value(id);});SetCapture(window);InvalidateRect(window,nullptr,FALSE);return;}
     int lfo=mockup::hitLfo(x,y);if(lfo>=0){selectedLfo=lfo;InvalidateRect(window,nullptr,FALSE);return;}
-    if(hit(mockup::random)){if(tab()<3)randomizeModule(tab(),selectedRepeat,seed,[&](ParamID id,double v){edit(id,v);});else if(tab()==3)randomizeReslice(seed,[&](ParamID id){return value(id);},[&](ParamID id,double v){edit(id,v);});else for(int i=0;i<16;++i){seed=seed*1664525u+1013904223u;edit(kGaterState0+i,(seed>>31)?1.:0.);}return;}
-    int step=mockup::hitStep(x,y);if(tab()>=2&&step>=0){
+    if(hit(mockup::randomRect(tab()))){if(tab()<3)randomizeModule(tab(),selectedRepeat,seed,[&](ParamID id,double v){edit(id,v);});else if(tab()==3)randomizeReslice(seed,[&](ParamID id){return value(id);},[&](ParamID id,double v){edit(id,v);});else for(int i=0;i<16;++i){seed=seed*1664525u+1013904223u;edit(kGaterState0+i,(seed>>31)?1.:0.);}return;}
+    int step=mockup::hitStep(x,y,tab());if(tab()>=2&&step>=0){
       if(tab()==2){selectedRepeat=step;if(dbl)edit(kRepeatStep0+step,value(kRepeatStep0+step)>.5?0.:1.);}
       if(tab()==3){selectedReslice=step;if(dbl)edit(kResliceStep0+step,value(kResliceStep0+step)>.5?0.:1.);}
       if(tab()==4){selectedGate=step;if(GetKeyState(VK_SHIFT)&0x8000){double v=value(kGaterRelease0+step)>.5?0.:1.;edit(kGaterRelease0+step,v);if(v>.5)edit(kGaterState0+step,0.);}else{edit(kGaterRelease0+step,0.);edit(kGaterState0+step,value(kGaterState0+step)>.25?0.:1.);}}
@@ -327,7 +328,7 @@ public:
   explicit WinEditor(EditController* c):controller(c){controller->addRef();rect=ViewRect(0,0,979,911);seed=uint32_t(GetTickCount64())^uint32_t(reinterpret_cast<uintptr_t>(this));seed|=1;loadSkin();}
   ~WinEditor()override{removed();mockupKnob.reset();if(skinDC){SelectObject(skinDC,oldSkin);DeleteDC(skinDC);}if(skin)DeleteObject(skin);for(size_t i=0;i<sprites.size();++i){if(spriteDC[i]){SelectObject(spriteDC[i],oldSprite[i]);DeleteDC(spriteDC[i]);}if(sprites[i])DeleteObject(sprites[i]);}if(imaging)Gdiplus::GdiplusShutdown(imaging);controller->release();}
   tresult PLUGIN_API isPlatformTypeSupported(FIDString type)override{return type&&std::strcmp(type,kPlatformTypeHWND)==0?kResultTrue:kResultFalse;}
-  tresult PLUGIN_API attached(void* parent,FIDString type)override{if(!parent||window||isPlatformTypeSupported(type)!=kResultTrue)return kResultFalse;HINSTANCE instance=nullptr;GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,reinterpret_cast<LPCWSTR>(&proc),&instance);WNDCLASSW wc{};wc.style=CS_DBLCLKS;wc.lpfnWndProc=proc;wc.hInstance=instance;wc.hCursor=LoadCursor(nullptr,IDC_ARROW);wc.lpszClassName=L"GrainsDosage070";RegisterClassW(&wc);window=CreateWindowExW(0,wc.lpszClassName,L"GrainsDosage",WS_CHILD|WS_VISIBLE,0,0,rect.getWidth(),rect.getHeight(),static_cast<HWND>(parent),nullptr,instance,this);if(!window)return kResultFalse;SetTimer(window,1,33,nullptr);return CPluginView::attached(parent,type);}
+  tresult PLUGIN_API attached(void* parent,FIDString type)override{if(!parent||window||isPlatformTypeSupported(type)!=kResultTrue)return kResultFalse;HINSTANCE instance=nullptr;GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,reinterpret_cast<LPCWSTR>(&proc),&instance);WNDCLASSW wc{};wc.style=CS_DBLCLKS;wc.lpfnWndProc=proc;wc.hInstance=instance;wc.hCursor=LoadCursor(nullptr,IDC_ARROW);wc.lpszClassName=L"GrainsDosage070";RegisterClassW(&wc);window=CreateWindowExW(0,wc.lpszClassName,L"GrainsDosage",WS_CHILD|WS_VISIBLE,0,0,rect.getWidth(),rect.getHeight(),static_cast<HWND>(parent),nullptr,instance,this);if(!window)return kResultFalse;SetTimer(window,1,16,nullptr);return CPluginView::attached(parent,type);}
   tresult PLUGIN_API removed()override{end();if(window){KillTimer(window,1);DestroyWindow(window);window=nullptr;}return CPluginView::removed();}
   tresult PLUGIN_API onSize(ViewRect* r)override{if(!r)return kInvalidArgument;auto result=CPluginView::onSize(r);if(window)SetWindowPos(window,nullptr,0,0,r->getWidth(),r->getHeight(),SWP_NOZORDER|SWP_NOMOVE);return result;}
   tresult PLUGIN_API canResize()override{return kResultTrue;}

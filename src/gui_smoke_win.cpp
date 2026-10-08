@@ -18,8 +18,8 @@ int main(){try{
  c->setParamNormalized(kSize,.25);send(WM_LBUTTONDOWN,158,290);send(WM_MOUSEMOVE,158,245);send(WM_LBUTTONUP,158,245);check(std::abs(c->getParamNormalized(kSize)-.5)<.015,"Knob drag");
  send(WM_LBUTTONDBLCLK,158,290);send(WM_LBUTTONUP,158,290);check(std::abs(c->getParamNormalized(kSize)-.25)<1e-6,"Double click reset");
  const ParamID enabled[]={kGrainEnabled,kGlitchEnabled,kRepeatEnabled,kResliceEnabled,kGaterEnabled};
- for(int t=0;t<5;++t){click(140+252*t,135);check(tabFromValue(c->getParamNormalized(kUiTab))==t,"Tab hit target");toggle(enabled[t],1300,442);auto led=mockup::ledRect(t);toggle(enabled[t],led.x+led.w/2,led.y+led.h/2);UpdateWindow(child);}
- toggle(kGaterState0,77,536);click(140+3*252,135);toggle(kResliceRndOn,700,273);
+ for(int t=0;t<5;++t){click(140+252*t,135);check(tabFromValue(c->getParamNormalized(kUiTab))==t,"Tab hit target");toggle(enabled[t],1300,(t==3?597:t==2?410:442));auto led=mockup::ledRect(t);toggle(enabled[t],led.x+led.w/2,led.y+led.h/2);UpdateWindow(child);}
+ toggle(kGaterState0,77,536);click(140+3*252,135);toggle(kResliceRndOn,750,248);
  click(140,135);click(688+105*2,703);toggle(lfoID(2,lEnabled),540,703);
  click(mockup::xy.x+13,mockup::xy.y+13);check(c->getParamNormalized(kXYX)<.015&&c->getParamNormalized(kXYY)>.985,"XY corner");
  auto routeValue=[&](ParamID id){return c->getParamNormalized(id);};

@@ -4,7 +4,7 @@
 #include "user_presets.h"
 namespace aztec {
 inline std::array<double,kCount> initialParameters() {
-  std::array<double,kCount> p{};for(int i=kUiWaveLow0;i<int(kCount);++i)p[i]=.5;p[kResliceLength]=2./3.;p[kFilterSeqDepth]=.5;p[kFilterSeqGlide]=.2;p[kFilterSeqRate]=2./5.;p[kCombOctave]=2./6.;p[kResliceMix]=1.;for(int i=0;i<16;++i)p[kResliceIndex0+i]=i/15.;p[kInputDeclick]=1.;p[kDeclickSensitivity]=.5;p[kReverbRandomRate]=1.;p[kGaterGrid]=2./3.;p[kGaterChance]=.5;p[kGaterMinLength]=0.;p[kGaterTie]=0.;for(int i=0;i<16;++i){p[kGaterState0+i]=1.;p[kGaterLength0+i]=(.75-.05)/.95;p[kGaterSustain0+i]=.1;}
+  std::array<double,kCount> p{};for(int i=kUiWaveLow0;i<int(kReverbRateV2);++i)p[i]=.5;p[kResliceLength]=2./3.;p[kFilterSeqDepth]=.5;p[kFilterSeqGlide]=.2;p[kFilterSeqRate]=2./5.;p[kCombOctave]=2./6.;p[kResliceMix]=1.;for(int i=0;i<16;++i)p[kResliceIndex0+i]=i/15.;p[kInputDeclick]=1.;p[kDeclickSensitivity]=.5;p[kReverbRandomRate]=1.;p[kGaterGrid]=2./3.;p[kGaterChance]=.5;p[kGaterMinLength]=0.;p[kGaterTie]=0.;for(int i=0;i<16;++i){p[kGaterState0+i]=1.;p[kGaterLength0+i]=(.75-.05)/.95;p[kGaterSustain0+i]=.1;}
   // Reslice starts with all steps enabled but the module itself stays off (kResliceEnabled default 0).
   for(int i=0;i<16;++i)p[kResliceStep0+i]=1.;
   for(int l=0;l<4;++l){p[kUiLfoCycle0+l]=p[kUiLfoEpoch0+l]=2147483648./4294967295.;p[kLfoSpeed0+l]=2./3.;for(int slot=0;slot<6;++slot)p[slotAmount(l,slot)]=.5;}

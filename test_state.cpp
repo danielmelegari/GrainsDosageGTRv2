@@ -59,6 +59,18 @@ int main() {
     for(int mode=0;mode<3;++mode){p[slotPolarity(0,0)]=mode*.5;auto l=settings(p,120.,48000.).lfos[0];
       assert(l.amount[0]==(mode==0?.5:0.));assert(l.positive[0]==(mode==1?.5:0.));assert(l.negative[0]==(mode==2?.5:0.));}
   }
+  // v0x46 saves ended before the appended rate and Gater phase parameters.
+  {
+    auto expected=defaults();expected[kReverbGrid]=1./3.;expected[kReverbRandomRate]=.5;
+    MemoryStream legacy;IBStreamer out(&legacy,kLittleEndian);out.writeInt32(0x51473146);
+    for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);
+    out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);
+    for(int i=kFreeze+1;i<kReverbRateV2;++i)out.writeDouble(expected[i]);
+    legacy.seek(0,IBStream::kIBSeekSet,nullptr);auto actual=defaults();assert(loadState(&legacy,actual)&&actual==expected);
+    auto s=settings(actual,120.,48000.);assert(s.reverbGrid==.5&&s.reverbRandomGrid==.5);
+    actual[kReverbRateV2]=5./6.;s=settings(actual,120.,48000.);assert(s.reverbGrid==1.5&&s.reverbRandomGrid==1.5);
+    actual[kReverbRateV2]=1.;s=settings(actual,120.,48000.);assert(s.reverbGrid==.75&&s.reverbRandomGrid==.75);
+  }
   MemoryStream bad; IBStreamer writer(&bad,kLittleEndian);
   writer.writeInt32(0x51473132); writer.writeDouble(std::numeric_limits<double>::quiet_NaN());
   bad.seek(0,IBStream::kIBSeekSet,nullptr); auto state=defaults(); const auto before=state;
@@ -154,7 +166,7 @@ int main() {
     MemoryStream rt3; assert(p2.getState(&rt3)==kResultOk);
     rt.seek(0,IBStream::kIBSeekSet,nullptr); rt3.seek(0,IBStream::kIBSeekSet,nullptr);
     int32 m1=0,m2=0;IBStreamer r1(&rt,kLittleEndian),r2(&rt3,kLittleEndian);
-    r1.readInt32(m1);r2.readInt32(m2);assert(m1==m2&&m1==0x51473146);
+    r1.readInt32(m1);r2.readInt32(m2);assert(m1==m2&&m1==0x51473147);
     // getState layout: kParamEnd values, buffer size, freeze flag, then the tail
     // (kBypassReserved lives in this region) up to kCount.
     const int fields=kParamEnd+2+(int(kCount)-int(kFreeze)-1);

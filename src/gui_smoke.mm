@@ -28,10 +28,10 @@ int main(int argc,char** argv){@autoreleasepool {try{
  c->setParamNormalized(kSize,.25);send(NSEventTypeLeftMouseDown,158,290);send(NSEventTypeLeftMouseDragged,158,245);send(NSEventTypeLeftMouseUp,158,245);
  checkGui(std::abs(c->getParamNormalized(kSize)-.5)<1e-6,"Grain knob drag");click(158,290,2);checkGui(std::abs(c->getParamNormalized(kSize)-.25)<1e-6,"Double click reset");
  const ParamID enabled[]={kGrainEnabled,kGlitchEnabled,kRepeatEnabled,kResliceEnabled,kGaterEnabled};
- for(int t=0;t<5;++t){click(140+252*t,135);checkGui(tabFromValue(c->getParamNormalized(kUiTab))==t,"Tab hit target");checkGui([(id<GrainsGuiInspection>)surface controlsFit],"Controls fit each tab");toggle(enabled[t],1300,442);auto led=mockup::ledRect(t);toggle(enabled[t],led.x+led.w/2,led.y+led.h/2);[surface display];}
- click(140+3*252,135);toggle(kResliceRndOn,700,273);click(61+76*5+16,536);// single click selects without toggling
+ for(int t=0;t<5;++t){click(140+252*t,135);checkGui(tabFromValue(c->getParamNormalized(kUiTab))==t,"Tab hit target");checkGui([(id<GrainsGuiInspection>)surface controlsFit],"Controls fit each tab");toggle(enabled[t],1300,(t==3?597:t==2?410:442));auto led=mockup::ledRect(t);toggle(enabled[t],led.x+led.w/2,led.y+led.h/2);[surface display];}
+ click(140+3*252,135);toggle(kResliceRndOn,750,248);click(57+81*5+22,400);// single click selects without toggling
  // Double-click a reslice step toggles its stored enabled state.
- double old=c->getParamNormalized(kResliceStep0+5);click(61+76*5+16,536,2);checkGui(c->getParamNormalized(kResliceStep0+5)==(old>.5?0.:1.),"Reslice step toggle");
+ double old=c->getParamNormalized(kResliceStep0+5);click(57+81*5+22,400,2);checkGui(c->getParamNormalized(kResliceStep0+5)==(old>.5?0.:1.),"Reslice step toggle");
  click(140+4*252,135);toggle(kGaterState0,77,536);
  click(140,135);click(688+105*2,703);toggle(lfoID(2,lEnabled),540,703);
  click(aztec::mockup::xy.x+12,aztec::mockup::xy.y+12);checkGui(c->getParamNormalized(kXYX)==0&&c->getParamNormalized(kXYY)==1,"XY corner");

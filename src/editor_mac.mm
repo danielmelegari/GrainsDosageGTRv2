@@ -149,6 +149,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
   int selectedLfo,selectedRepeat,dragID,dragSlot,dropSlot;
   bool dragXY,routeMoved;
   aztec::mockup::WaveVisual waveVisual;
+  aztec::mockup::Motion motion;
   std::array<int,5> routingAtDrag;
   aztec::Kind dragKind;
   NSRect dragRect;
@@ -281,8 +282,8 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
     NSString* face=[[NSBundle bundleForClass:[GrainsSurface class]] pathForResource:@"mockup-knob" ofType:@"png"];
     if(!exists(face))face=@"assets/mockup/knob.png";
     knobFace=[[NSImage alloc] initWithContentsOfFile:face];
-    self.toolTip=@"Drag knobs vertically; Shift gives fine control. Double-click resets. Use ORDER to change audio order.";
-    timer=[NSTimer timerWithTimeInterval:1./30. target:self selector:@selector(tick:) userInfo:nil repeats:YES];
+    self.toolTip=@"Drag knobs vertically; Shift gives fine control. Double-click resets. Drag the module tabs to change audio order.";
+    timer=[NSTimer timerWithTimeInterval:1./60. target:self selector:@selector(tick:) userInfo:nil repeats:YES];
     [[NSRunLoop mainRunLoop] addTimer:timer forMode:NSRunLoopCommonModes];
   }return self;
 }
@@ -301,7 +302,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
   // longer drive repaints — only parameter value changes do.
   for(int id=0;id<aztec::kCount;++id){double v=owner->value(id);if(v!=cached[id]){cached[id]=v;changed=true;}}
   waveVisual.update([&](aztec::ParamID id){return owner->value(id);});
-  if(changed||[self tab]==0)[self setNeedsDisplay:YES];
+  [self setNeedsDisplay:YES];
 }
 - (NSPoint)logical:(NSEvent*)event {
   NSPoint p=[self convertPoint:event.locationInWindow fromView:nil];return NSMakePoint(p.x*aztec::canvasW/self.bounds.size.width,p.y*aztec::canvasH/self.bounds.size.height);
@@ -419,7 +420,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
     CGContextScaleCTM(ctx,1,-1);CGContextSetInterpolationQuality(ctx,kCGInterpolationHigh);
     CGContextDrawImage(ctx,CGRectMake(-r.w/2,-r.h/2,r.w,r.h),face);CGContextRestoreGState(ctx);
   };
-  mockup::render(painter,[&](ParamID id){return owner->value(id);},[&](ParamID id,double v){return std::string([owner->display(id,v) UTF8String]);},std::string([presetName UTF8String]),[self tab],selectedLfo,selectedRepeat,selectedGate,selectedReslice,&waveVisual,dragSlot,dropSlot);
+  mockup::render(painter,[&](ParamID id){return owner->value(id);},[&](ParamID id,double v){return std::string([owner->display(id,v) UTF8String]);},std::string([presetName UTF8String]),[self tab],selectedLfo,selectedRepeat,selectedGate,selectedReslice,&waveVisual,dragSlot,dropSlot,&motion);
   [NSGraphicsContext restoreGraphicsState];
 }
 - (void)chooseSkin:(NSMenuItem*)item {
@@ -520,13 +521,13 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
   int led=mockup::hitLed(p.x,p.y);if(led>=0){int stage=mockup::routeChain([&](ParamID id){return owner->value(id);})[led];auto id=mockup::stageEnabled[stage];owner->edit(id,owner->value(id)>=.5?0.:1.);[self setNeedsDisplay:YES];return;}
   int route=mockup::hitRoute(p.x,p.y);if(route>=0){dragSlot=route;dropSlot=-1;routeMoved=false;origin=p;routingAtDrag=mockup::routeChain([&](ParamID id){return owner->value(id);});[self setNeedsDisplay:YES];return;}
   int lfoHit=mockup::hitLfo(p.x,p.y);if(lfoHit>=0){selectedLfo=lfoHit;[self setNeedsDisplay:YES];return;}
-  if(hit(mockup::random)){
+  if(hit(mockup::randomRect([self tab]))){
     int t=[self tab];if(t<3)randomizeModule(t,selectedRepeat,randomSeed,[&](ParamID id,double v){owner->edit(id,v);});
     else if(t==3)randomizeReslice(randomSeed,[&](ParamID id){return owner->value(id);},[&](ParamID id,double v){owner->edit(id,v);});
     else {for(int i=0;i<16;++i){randomSeed=randomSeed*1664525u+1013904223u;owner->edit(kGaterState0+i,(randomSeed>>31)?1.:0.);}}
     [self setNeedsDisplay:YES];return;
   }
-  int step=mockup::hitStep(p.x,p.y);if([self tab]>=2&&step>=0){
+  int step=mockup::hitStep(p.x,p.y,[self tab]);if([self tab]>=2&&step>=0){
     if([self tab]==2){selectedRepeat=step;if(event.clickCount>=2)owner->edit(kRepeatStep0+step,owner->value(kRepeatStep0+step)>.5?0.:1.);}
     if([self tab]==3){selectedReslice=step;if(event.clickCount>=2)owner->edit(kResliceStep0+step,owner->value(kResliceStep0+step)>.5?0.:1.);}
     if([self tab]==4){selectedGate=step;if(event.modifierFlags&NSEventModifierFlagShift){double v=owner->value(kGaterRelease0+step)>.5?0.:1.;owner->edit(kGaterRelease0+step,v);if(v>.5)owner->edit(kGaterState0+step,0.);}else{owner->edit(kGaterRelease0+step,0.);owner->edit(kGaterState0+step,owner->value(kGaterState0+step)>.25?0.:1.);}}
