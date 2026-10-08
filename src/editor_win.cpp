@@ -35,9 +35,10 @@ static inline skin::Rgb C2(int role){return skin::active().at(role);}
 #define ONTEXT() AZSKIN(kOnText)             // dark text for lit green fills
 constexpr double slotX[]={16,452,888};
 enum Kind{Knob,Slider,Toggle,Select,Pad,Pan,PanMode,VSlider};
-struct Control{ParamID id;double x,y,w,h;Kind kind;const char* label;};
+struct Control{ParamID id;double x,y,w,h;Kind kind;std::string label;};
 class WinEditor final:public CPluginView{
   EditController* controller;HWND window=nullptr;std::vector<Control> controls;
+  mockup::RackState rackState;bool dragScroll=false;double scrollOrigin=0,routePointerX=0,routePointerY=0;
   int selectedGate=0,selectedReslice=0;
   int selectedLfo=0,selectedRepeat=0,dragID=-1,dragSlot=-1,dropSlot=-1;
   mockup::WaveVisual waveVisual;
@@ -258,12 +259,7 @@ class WinEditor final:public CPluginView{
   int slot(int st)const{for(int i=0;i<3;++i)if(stage(i)==st)return i;return 0;}
   int tab()const{return aztec::tabFromValue(value(kUiTab));}
   void chooseTab(int t){t=std::clamp(t,0,tabCount-1);controller->setParamNormalized(kUiTab,tabToValue(t));InvalidateRect(window,nullptr,FALSE);}
-  void layout(){controls.clear();
-#define ADD(ID,X,Y,W,H,K,L) controls.push_back({ParamID(ID),double(X),double(Y),double(W),double(H),K,L})
-  const int currentTab=tab();
-#include "editor_layout_win.inl"
-#undef ADD
-  }
+  void layout(){controls.clear();for(const auto& c:mockup::controls([&](ParamID id){return value(id);},tab(),selectedLfo,selectedRepeat,selectedGate,selectedReslice,rackState))controls.push_back({c.id,c.r.x,c.r.y,c.r.w,c.r.h,Kind(c.kind),c.label});}
   static bool inside(double x,double y,double a,double b,double w,double h){return x>=a&&x<a+w&&y>=b&&y<b+h;}
   void point(LPARAM lp,double& x,double& y){RECT r;GetClientRect(window,&r);mockup::Viewport viewport(r.right,r.bottom);auto logical=viewport.logical(GET_X_LPARAM(lp),GET_Y_LPARAM(lp));x=logical.first;y=logical.second;}
   static COLORREF green(){return AZSKIN(kAccent);}static COLORREF cream(){return AZSKIN(kCream);}static COLORREF dark(){return AZSKIN(kBgDeep);}
@@ -290,7 +286,7 @@ class WinEditor final:public CPluginView{
       Gdiplus::LinearGradientBrush brush(Gdiplus::PointF(x,y),Gdiplus::PointF(x,y+h),Gdiplus::Color(255,top.r,top.g,top.b),Gdiplus::Color(255,fill.r,fill.g,fill.b));
       Gdiplus::Pen pen(Gdiplus::Color(255,edge.r,edge.g,edge.b),1.3f);g.FillPath(&brush,&path);g.DrawPath(&pen,&path);
     };
-    painter.text=[&](const std::string& s,mockup::Rect r,double size,skin::Rgb col,bool center){text(wide(s),r.x,r.y,r.w,r.h,int(size),C(col),center,0);};
+    painter.text=[&](const std::string& s,mockup::Rect r,double size,skin::Rgb col,bool center){auto str=wide(s);HFONT f=CreateFontW(-int(size),0,0,0,FW_HEAVY,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,ANTIALIASED_QUALITY,DEFAULT_PITCH,L"Arial");auto old=SelectObject(dc,f);SIZE extent{};GetTextExtentPoint32W(dc,str.c_str(),int(str.size()),&extent);SelectObject(dc,old);DeleteObject(f);if(extent.cx>r.w)size*=r.w/extent.cx;text(str,r.x,r.y,r.w,r.h,int(size),C(col),center,0);};
     painter.line=[&](double x,double y,double xx,double yy,skin::Rgb col,double width){line(x,y,xx,yy,C(col),int(std::max(1.,width)));};
     painter.polygon=[&](const std::vector<std::pair<double,double>>& pts,skin::Rgb col){if(pts.size()<3)return;Gdiplus::Graphics g(dc);SIZE viewport{},logical{};GetViewportExtEx(dc,&viewport);GetWindowExtEx(dc,&logical);POINT offset{};GetViewportOrgEx(dc,&offset);g.TranslateTransform(float(offset.x),float(offset.y));g.ScaleTransform(float(viewport.cx)/logical.cx,float(viewport.cy)/logical.cy);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);std::vector<Gdiplus::PointF> points;for(auto pt:pts)points.emplace_back(float(pt.first),float(pt.second));Gdiplus::SolidBrush brush(Gdiplus::Color(255,col.r,col.g,col.b));g.FillPolygon(&brush,points.data(),int(points.size()));};
     painter.knob=[&](mockup::Rect r,double value){
@@ -300,9 +296,10 @@ class WinEditor final:public CPluginView{
       g.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);g.TranslateTransform(float(r.x+r.w/2),float(r.y+r.h/2));g.RotateTransform(float(270*value-135));
       g.DrawImage(mockupKnob.get(),Gdiplus::RectF(float(-r.w/2),float(-r.h/2),float(r.w),float(r.h)));
     };
-    mockup::render(painter,[&](ParamID id){return value(id);},[&](ParamID id,double v){return utf8(display(id,v));},utf8(presetName),tab(),selectedLfo,selectedRepeat,selectedGate,selectedReslice,&waveVisual,dragSlot,dropSlot,&motion);
+    painter.clip=[&](mockup::Rect r){SaveDC(dc);IntersectClipRect(dc,int(r.x),int(r.y),int(r.x+r.w),int(r.y+r.h));};painter.unclip=[&](){RestoreDC(dc,-1);};
+    mockup::render(painter,[&](ParamID id){return value(id);},[&](ParamID id,double v){return utf8(display(id,v));},utf8(presetName),tab(),selectedLfo,selectedRepeat,selectedGate,selectedReslice,&waveVisual,dragSlot,dropSlot,&motion,mockup::RenderPass::All,rackState);
   }
-  void end(){if(dragID>=0)controller->endEdit(ParamID(dragID));if(dragXY){controller->endEdit(kXYX);controller->endEdit(kXYY);}dragID=dragSlot=dropSlot=-1;dragXY=routeMoved=false;}
+  void end(){if(dragID>=0)controller->endEdit(ParamID(dragID));if(dragXY){controller->endEdit(kXYX);controller->endEdit(kXYY);}dragID=dragSlot=dropSlot=-1;dragXY=routeMoved=dragScroll=false;animationFrames=12;}
   void down(double x,double y,bool dbl){layout();SetFocus(window);
     auto hit=[&](mockup::Rect r){return r.contains(x,y);};
     if(hit(mockup::previous)){stepPreset(-1);return;}
@@ -310,20 +307,16 @@ class WinEditor final:public CPluginView{
     if(hit(mockup::preset)){presetMenu();return;}
     if(hit(mockup::load)){preset(false);return;}
     if(hit(mockup::save)){preset(true);return;}
-    if(hit(mockup::skinMenu)){skinMenu();return;}
-    if(hit(mockup::zoomMenu)){HMENU m=CreatePopupMenu();int n=1;for(int size:{50,60,70,75,80,90,100})AppendMenuW(m,MF_STRING,n++,(std::to_wstring(size)+L"%").c_str());POINT p;GetCursorPos(&p);int pick=TrackPopupMenu(m,TPM_RETURNCMD,p.x,p.y,0,window,nullptr);DestroyMenu(m);if(pick&&plugFrame){int sizes[]={50,60,70,75,80,90,100};double f=sizes[pick-1]/100.;ViewRect r(0,0,int(mockup::width*f),int(mockup::height*f));plugFrame->resizeView(this,&r);}return;}
-    int led=mockup::hitLed(x,y);if(led>=0){int stage=mockup::routeChain([&](ParamID id){return value(id);})[led];auto id=mockup::stageEnabled[stage];edit(id,value(id)>=.5?0.:1.);return;}
-    int route=mockup::hitRoute(x,y);if(route>=0){dragSlot=route;dropSlot=-1;routeMoved=false;originX=x;originY=y;routingAtDrag=mockup::routeChain([&](ParamID id){return value(id);});chooseTab(routingAtDrag[route]);SetCapture(window);InvalidateRect(window,nullptr,FALSE);return;}
-    int lfo=mockup::hitLfo(x,y);if(lfo>=0){selectedLfo=lfo;InvalidateRect(window,nullptr,FALSE);return;}
-    if(hit(mockup::randomRect(tab()))){if(tab()<3)randomizeModule(tab(),selectedRepeat,seed,[&](ParamID id){return value(id);},[&](ParamID id,double v){edit(id,v);});else if(tab()==3)randomizeReslice(seed,[&](ParamID id){return value(id);},[&](ParamID id,double v){edit(id,v);});else for(int i=0;i<16;++i){seed=seed*1664525u+1013904223u;edit(kGaterState0+i,(seed>>31)?1.:0.);}return;}
-    int step=mockup::hitStep(x,y,tab());if(tab()>=2&&step>=0){
-      if(tab()==2){selectedRepeat=step;if(dbl)edit(kRepeatStep0+step,value(kRepeatStep0+step)>.5?0.:1.);}
-      if(tab()==3){selectedReslice=step;if(dbl)edit(kResliceStep0+step,value(kResliceStep0+step)>.5?0.:1.);}
-      if(tab()==4){selectedGate=step;if(GetKeyState(VK_SHIFT)&0x8000){double v=value(kGaterRelease0+step)>.5?0.:1.;edit(kGaterRelease0+step,v);if(v>.5)edit(kGaterState0+step,0.);}else{edit(kGaterRelease0+step,0.);edit(kGaterState0+step,value(kGaterState0+step)>.25?0.:1.);}}
-      InvalidateRect(window,nullptr,FALSE);return;
-    }
-    if(hit(mockup::xy)){dragXY=true;controller->beginEdit(kXYX);controller->beginEdit(kXYY);change(kXYX,(x-mockup::xy.x-12)/(mockup::xy.w-24));change(kXYY,1-(y-mockup::xy.y-12)/(mockup::xy.h-24));SetCapture(window);return;}
-    for(const auto& c:controls)if(inside(x,y,c.x,c.y,c.w,c.h)){
+    if(rackState.page==1&&y>=mockup::bodyTop&&hit(rackState.position(mockup::skinMenu))){skinMenu();return;}
+    if(rackState.page==1&&y>=mockup::bodyTop&&hit(rackState.position(mockup::zoomMenu))){HMENU m=CreatePopupMenu();int n=1;for(int size:{50,60,70,75,80,90,100})AppendMenuW(m,MF_STRING,n++,(std::to_wstring(size)+L"%").c_str());POINT p;GetCursorPos(&p);int pick=TrackPopupMenu(m,TPM_RETURNCMD,p.x,p.y,0,window,nullptr);DestroyMenu(m);if(pick&&plugFrame){int sizes[]={50,60,70,75,80,90,100};double f=sizes[pick-1]/100.;ViewRect r(0,0,int(mockup::width*f),int(mockup::height*f));plugFrame->resizeView(this,&r);}return;}
+    auto val=[&](ParamID id){return value(id);};int page=mockup::hitPage(x,y);if(page>=0){rackState.page=page;motion.ready=false;InvalidateRect(window,nullptr,FALSE);return;}
+    if(mockup::maxScroll(rackState)>0&&hit(mockup::scrollbar())){dragScroll=true;originY=y;scrollOrigin=rackState.offset();SetCapture(window);return;}
+    int route=mockup::hitRoute(x,y,val,rackState);if(route>=0){dragSlot=route;dropSlot=-1;routeMoved=false;originX=x;originY=y;routingAtDrag=mockup::routeChain(val);chooseTab(routingAtDrag[route]);SetCapture(window);return;}
+    int lfo=mockup::hitLfo(x,y,rackState);if(lfo>=0){selectedLfo=lfo;InvalidateRect(window,nullptr,FALSE);return;}
+    if(rackState.page==0&&y>=mockup::bodyTop)for(int t=0;t<5;++t)if(hit(mockup::randomRect(t,val,rackState))){if(t<3)randomizeModule(t,selectedRepeat,seed,val,[&](ParamID id,double v){edit(id,v);});else if(t==3)randomizeReslice(seed,val,[&](ParamID id,double v){edit(id,v);});else for(int i=0;i<16;++i){seed=seed*1664525u+1013904223u;edit(kGaterState0+i,(seed>>31)?1.:0.);}return;}
+    int st=-1,step=mockup::hitStep(x,y,val,rackState,st);if(step>=0){if(st==2){selectedRepeat=step;if(dbl)edit(kRepeatStep0+step,value(kRepeatStep0+step)>.5?0.:1.);}if(st==3){selectedReslice=step;if(dbl)edit(kResliceStep0+step,value(kResliceStep0+step)>.5?0.:1.);}if(st==4){selectedGate=step;if(GetKeyState(VK_SHIFT)&0x8000){double v=value(kGaterRelease0+step)>.5?0.:1.;edit(kGaterRelease0+step,v);if(v>.5)edit(kGaterState0+step,0.);}else{edit(kGaterRelease0+step,0.);edit(kGaterState0+step,value(kGaterState0+step)>.25?0.:1.);}}InvalidateRect(window,nullptr,FALSE);return;}
+    auto xy=rackState.position(mockup::xy);if(rackState.page==2&&y>=mockup::bodyTop&&hit(xy)){dragXY=true;controller->beginEdit(kXYX);controller->beginEdit(kXYY);change(kXYX,(x-xy.x-12)/(xy.w-24));change(kXYY,1-(y-xy.y-12)/(xy.h-24));SetCapture(window);return;}
+    for(const auto& c:controls)if((y>=mockup::bodyTop||c.id==kInputDeclick||c.id==kDeclickSensitivity)&&inside(x,y,c.x,c.y,c.w,c.h)){
       if(c.kind==PanMode){edit(c.id,std::clamp(int((x-c.x)/(c.w/3)),0,2)/2.);return;}
       if(c.kind==Toggle||c.kind==Pad){edit(c.id,value(c.id)>.5?0:1);return;}
       if(dbl){edit(c.id,info(c.id).defaultNormalizedValue);return;}
@@ -334,19 +327,22 @@ class WinEditor final:public CPluginView{
   static LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp){auto* e=reinterpret_cast<WinEditor*>(GetWindowLongPtrW(hwnd,GWLP_USERDATA));if(msg==WM_NCCREATE){e=static_cast<WinEditor*>(reinterpret_cast<CREATESTRUCTW*>(lp)->lpCreateParams);SetWindowLongPtrW(hwnd,GWLP_USERDATA,reinterpret_cast<LONG_PTR>(e));e->window=hwnd;}if(!e)return DefWindowProcW(hwnd,msg,wp,lp);
     double x=0,y=0;
     switch(msg){
+      case WM_APP+72:return e->rackState.page;
+      case WM_APP+73:e->rackState.scroll[e->rackState.page]=std::clamp(double(lp),0.,mockup::maxScroll(e->rackState));InvalidateRect(hwnd,nullptr,FALSE);return 0;
       case WM_APP+71:return e->rackBackplate&&e->rackAtlas&&e->rackBackplate->GetLastStatus()==Gdiplus::Ok&&e->rackAtlas->GetLastStatus()==Gdiplus::Ok;
       case WM_ERASEBKGND:return 1;
       case WM_TIMER:{
         if(!IsWindowVisible(hwnd)||IsIconic(GetAncestor(hwnd,GA_ROOT)))return 0;
-        bool changed=false;for(int id=0;id<kCount;++id){double v=e->value(id);if(e->lastDisplayValues[id]!=v){e->lastDisplayValues[id]=v;changed=true;}}
-        if(changed)e->animationFrames=60;
-        if(e->animationFrames>0||e->dragSlot>=0){--e->animationFrames;if(e->tab()==0)e->waveVisual.update([&](ParamID id){return e->lastDisplayValues[id];});InvalidateRect(hwnd,nullptr,FALSE);}return 0;}
+        bool changed=false;for(int id=0;id<kCount;++id){double v=e->value(id);if(e->lastDisplayValues[id]!=v){e->lastDisplayValues[id]=v;if(!isMonitor(id)||mockup::monitorVisible(id,[&](ParamID p){return e->value(p);},e->rackState,e->selectedLfo))changed=true;}}
+        if(e->dragSlot>=0&&e->routeMoved){double d=e->routePointerY<mockup::bodyTop+45?-18:e->routePointerY>mockup::height-45?18:0;if(d){mockup::scrollBy(e->rackState,d);e->dropSlot=mockup::routeInsertion(e->routePointerX,e->routePointerY,[&](ParamID id){return e->value(id);},e->rackState);}}if(changed)e->animationFrames=12;
+        if(e->animationFrames>0||e->dragSlot>=0){--e->animationFrames;if(e->rackState.page==0&&mockup::visible(mockup::waveRect([&](ParamID id){return e->value(id);},e->rackState)))e->waveVisual.update([&](ParamID id){return e->lastDisplayValues[id];});InvalidateRect(hwnd,nullptr,FALSE);}return 0;}
       case WM_PAINT:{PAINTSTRUCT ps;HDC screen=BeginPaint(hwnd,&ps);RECT r;GetClientRect(hwnd,&r);HDC mem=CreateCompatibleDC(screen);auto bitmap=CreateCompatibleBitmap(screen,r.right*2,r.bottom*2);auto old=SelectObject(mem,bitmap);PatBlt(mem,0,0,r.right*2,r.bottom*2,BLACKNESS);mockup::Viewport fit(r.right,r.bottom);SetMapMode(mem,MM_ANISOTROPIC);SetWindowExtEx(mem,int(mockup::width),int(mockup::height),nullptr);SetViewportExtEx(mem,int(std::round(mockup::width*fit.scale*2)),int(std::round(mockup::height*fit.scale*2)),nullptr);SetViewportOrgEx(mem,int(std::round(fit.x*2)),int(std::round(fit.y*2)),nullptr);e->dc=mem;e->draw();SetMapMode(mem,MM_TEXT);SetViewportOrgEx(mem,0,0,nullptr);SetStretchBltMode(screen,HALFTONE);SetBrushOrgEx(screen,0,0,nullptr);StretchBlt(screen,0,0,r.right,r.bottom,mem,0,0,r.right*2,r.bottom*2,SRCCOPY);SelectObject(mem,old);DeleteObject(bitmap);DeleteDC(mem);EndPaint(hwnd,&ps);return 0;}
       case WM_LBUTTONDOWN:case WM_LBUTTONDBLCLK:e->point(lp,x,y);e->down(x,y,msg==WM_LBUTTONDBLCLK);return 0;
-      case WM_MOUSEMOVE:e->point(lp,x,y);if(e->dragSlot>=0){if(std::hypot(x-e->originX,y-e->originY)>8)e->routeMoved=true;if(e->routeMoved)e->dropSlot=mockup::routeInsertion(x,y);InvalidateRect(hwnd,nullptr,FALSE);}else if(e->dragXY){e->change(kXYX,(x-mockup::xy.x-12)/(mockup::xy.w-24));e->change(kXYY,1-(y-mockup::xy.y-12)/(mockup::xy.h-24));}else if(e->dragID>=0){double delta=(e->dragKind==Slider||e->dragKind==Pan)?(x-e->originX)/e->dragWidth:(e->originY-y)/(e->dragKind==VSlider?std::max(1.,e->dragHeight-42):180.);if(GetKeyState(VK_SHIFT)&0x8000)delta*=.1;e->dragValue=std::clamp(e->dragValue+delta,0.,1.);e->originX=x;e->originY=y;e->change(ParamID(e->dragID),e->dragValue);}return 0;
+      case WM_MOUSEMOVE:e->point(lp,x,y);if(e->dragScroll){auto b=mockup::scrollbar(),t=mockup::scrollThumb(e->rackState);e->rackState.scroll[e->rackState.page]=std::clamp(e->scrollOrigin+(y-e->originY)*mockup::maxScroll(e->rackState)/std::max(1.,b.h-t.h),0.,mockup::maxScroll(e->rackState));InvalidateRect(hwnd,nullptr,FALSE);}else if(e->dragSlot>=0){e->routePointerX=x;e->routePointerY=y;if(std::hypot(x-e->originX,y-e->originY)>8)e->routeMoved=true;if(e->routeMoved)e->dropSlot=mockup::routeInsertion(x,y,[&](ParamID id){return e->value(id);},e->rackState);InvalidateRect(hwnd,nullptr,FALSE);}else if(e->dragXY){auto xy=e->rackState.position(mockup::xy);e->change(kXYX,(x-xy.x-12)/(xy.w-24));e->change(kXYY,1-(y-xy.y-12)/(xy.h-24));}else if(e->dragID>=0){double delta=(e->dragKind==Slider||e->dragKind==Pan)?(x-e->originX)/e->dragWidth:(e->originY-y)/(e->dragKind==VSlider?std::max(1.,e->dragHeight-42):180.);if(GetKeyState(VK_SHIFT)&0x8000)delta*=.1;e->dragValue=std::clamp(e->dragValue+delta,0.,1.);e->originX=x;e->originY=y;e->change(ParamID(e->dragID),e->dragValue);}return 0;
       case WM_LBUTTONUP:if(e->dragSlot>=0&&e->dropSlot>=0&&e->dropSlot!=e->dragSlot&&e->dropSlot!=e->dragSlot+1)e->edit(kRoutingOrder,mockup::moveRoute(e->routingAtDrag,e->dragSlot,e->dropSlot));e->end();ReleaseCapture();InvalidateRect(hwnd,nullptr,FALSE);return 0;
       case WM_CAPTURECHANGED:e->end();return 0;
-      case WM_MOUSEWHEEL:{POINT p{GET_X_LPARAM(lp),GET_Y_LPARAM(lp)};ScreenToClient(hwnd,&p);e->point(MAKELPARAM(p.x,p.y),x,y);e->layout();for(const auto& c:e->controls)if(inside(x,y,c.x,c.y,c.w,c.h)&&(c.kind==Knob||c.kind==Slider||c.kind==VSlider)){int n=e->info(c.id).stepCount;double d=n?1./n:.01;if(GetKeyState(VK_SHIFT)&0x8000)d*=.1;e->edit(c.id,e->value(c.id)+(GET_WHEEL_DELTA_WPARAM(wp)>0?d:-d));break;}return 0;}
+      case WM_MOUSEWHEEL:{mockup::scrollBy(e->rackState,-GET_WHEEL_DELTA_WPARAM(wp)/120.*72);InvalidateRect(hwnd,nullptr,FALSE);return 0;}
+
     }return DefWindowProcW(hwnd,msg,wp,lp);
   }
 public:

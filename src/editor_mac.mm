@@ -117,15 +117,6 @@ static constexpr double slotX[3]={16.,452.,888.};
 // flips instantly between the five processors to morph between artefacts.
 // Modulation / Morph / Filter / Reverb live under the cards and stay visible.
 static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLICE","GATER"};
-// Tab strip geometry (canvas coordinates): five equal buttons in one row at
-// y=84, directly under the header panel (which ends at y=81) and above the
-// module cards (which start at y=98). Five 250 px buttons with 3 px gaps =
-// 1286 px starting at x=17 -> right edge 1303, inside the 1320 canvas. Shared
-// by the Cocoa paint/hit-test pass and mirrored by the Win32 editor.
-inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
-  auto r=aztec::mockup::tabRect(i);x=r.x;y=r.y;w=r.w;h=r.h;
-}
-
 @interface GrainsSurface:NSView {
 @public
   aztec::Editor* owner;
@@ -141,11 +132,16 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
   NSImage* rackBackplate;
   NSImage* rackAtlas;
   NSImage* staticScene;
+  aztec::mockup::RackState rackState;
+  int scenePage;double sceneScroll;
+  bool dragScroll;double scrollOrigin;NSPoint routePointer;
+  NSMutableDictionary<NSString*,id>* rasterSlices;
   NSString* scenePreset;
   std::array<double,aztec::kCount> sceneValues;
   std::array<int,5> sceneSelection;
   int animationFrames;
   NSUInteger staticBuilds;
+  NSUInteger controlPatches;
   bool fullRedrawForInspection;
   NSMutableDictionary<NSString*,NSAttributedString*>* textCache;
   NSImage* knobFace;   // user-supplied knobOK.png face (assets/sprites/knob.png)
@@ -171,6 +167,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
 }
 - (BOOL)skinLoaded;
 - (NSUInteger)staticBuilds;
+- (NSUInteger)controlPatches;
 - (void)setFullRedrawForInspection:(BOOL)enabled;
 - (void)preset:(BOOL)save;
 - (void)stepPreset:(int)direction;
@@ -181,11 +178,10 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
 - (void)chooseSkin:(NSMenuItem*)item;
 - (void)choosePreset:(NSMenuItem*)item;
 - (BOOL)controlsFit;
+- (int)page;
+- (double)pageScroll;
+- (void)setPageScroll:(double)value;
 - (NSInteger)moduleIndexForRect:(NSRect)r;
-- (int)hitTab:(NSPoint)p;
-- (double)pxHitCard;
-- (double)pyHitCard;
-- (void)drawTabs;
 - (void)stop;
 - (void)tick:(NSTimer*)tick;
 - (void)choose:(NSMenuItem*)item;
@@ -194,7 +190,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
 @implementation GrainsSurface
 - (instancetype)initWithFrame:(NSRect)frame {
   self=[super initWithFrame:frame];if(self){
-    presetName=@"PRESETS ▾";sceneValues.fill(-1.);sceneSelection.fill(-1);animationFrames=0;staticBuilds=0;textCache=[NSMutableDictionary dictionary];
+    scenePage=-1;sceneScroll=-1;dragScroll=false;scrollOrigin=0;presetName=@"PRESETS ▾";sceneValues.fill(-1.);sceneSelection.fill(-1);animationFrames=0;staticBuilds=0;textCache=[NSMutableDictionary dictionary];rasterSlices=[NSMutableDictionary dictionary];
     // Tab strip (Option B): the Cocoa editor owns its own selection state for
     // the per-step step-sequencer widgets (mirrors the Win32 editor). The tab
     // itself lives in kUiTab. These must be initialised before any layout is
@@ -301,7 +297,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
     NSString* atlas=[[NSBundle bundleForClass:[GrainsSurface class]] pathForResource:@"approved-controls" ofType:@"png"];
     if(!exists(atlas))atlas=@"assets/approved-rack/controls.png";
     rackAtlas=[[NSImage alloc] initWithContentsOfFile:atlas];
-    self.toolTip=@"Drag knobs vertically; Shift gives fine control. Double-click resets. Drag the module tabs to change audio order.";
+    self.toolTip=@"Drag knobs vertically; Shift gives fine control. Double-click resets. Scroll each page. Drag module headers vertically to change audio order. Option-scroll edits a knob.";
     timer=[NSTimer timerWithTimeInterval:1./30. target:self selector:@selector(tick:) userInfo:nil repeats:YES];
     timer.tolerance=.003;
     [[NSRunLoop mainRunLoop] addTimer:timer forMode:NSRunLoopCommonModes];
@@ -311,6 +307,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
 - (BOOL)isOpaque{return YES;}
 - (BOOL)acceptsFirstResponder{return YES;}
 - (NSUInteger)staticBuilds{return staticBuilds;}
+- (NSUInteger)controlPatches{return controlPatches;}
 - (void)setFullRedrawForInspection:(BOOL)enabled{fullRedrawForInspection=enabled;if(!enabled)staticScene=nil;}
 - (BOOL)skinLoaded{return rackBackplate!=nil&&rackAtlas!=nil;}
 - (void)stop {
@@ -321,11 +318,12 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
 - (void)tick:(NSTimer*)tick {
   (void)tick;if(!owner||self.hiddenOrHasHiddenAncestor||!self.window||!(self.window.occlusionState&NSWindowOcclusionStateVisible))return;
   bool changed=false;
-  for(int id=0;id<aztec::kCount;++id){double v=owner->value(id);if(v!=cached[id]){cached[id]=v;changed=true;}}
-  if(changed)animationFrames=60;
+  for(int id=0;id<aztec::kCount;++id){double v=owner->value(id);if(v!=cached[id]){cached[id]=v;if(!aztec::isMonitor(id)||aztec::mockup::monitorVisible(id,[&](aztec::ParamID p){return owner->value(p);},rackState,selectedLfo))changed=true;}}
+  if(dragSlot>=0&&routeMoved){double delta=routePointer.y<aztec::mockup::bodyTop+45?-18:routePointer.y>aztec::mockup::height-45?18:0;if(delta){aztec::mockup::scrollBy(rackState,delta);dropSlot=aztec::mockup::routeInsertion(routePointer.x,routePointer.y,[&](aztec::ParamID id){return owner->value(id);},rackState);staticScene=nil;}}
+  if(changed)animationFrames=12;
   if(animationFrames>0||dragSlot>=0){
     --animationFrames;
-    if([self tab]==0)waveVisual.update([&](aztec::ParamID id){return cached[id];});
+    if(rackState.page==0&&aztec::mockup::visible(aztec::mockup::waveRect([&](aztec::ParamID id){return owner->value(id);},rackState)))waveVisual.update([&](aztec::ParamID id){return cached[id];});
     [self setNeedsDisplay:YES];
   }
 }
@@ -348,42 +346,21 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
 - (void)add:(aztec::ParamID)id x:(double)x y:(double)y w:(double)w h:(double)h kind:(aztec::Kind)kind label:(const char*)name {
   controls.push_back({id,NSMakeRect(x,y,w,h),kind,name});
 }
+- (int)page{return rackState.page;}
+- (double)pageScroll{return rackState.offset();}
+- (void)setPageScroll:(double)value{rackState.scroll[rackState.page]=std::clamp(value,0.,aztec::mockup::maxScroll(rackState));staticScene=nil;[self setNeedsDisplay:YES];}
 - (void)layoutControls {
   using namespace aztec;controls.clear();
-  const int currentTab=[self tab];   // shared layout (.inl) reads this
-#define ADD(ID,X,Y,W,H,K,L) [self add:(ID) x:(X) y:(Y) w:(W) h:(H) kind:(K) label:(L)]
-  auto slot=[&](int stage){return [self slot:stage];};
-  auto value=[&](ParamID id){return owner->value(id);};
-#include "editor_layout_win.inl"
-#undef ADD
+  for(const auto& c:mockup::controls([&](ParamID id){return owner->value(id);},[self tab],selectedLfo,selectedRepeat,selectedGate,selectedReslice,rackState))controls.push_back({c.id,NSMakeRect(c.r.x,c.r.y,c.r.w,c.r.h),Kind(c.kind),c.label});
 }
 - (BOOL)controlsFit {
-  [self layoutControls];NSRect all=NSMakeRect(0,0,aztec::canvasW,aztec::canvasH);
-  for(const auto& c:controls)if(!NSContainsRect(all,c.rect)){NSLog(@"Control outside canvas: id=%u label=%s rect=%@ canvas=%@",unsigned(c.id),c.label.c_str(),NSStringFromRect(c.rect),NSStringFromRect(all));return NO;}return YES;
+  [self layoutControls];for(const auto& c:controls)if(c.rect.size.width<=0||c.rect.size.height<=0||c.rect.origin.x<0||NSMaxX(c.rect)>aztec::canvasW)return NO;return YES;
 }
 - (void)art:(NSRect)source in:(NSRect)dest opacity:(double)opacity {
   NSString* key=[NSString stringWithFormat:@"%.0f,%.0f,%.0f,%.0f",source.origin.x,source.origin.y,source.size.width,source.size.height];NSImage* sprite=sprites[key];
   if(sprite){[NSGraphicsContext currentContext].imageInterpolation=NSImageInterpolationHigh;[sprite drawInRect:dest fromRect:NSMakeRect(0,0,sprite.size.width,sprite.size.height) operation:NSCompositingOperationSourceOver fraction:opacity respectFlipped:YES hints:nil];return;}
   if(!artwork)return;source.origin.y=artwork.size.height-source.origin.y-source.size.height;
   [artwork drawInRect:dest fromRect:source operation:NSCompositingOperationSourceOver fraction:opacity respectFlipped:YES hints:nil];
-}
-- (int)hitTab:(NSPoint)p {
-  // Tab strip hit test (see tabRectAt for geometry). Returns -1 when the point
-  // is outside every tab button so callers fall through to the legacy handlers.
-  for(int i=0;i<5;++i){double x,y,w,h;tabRectAt(i,x,y,w,h);
-    if(NSPointInRect(p,NSMakeRect(x,y,w,h)))return i;}
-  return -1;
-}
-- (double)pxHitCard { double x,y,w,h;aztec::tabSlotRect([self tab],0,x,y,w,h);return x;}
-- (double)pyHitCard { double x,y,w,h;aztec::tabSlotRect([self tab],0,x,y,w,h);return y;}
-- (void)drawTabs {
-  const int active=[self tab];
-  for(int i=0;i<5;++i){
-    double x,y,w,h;tabRectAt(i,x,y,w,h);NSRect r=NSMakeRect(x,y,w,h);
-    bool on=i==active;
-    box(r,on?AZSKIN(kAccentGlow):AZSKIN(kPanelRaised),on?green():AZSKIN(kFiligreeDim),4);
-    label(@(tabNames[i]),NSMakeRect(x,y+1,w,h-2),9,on?onText():cream(),true);
-  }
 }
 - (NSInteger)moduleIndexForRect:(NSRect)r {
   // Match a panel() rect against the kModuleImages canvas positions. The three
@@ -430,13 +407,26 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
   using namespace aztec;
   mockup::Painter painter;
   painter.image=[&](int asset,mockup::Rect r,mockup::Rect source){
-    NSImage* image=asset==mockup::Backplate?rackBackplate:rackAtlas;if(!image)return;
-    [image drawInRect:NSMakeRect(r.x,r.y,r.w,r.h) fromRect:NSMakeRect(source.x,image.size.height-source.y-source.h,source.w,source.h) operation:NSCompositingOperationSourceOver fraction:1. respectFlipped:YES hints:@{NSImageHintInterpolation:@(NSImageInterpolationHigh)}];
+    NSString* key=[NSString stringWithFormat:@"%d:%.3f,%.3f,%.3f,%.3f",asset,source.x,source.y,source.w,source.h];
+    CGImageRef slice=(__bridge CGImageRef)rasterSlices[key];
+    if(!slice){
+      NSImage* image=asset==mockup::Backplate?rackBackplate:rackAtlas;if(!image)return;
+      CGImageRef pixels=[image CGImageForProposedRect:nullptr context:nil hints:nil];
+      CGImageRef cropped=CGImageCreateWithImageInRect(pixels,CGRectMake(source.x,source.y,source.w,source.h));if(!cropped)return;
+      rasterSlices[key]=CFBridgingRelease(cropped);slice=(__bridge CGImageRef)rasterSlices[key];
+    }
+    CGContextRef context=[NSGraphicsContext currentContext].CGContext;CGContextSaveGState(context);
+    CGContextTranslateCTM(context,r.x,r.y+r.h);CGContextScaleCTM(context,1,-1);
+    CGContextSetInterpolationQuality(context,kCGInterpolationHigh);
+    CGContextDrawImage(context,CGRectMake(0,0,r.w,r.h),slice);CGContextRestoreGState(context);
   };
   painter.box=[](mockup::Rect r,skin::Rgb fill,skin::Rgb edge,double radius){box(NSMakeRect(r.x,r.y,r.w,r.h),C(fill),C(edge),radius);};
   painter.text=[&](const std::string& text,mockup::Rect r,double size,skin::Rgb color,bool center){
     NSString* str=[NSString stringWithUTF8String:text.c_str()];
-    NSString* key=[NSString stringWithFormat:@"%@|%.2f|%d,%d,%d|%d",str,size,color.r,color.g,color.b,center];
+    NSFont* fitFont=[NSFont fontWithName:@"HelveticaNeue-Bold" size:size];if(!fitFont)fitFont=[NSFont boldSystemFontOfSize:size];
+    double measured=[str sizeWithAttributes:@{NSFontAttributeName:fitFont}].width;
+    if(measured>r.w&&measured>0)size*=r.w/measured;
+    NSString* key=[NSString stringWithFormat:@"%@|%.3f|%d,%d,%d|%d",str,size,color.r,color.g,color.b,center];
     NSAttributedString* cachedText=textCache[key];
     if(!cachedText){
       NSMutableParagraphStyle* style=[[NSMutableParagraphStyle alloc] init];style.alignment=center?NSTextAlignmentCenter:NSTextAlignmentLeft;style.lineBreakMode=NSLineBreakByTruncatingTail;
@@ -458,18 +448,40 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
     CGContextScaleCTM(ctx,1,-1);CGContextSetInterpolationQuality(ctx,kCGInterpolationHigh);
     CGContextDrawImage(ctx,CGRectMake(-r.w/2,-r.h/2,r.w,r.h),face);CGContextRestoreGState(ctx);
   };
-  bool rebuild=!staticScene||![scenePreset isEqualToString:presetName];
+  painter.clip=[](mockup::Rect r){CGContextRef c=[NSGraphicsContext currentContext].CGContext;CGContextSaveGState(c);CGContextClipToRect(c,CGRectMake(r.x,r.y,r.w,r.h));};
+  painter.unclip=[](){CGContextRestoreGState([NSGraphicsContext currentContext].CGContext);};
+  bool rebuild=!staticScene||![scenePreset isEqualToString:presetName]||scenePage!=rackState.page||sceneScroll!=rackState.offset();scenePage=rackState.page;sceneScroll=rackState.offset();
+  std::vector<ParamID> changedControls;
   std::array<int,5> selection{{[self tab],selectedLfo,selectedRepeat,selectedGate,selectedReslice}};
   if(selection!=sceneSelection){sceneSelection=selection;rebuild=true;}
-  for(int id=0;id<kCount;++id)if(!isMonitor(id)){double v=owner->value(id);if(sceneValues[id]!=v){sceneValues[id]=v;rebuild=true;}}
+  for(int id=0;id<kCount;++id)if(!isMonitor(id)){double v=owner->value(id);if(sceneValues[id]!=v){sceneValues[id]=v;changedControls.push_back(ParamID(id));}}
   const int activeWave=kUiModWave0+selectedLfo;
   if(owner->value(kModWaveRnd0+selectedLfo)>0&&sceneValues[activeWave]!=owner->value(activeWave)){sceneValues[activeWave]=owner->value(activeWave);rebuild=true;}
-  auto render=[&](mockup::RenderPass pass){mockup::render(painter,[&](ParamID id){return owner->value(id);},[&](ParamID id,double v){return std::string([owner->display(id,v) UTF8String]);},std::string([presetName UTF8String]),[self tab],selectedLfo,selectedRepeat,selectedGate,selectedReslice,&waveVisual,dragSlot,dropSlot,&motion,pass);};
-  if(fullRedrawForInspection){render(mockup::RenderPass::All);}else{
+  std::vector<mockup::Control> patches;
+  if(!rebuild&&!changedControls.empty()){
+    auto list=mockup::controls([&](ParamID id){return owner->value(id);},[self tab],selectedLfo,selectedRepeat,selectedGate,selectedReslice,rackState);
+    for(auto id:changedControls){auto found=std::find_if(list.begin(),list.end(),[&](const mockup::Control& c){return c.id==id;});
+      if(mockup::structural(id)){rebuild=true;break;}
+      if(found!=list.end()&&found->kind!=mockup::Pad&&(found->id==kInputDeclick||found->id==kDeclickSensitivity||mockup::visible(found->r)))patches.push_back(*found);
+    }
+  }
+  auto render=[&](mockup::RenderPass pass){mockup::render(painter,[&](ParamID id){return owner->value(id);},[&](ParamID id,double v){return std::string([owner->display(id,v) UTF8String]);},std::string([presetName UTF8String]),[self tab],selectedLfo,selectedRepeat,selectedGate,selectedReslice,&waveVisual,dragSlot,dropSlot,&motion,pass,rackState);};
+  if(fullRedrawForInspection||dragSlot>=0||motion.routing){staticScene=nil;render(mockup::RenderPass::All);}else{
   if(rebuild){
     staticScene=[[NSImage alloc] initWithSize:NSMakeSize(canvasW,canvasH)];
     [staticScene lockFocusFlipped:YES];render(mockup::RenderPass::Static);[staticScene unlockFocus];
     scenePreset=[presetName copy];++staticBuilds;
+  }else if(!patches.empty()){
+    [staticScene lockFocusFlipped:YES];
+    for(const auto& control:patches){
+      CGContextRef context=[NSGraphicsContext currentContext].CGContext;CGContextSaveGState(context);
+      CGContextClipToRect(context,CGRectMake(control.r.x,control.r.y,control.r.w,control.r.h));
+      if(control.id!=kInputDeclick&&control.id!=kDeclickSensitivity)CGContextClipToRect(context,CGRectMake(51,mockup::bodyTop,982,mockup::height-mockup::bodyTop));
+      mockup::restoreControlBackground(painter,control,[&](ParamID id){return owner->value(id);},rackState);
+      mockup::renderControl(painter,control,[&](ParamID id){return owner->value(id);},[&](ParamID id,double v){return std::string([owner->display(id,v) UTF8String]);},selectedLfo);
+      CGContextRestoreGState(context);++controlPatches;
+    }
+    [staticScene unlockFocus];
   }
   [staticScene drawInRect:NSMakeRect(0,0,canvasW,canvasH) fromRect:NSZeroRect operation:NSCompositingOperationCopy fraction:1. respectFlipped:YES hints:nil];
   render(mockup::RenderPass::Dynamic);
@@ -572,29 +584,30 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
   if(hit(mockup::preset)){[self presetMenu:event];return;}
   if(hit(mockup::load)){[self preset:NO];return;}
   if(hit(mockup::save)){[self preset:YES];return;}
-  if(hit(mockup::skinMenu)){[self skinMenu:event];return;}
-  if(hit(mockup::zoomMenu)){
+  if(rackState.page==1&&p.y>=mockup::bodyTop&&hit(rackState.position(mockup::skinMenu))){[self skinMenu:event];return;}
+  if(rackState.page==1&&p.y>=mockup::bodyTop&&hit(rackState.position(mockup::zoomMenu))){
     NSMenu* menu=[[NSMenu alloc] initWithTitle:@"UI size"];
     for(int percent:{50,60,70,75,80,90,100}){NSMenuItem* item=[[NSMenuItem alloc] initWithTitle:[NSString stringWithFormat:@"%d%%",percent] action:@selector(chooseZoom:) keyEquivalent:@""];item.target=self;item.tag=percent;[menu addItem:item];}
     [NSMenu popUpContextMenu:menu withEvent:event forView:self];return;
   }
-  int led=mockup::hitLed(p.x,p.y);if(led>=0){int stage=mockup::routeChain([&](ParamID id){return owner->value(id);})[led];auto id=mockup::stageEnabled[stage];owner->edit(id,owner->value(id)>=.5?0.:1.);[self setNeedsDisplay:YES];return;}
-  int route=mockup::hitRoute(p.x,p.y);if(route>=0){dragSlot=route;dropSlot=-1;routeMoved=false;origin=p;routingAtDrag=mockup::routeChain([&](ParamID id){return owner->value(id);});[self chooseTab:routingAtDrag[route]];[self setNeedsDisplay:YES];return;}
-  int lfoHit=mockup::hitLfo(p.x,p.y);if(lfoHit>=0){selectedLfo=lfoHit;[self setNeedsDisplay:YES];return;}
-  if(hit(mockup::randomRect([self tab]))){
-    int t=[self tab];if(t<3)randomizeModule(t,selectedRepeat,randomSeed,[&](ParamID id){return owner->value(id);},[&](ParamID id,double v){owner->edit(id,v);});
-    else if(t==3)randomizeReslice(randomSeed,[&](ParamID id){return owner->value(id);},[&](ParamID id,double v){owner->edit(id,v);});
-    else {for(int i=0;i<16;++i){randomSeed=randomSeed*1664525u+1013904223u;owner->edit(kGaterState0+i,(randomSeed>>31)?1.:0.);}}
+  auto value=[&](ParamID id){return owner->value(id);};
+  int page=mockup::hitPage(p.x,p.y);if(page>=0){rackState.page=page;staticScene=nil;motion.ready=false;[self setNeedsDisplay:YES];return;}
+  if(mockup::maxScroll(rackState)>0&&hit(mockup::scrollbar())){dragScroll=true;origin=p;scrollOrigin=rackState.offset();return;}
+  int route=mockup::hitRoute(p.x,p.y,value,rackState);if(route>=0){dragSlot=route;dropSlot=-1;routeMoved=false;origin=routePointer=p;routingAtDrag=mockup::routeChain(value);[self chooseTab:routingAtDrag[route]];[self setNeedsDisplay:YES];return;}
+  int lfoHit=mockup::hitLfo(p.x,p.y,rackState);if(lfoHit>=0){selectedLfo=lfoHit;[self setNeedsDisplay:YES];return;}
+  if(rackState.page==0&&p.y>=mockup::bodyTop)for(int t=0;t<5;++t)if(hit(mockup::randomRect(t,value,rackState))){
+    if(t<3)randomizeModule(t,selectedRepeat,randomSeed,value,[&](ParamID id,double v){owner->edit(id,v);});else if(t==3)randomizeReslice(randomSeed,value,[&](ParamID id,double v){owner->edit(id,v);});else for(int i=0;i<16;++i){randomSeed=randomSeed*1664525u+1013904223u;owner->edit(kGaterState0+i,(randomSeed>>31)?1.:0.);}
     [self setNeedsDisplay:YES];return;
   }
-  int step=mockup::hitStep(p.x,p.y,[self tab]);if([self tab]>=2&&step>=0){
-    if([self tab]==2){selectedRepeat=step;if(event.clickCount>=2)owner->edit(kRepeatStep0+step,owner->value(kRepeatStep0+step)>.5?0.:1.);}
-    if([self tab]==3){selectedReslice=step;if(event.clickCount>=2)owner->edit(kResliceStep0+step,owner->value(kResliceStep0+step)>.5?0.:1.);}
-    if([self tab]==4){selectedGate=step;if(event.modifierFlags&NSEventModifierFlagShift){double v=owner->value(kGaterRelease0+step)>.5?0.:1.;owner->edit(kGaterRelease0+step,v);if(v>.5)owner->edit(kGaterState0+step,0.);}else{owner->edit(kGaterRelease0+step,0.);owner->edit(kGaterState0+step,owner->value(kGaterState0+step)>.25?0.:1.);}}
+  int st=-1,step=mockup::hitStep(p.x,p.y,value,rackState,st);if(step>=0){
+    if(st==2){selectedRepeat=step;if(event.clickCount>=2)owner->edit(kRepeatStep0+step,value(kRepeatStep0+step)>.5?0.:1.);}
+    if(st==3){selectedReslice=step;if(event.clickCount>=2)owner->edit(kResliceStep0+step,value(kResliceStep0+step)>.5?0.:1.);}
+    if(st==4){selectedGate=step;if(event.modifierFlags&NSEventModifierFlagShift){double v=value(kGaterRelease0+step)>.5?0.:1.;owner->edit(kGaterRelease0+step,v);if(v>.5)owner->edit(kGaterState0+step,0.);}else{owner->edit(kGaterRelease0+step,0.);owner->edit(kGaterState0+step,value(kGaterState0+step)>.25?0.:1.);}}
     [self setNeedsDisplay:YES];return;
   }
-  if(hit(mockup::xy)){dragXY=true;owner->begin(kXYX);owner->begin(kXYY);owner->change(kXYX,(p.x-mockup::xy.x-12)/(mockup::xy.w-24));owner->change(kXYY,1-(p.y-mockup::xy.y-12)/(mockup::xy.h-24));[self setNeedsDisplay:YES];return;}
-  for(const auto& c:controls)if(NSPointInRect(p,c.rect)){
+  auto xy=rackState.position(mockup::xy);
+  if(rackState.page==2&&p.y>=mockup::bodyTop&&hit(xy)){dragXY=true;owner->begin(kXYX);owner->begin(kXYY);owner->change(kXYX,(p.x-xy.x-12)/(xy.w-24));owner->change(kXYY,1-(p.y-xy.y-12)/(xy.h-24));[self setNeedsDisplay:YES];return;}
+  for(const auto& c:controls)if((p.y>=mockup::bodyTop||c.id==kInputDeclick||c.id==kDeclickSensitivity)&&NSPointInRect(p,c.rect)){
     if(c.kind==aztec::PanMode)owner->edit(c.id,std::clamp(int((p.x-c.rect.origin.x)/(c.rect.size.width/3.)),0,2)/2.);
     else if(c.kind==aztec::Pad||c.kind==aztec::Toggle)owner->edit(c.id,owner->value(c.id)>=.5?0.:1.);
     else if(event.clickCount>=2)owner->edit(c.id,owner->info(c.id).defaultNormalizedValue);
@@ -614,8 +627,9 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
 }
 - (void)mouseDragged:(NSEvent*)event {
   if(!owner)return;NSPoint p=[self logical:event];
-  if(dragSlot>=0){if(std::hypot(p.x-origin.x,p.y-origin.y)>8)routeMoved=true;if(routeMoved)dropSlot=aztec::mockup::routeInsertion(p.x,p.y);[self setNeedsDisplay:YES];return;}
-  if(dragXY){owner->change(aztec::kXYX,(p.x-aztec::mockup::xy.x-12)/(aztec::mockup::xy.w-24));owner->change(aztec::kXYY,1.-(p.y-aztec::mockup::xy.y-12)/(aztec::mockup::xy.h-24));[self setNeedsDisplay:YES];return;}
+  if(dragScroll){auto bar=aztec::mockup::scrollbar(),thumb=aztec::mockup::scrollThumb(rackState);[self setPageScroll:scrollOrigin+(p.y-origin.y)*aztec::mockup::maxScroll(rackState)/std::max(1.,bar.h-thumb.h)];return;}
+  if(dragSlot>=0){routePointer=p;if(std::hypot(p.x-origin.x,p.y-origin.y)>8)routeMoved=true;if(routeMoved)dropSlot=aztec::mockup::routeInsertion(p.x,p.y,[&](aztec::ParamID id){return owner->value(id);},rackState);[self setNeedsDisplay:YES];return;}
+  if(dragXY){auto xy=rackState.position(aztec::mockup::xy);owner->change(aztec::kXYX,(p.x-xy.x-12)/(xy.w-24));owner->change(aztec::kXYY,1.-(p.y-xy.y-12)/(xy.h-24));[self setNeedsDisplay:YES];return;}
   if(dragID<0)return;double delta=(dragKind==aztec::Slider||dragKind==aztec::Pan)?(p.x-origin.x)/dragRect.size.width:(origin.y-p.y)/(dragKind==aztec::VSlider?std::max(1.,dragRect.size.height-42):180.);
   if(event.modifierFlags&NSEventModifierFlagShift)delta*=.1;
   starting=std::clamp(starting+delta,0.,1.);origin=p;
@@ -625,15 +639,14 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
   (void)event;if(!owner)return;
   if(dragSlot>=0&&dropSlot>=0&&dropSlot!=dragSlot&&dropSlot!=dragSlot+1)owner->edit(aztec::kRoutingOrder,aztec::mockup::moveRoute(routingAtDrag,dragSlot,dropSlot));
   if(dragID>=0)owner->end(aztec::ParamID(dragID));if(dragXY){owner->end(aztec::kXYX);owner->end(aztec::kXYY);}
-  dragID=dragSlot=dropSlot=-1;dragXY=routeMoved=false;[self setNeedsDisplay:YES];
+  dragID=dragSlot=dropSlot=-1;dragXY=routeMoved=dragScroll=false;animationFrames=12;[self setNeedsDisplay:YES];
 }
 - (void)scrollWheel:(NSEvent*)event {
-  if(!owner)return;NSPoint p=[self logical:event];[self layoutControls];
-  for(const auto& c:controls)if(NSPointInRect(p,c.rect)&&(c.kind==aztec::Knob||c.kind==aztec::Slider||c.kind==aztec::VSlider)){
-    int n=owner->info(c.id).stepCount;double step=n?1./n:.01;if(event.modifierFlags&NSEventModifierFlagShift)step*=.1;
-    if(event.scrollingDeltaY!=0.)owner->edit(c.id,owner->value(c.id)+(event.scrollingDeltaY>0?step:-step));[self setNeedsDisplay:YES];return;
-  }
+  if(!owner||dragID>=0||dragXY)return;NSPoint p=[self logical:event];
+  if(event.modifierFlags&NSEventModifierFlagOption){[self layoutControls];for(const auto& c:controls)if(p.y>=aztec::mockup::bodyTop&&NSPointInRect(p,c.rect)&&(c.kind==aztec::Knob||c.kind==aztec::Slider||c.kind==aztec::VSlider)){int n=owner->info(c.id).stepCount;double step=n?1./n:.01;if(event.modifierFlags&NSEventModifierFlagShift)step*=.1;owner->edit(c.id,owner->value(c.id)+(event.scrollingDeltaY>0?step:-step));[self setNeedsDisplay:YES];return;}}
+  double delta=event.scrollingDeltaY*(event.hasPreciseScrollingDeltas?1.:18.);[self setPageScroll:rackState.offset()-delta];
 }
+
 @end
 namespace aztec {
 // No "using namespace qg" here: inside this namespace an unqualified qg would

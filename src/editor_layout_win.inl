@@ -1,118 +1,43 @@
-// Shared geometry in the approved artwork's 1083 x 1452 coordinate system.
-const int tab=currentTab;
+// Header and navigation never use the page scroll offset.
 ADD(kInputDeclick,835,65,55,23,Toggle,"ON");
 ADD(kDeclickSensitivity,895,62,108,27,Slider,"");
-const ParamID stageEnabled[]={kGrainEnabled,kGlitchEnabled,kRepeatEnabled,kResliceEnabled,kGaterEnabled};
-ADD(stageEnabled[tab],759,451,75,32,Toggle,"ON");
-ADD(kTranspose,876,194,139,137,Knob,"TRANSPOSE");
-ADD(kStretchSpeed,876,337,139,129,Knob,"STRETCH");
-ADD(kStretchOn,876,472,139,27,Toggle,"FREE STRETCH");
-if(tab==0){
- const ParamID ids[]={kSize,kDensity,kPosition,kChaos,kPitch,kGrainMix};
- const char* labels[]={"SIZE","DENSITY","LOOKBACK","CHAOS","PITCH","MIX"};
- for(int i=0;i<6;++i)ADD(ids[i],75+i*127,211,119,123,Knob,labels[i]);
- ADD(kDensityFlow,76,357,166,29,Toggle,"DENSITY FLOW");
- ADD(kFreeze,252,357,100,29,Toggle,"FREEZE");
- ADD(kGrainBuffer,364,357,134,29,Select,"BUFFER");
- ADD(kPanMode,512,357,145,29,Select,"PAN MODE");
- if(value(kPanMode)<.25)ADD(kGrainPan,676,353,157,37,Slider,"PAN");
+auto addBody=[&](ParamID id,double x,double y,double w,double h,mockup::Kind kind,const char* label){auto r=state.position({x,y,w,h});result.push_back({id,r,kind,label});};
+#define BODY(ID,X,Y,W,H,K,L) addBody(ParamID(ID),X,Y,W,H,mockup::K,L)
+if(state.page==0){
+ BODY(kTranspose,350,260,140,122,Knob,"TRANSPOSE");
+ BODY(kStretchSpeed,570,260,140,122,Knob,"STRETCH");
+ BODY(kStretchOn,756,309,192,32,Toggle,"FREE STRETCH");
+ for(int stage:mockup::routeChain(value)){
+  auto r=mockup::moduleRect(stage,value,state);double y=r.y+state.offset(),x=r.x;
+  BODY(mockup::stageEnabled[stage],x+712,y+13,82,30,Toggle,"ON");
+  if(stage==0){const ParamID ids[]={kSize,kDensity,kPosition,kChaos,kPitch,kGrainMix};const char* labels[]={"SIZE","DENSITY","LOOKBACK","CHAOS","PITCH","MIX"};for(int i=0;i<6;++i)BODY(ids[i],x+25+i*155,y+65,130,120,Knob,labels[i]);
+   BODY(kMixLock0,x+805,y+188,110,23,Toggle,"LOCK");
+   BODY(kDensityFlow,x+25,y+188,161,30,Toggle,"DENSITY FLOW");BODY(kFreeze,x+197,y+188,105,30,Toggle,"FREEZE");BODY(kGrainBuffer,x+313,y+188,148,30,Select,"BUFFER");BODY(kPanMode,x+472,y+188,172,30,Select,"PAN MODE");if(value(kPanMode)<.25)BODY(kGrainPan,x+657,y+186,135,35,Slider,"PAN");
+  }else if(stage==1){
+   BODY(kGlitchDivision,x+27,y+65,225,32,Select,"SLICE");BODY(kGlitchTriggerRate,x+275,y+65,292,32,Select,"TRIGGER EVERY");BODY(kGlitchReverse,x+598,y+65,160,32,Toggle,"REVERSE");
+   BODY(kGlitchChance,x+60,y+117,135,112,Knob,"CHANCE");BODY(kGlitchMix,x+305,y+117,135,112,Knob,"MIX");BODY(kMixLock0+1,x+449,y+158,91,24,Toggle,"LOCK");BODY(kGlitchVariation,x+585,y+145,340,63,Slider,"VARIATION");
+  }else if(stage==2){
+   BODY(kRepeatDivision,x+25,y+67,165,32,Select,"LENGTH");BODY(kRepeatOn,x+204,y+67,105,32,Toggle,"HOLD");BODY(kRepeatSeq,x+323,y+67,118,32,Toggle,"GRID ON");BODY(kRepeatAuto,x+456,y+67,97,32,Toggle,"AUTO");BODY(kRepeatInterval,x+570,y+67,370,32,Select,"INTERVAL");
+   BODY(kRepeatMix,x+25,y+112,128,105,Knob,"MIX");BODY(kMixLock0+2,x+164,y+158,90,24,Toggle,"LOCK");BODY(kRepeatDuration,x+285,y+137,300,64,Slider,"DURATION");BODY(kRepeatChance,x+623,y+137,300,64,Slider,"CHANCE");
+   BODY(kRepeatStep0+selectedRepeat,x+26,y+304,139,31,Toggle,"STEP ON");BODY(kRepeatRate0+selectedRepeat,x+187,y+304,233,31,Select,"DIVISION");BODY(kRepeatPitch0+selectedRepeat,x+456,y+299,240,37,Slider,"STEP PITCH");
+  }else if(stage==3){
+   BODY(kResliceLength,x+27,y+69,214,51,Slider,"WINDOW");BODY(kResliceMix,x+267,y+69,170,51,Slider,"MIX");BODY(kMixLock0+3,x+451,y+87,60,24,Toggle,"LOCK");BODY(kResliceRndOn,x+519,y+81,166,32,Toggle,"STEP RND");BODY(kResliceRndRate,x+714,y+81,225,32,Select,"RND RATE");BODY(kResliceIndex0+selectedReslice,x+27,y+235,344,31,Select,"SOURCE SLICE");
+  }else{
+   BODY(kGaterGrid,x+27,y+69,175,32,Select,"RATE");BODY(kGaterLengthRnd,x+227,y+69,183,32,Toggle,"LENGTH RND");BODY(kGaterStepRnd,x+436,y+69,180,32,Toggle,"STEP RND");BODY(kGaterLatch,x+643,y+69,150,32,Toggle,"LATCH");
+   BODY(kGaterChance,x+27,y+125,211,62,Slider,"CHANCE");BODY(kGaterMinLength,x+260,y+125,211,62,Slider,"MIN LENGTH");BODY(kGaterLength0+selectedGate,x+493,y+125,211,62,Slider,"STEP LENGTH");BODY(kGaterSustain0+selectedGate,x+726,y+125,211,62,Slider,"SUSTAIN");
+  }
+ }
+}else if(state.page==1){
+ BODY(lfoID(selectedLfo,lEnabled),400,223,92,34,Toggle,"ON");
+ BODY(lfoID(selectedLfo,lWave),78,262,285,29,Select,"");BODY(lfoID(selectedLfo,lSync),391,270,105,30,Toggle,"SYNC");BODY(kRandomSteps0+selectedLfo,514,270,222,30,Select,"POINTS");BODY(lfoID(selectedLfo,lGrid),752,270,249,30,Select,"LENGTH");
+ BODY(lfoID(selectedLfo,lReset),78,563,285,29,Toggle,"RETRIGGER");BODY(kLfoSpeed0+selectedLfo,78,613,127,29,Select,"SPEED");BODY(kModWaveRnd0+selectedLfo,217,613,146,29,Select,"MOD W.");
+ BODY(lfoID(selectedLfo,lHz),391,322,279,61,Slider,"RATE");BODY(lfoID(selectedLfo,lDepth),718,322,283,61,Slider,"DEPTH");BODY(lfoID(selectedLfo,lPhase),391,391,279,61,Slider,"PHASE");BODY(lfoID(selectedLfo,lGlide),718,391,283,61,Slider,"GLIDE");
+ for(int i=0;i<6;++i){int col=i%2,row=i/2;BODY(slotTarget(selectedLfo,i),391+col*327,472+row*64,239,27,Select,"DEST");BODY(slotPolarity(selectedLfo,i),641+col*327,472+row*64,34,27,Select,"");BODY(slotAmount(selectedLfo,i),391+col*327,504+row*64,283,21,Slider,"");}
+ BODY(kMasterFilter,422,715,85,30,Toggle,"ON");BODY(kFilterCutoff,79,758,129,127,Knob,"CUTOFF");BODY(kFilterResonance,227,758,129,127,Knob,"RESONANCE");BODY(kFilterDrive,375,758,129,127,Knob,"DRIVE");BODY(kFilterType,79,916,129,29,Select,"TYPE");BODY(kFilterSlope,227,916,129,29,Select,"SLOPE");BODY(kFilterModel,375,916,129,29,Select,"ALG");
+ BODY(kFilterSeqOn,918,715,85,30,Toggle,"ON");BODY(kFilterSeqMode,574,761,125,29,Select,"MODE");if(value(kFilterSeqMode)<.5)BODY(kFilterSeqPattern,711,761,144,29,Select,"PATTERN");BODY(kFilterSeqRate,866,761,137,29,Select,"RATE");BODY(kFilterSeqDepth,574,800,199,29,Slider,"DEPTH");BODY(kFilterSeqGlide,798,800,203,29,Slider,"GLIDE");int comb=int(std::round(value(kFilterModel)*18));if(comb==7||comb==8){BODY(kCombRoot,574,960,112,23,Select,"ROOT");BODY(kCombOctave,699,960,127,23,Select,"OCTAVE");BODY(kCombScale,838,960,165,23,Select,"NOTES");}
+ BODY(kReverbOn,916,1024,86,31,Toggle,"ON");BODY(kReverbKill,763,1024,139,31,Toggle,"KILL DRY");BODY(kReverbModel,78,1069,210,30,Select,"TYPE");if(value(kReverbModel)<.125)BODY(kReverbType,304,1069,202,30,Select,"MODE");BODY(kReverbSource,521,1069,287,30,Select,"SOURCE");BODY(kReverbRateV2,824,1069,178,30,Select,"RATE");BODY(kReverbMix,86,1139,80,151,VSlider,"AMOUNT");BODY(kReverbLength,195,1139,80,151,VSlider,"LENGTH");BODY(kMixLock0+4,87,1111,80,21,Toggle,"LOCK");if(value(kReverbSource)<.5)for(int i=0;i<16;++i)BODY(kReverbStep0+i,300+i*43,1118,26,138,Pad,"");
+ BODY(kMix,490,1378,125,123,Knob,"MIX");BODY(kMixLock0+5,501,1504,95,21,Toggle,"LOCK");BODY(kNormalize,650,1390,174,30,Toggle,"NORMALIZE");BODY(kMasterLimiter,650,1440,174,30,Toggle,"LIMITER");BODY(kLimiterCeiling,844,1390,157,30,Select,"LIMIT");
+}else{
+ BODY(kXYEnable,916,223,86,34,Toggle,"ON");BODY(kXTarget,79,955,445,30,Select,"X DEST");BODY(kYTarget,558,955,445,30,Select,"Y DEST");BODY(kXAmount,79,999,445,28,Slider,"");BODY(kYAmount,558,999,445,28,Slider,"");
 }
-if(tab==1){
- ADD(kGlitchDivision,77,218,179,30,Select,"SLICE");
- ADD(kGlitchReverse,77,266,179,30,Toggle,"REVERSE");
- ADD(kGlitchTriggerRate,77,315,179,30,Select,"TRIGGER");
- ADD(kGlitchChance,292,216,124,127,Knob,"CHANCE");
- ADD(kGlitchMix,454,216,124,127,Knob,"MIX");
- ADD(kGlitchVariation,634,246,181,62,Slider,"VARIATION");
-}
-if(tab==2){
- ADD(kRepeatDivision,76,217,141,29,Select,"LENGTH");
- ADD(kRepeatOn,76,261,141,29,Toggle,"HOLD");
- ADD(kRepeatMix,238,210,115,117,Knob,"MIX");
- ADD(kRepeatSeq,378,217,124,29,Toggle,"GRID ON");
- ADD(kRepeatAuto,378,261,124,29,Toggle,"AUTO");
- ADD(kRepeatInterval,526,217,286,29,Select,"INTERVAL");
- ADD(kRepeatDuration,526,265,132,57,Slider,"DURATION");
- ADD(kRepeatChance,680,265,132,57,Slider,"CHANCE");
- ADD(kRepeatStep0+selectedRepeat,76,447,116,30,Toggle,"STEP ON");
- ADD(kRepeatRate0+selectedRepeat,205,447,184,30,Select,"DIVISION");
- ADD(kRepeatPitch0+selectedRepeat,405,430,193,57,Slider,"STEP PITCH");
-}
-if(tab==3){
- ADD(kResliceLength,76,223,152,60,Slider,"WINDOW");
- ADD(kResliceMix,258,223,151,60,Slider,"MIX");
- ADD(kResliceRndOn,439,233,151,30,Toggle,"STEP RND");
- ADD(kResliceRndRate,619,233,207,30,Select,"RND RATE");
- ADD(kResliceIndex0+selectedReslice,76,449,212,30,Select,"SOURCE SLICE");
-}
-if(tab==4){
- ADD(kGaterGrid,76,212,151,32,Select,"RATE");
- ADD(kGaterLengthRnd,244,212,145,32,Toggle,"LENGTH RND");
- ADD(kGaterStepRnd,400,212,151,32,Toggle,"STEP RND");
- ADD(kGaterLatch,563,212,138,32,Toggle,"LATCH");
- ADD(kGaterChance,76,286,151,65,Slider,"CHANCE");
- ADD(kGaterMinLength,258,286,150,65,Slider,"MIN LENGTH");
- ADD(kGaterLength0+selectedGate,439,286,151,65,Slider,"STEP LENGTH");
- ADD(kGaterSustain0+selectedGate,619,286,149,65,Slider,"SUSTAIN");
-}
-ADD(lfoID(selectedLfo,lEnabled),348,533,94,35,Toggle,"ON");
-ADD(lfoID(selectedLfo,lWave),77,570,249,25,Select,"");
-ADD(lfoID(selectedLfo,lSync),350,576,95,28,Toggle,"SYNC");
-ADD(kRandomSteps0+selectedLfo,451,576,126,28,Select,"POINTS");
-ADD(lfoID(selectedLfo,lGrid),588,576,124,28,Select,"LENGTH");
-ADD(lfoID(selectedLfo,lReset),77,796,249,26,Toggle,"RETRIGGER");
-ADD(lfoID(selectedLfo,lHz),350,617,74,62,Slider,"RATE");
-ADD(lfoID(selectedLfo,lDepth),446,617,74,62,Slider,"DEPTH");
-ADD(lfoID(selectedLfo,lPhase),542,617,74,62,Slider,"PHASE");
-ADD(lfoID(selectedLfo,lGlide),638,617,74,62,Slider,"GLIDE");
-ADD(kLfoSpeed0+selectedLfo,77,830,116,26,Select,"SPEED");
-ADD(kModWaveRnd0+selectedLfo,205,830,121,26,Select,"MOD W.");
-for(int i=0;i<6;++i){
- ADD(slotTarget(selectedLfo,i),349+(i%2)*187,688+(i/2)*58,138,26,Select,"DEST");
- ADD(slotPolarity(selectedLfo,i),491+(i%2)*187,688+(i/2)*58,31,26,Select,"");
- ADD(slotAmount(selectedLfo,i),349+(i%2)*187,718+(i/2)*58,173,22,Slider,"");
-}
-ADD(kXYEnable,932,533,75,35,Toggle,"ON");
-ADD(kXTarget,757,810,120,28,Select,"DEST");
-ADD(kXAmount,757,847,120,28,Slider,"");
-ADD(kYTarget,889,810,120,28,Select,"DEST");
-ADD(kYAmount,889,847,120,28,Slider,"");
-ADD(kMasterFilter,182,906,79,29,Toggle,"ON");
-ADD(kFilterCutoff,79,951,120,136,Knob,"CUTOFF");
-ADD(kFilterResonance,217,951,120,136,Knob,"RESONANCE");
-ADD(kFilterDrive,355,951,120,136,Knob,"DRIVE");
-ADD(kFilterType,78,1105,119,25,Select,"TYPE");
-ADD(kFilterSlope,208,1105,119,25,Select,"SLOPE");
-ADD(kFilterModel,338,1105,138,25,Select,"ALG");
-ADD(kFilterSeqOn,771,906,79,29,Toggle,"ON");
-ADD(kFilterSeqMode,521,951,145,27,Select,"MODE");
-if(value(kFilterSeqMode)<.5)ADD(kFilterSeqPattern,676,951,150,27,Select,"PATTERN");
-ADD(kFilterSeqRate,840,951,169,27,Select,"RATE");
-ADD(kFilterSeqDepth,523,984,220,29,Slider,"DEPTH");
-ADD(kFilterSeqGlide,771,984,237,29,Slider,"GLIDE");
-const int combModel=int(std::round(value(kFilterModel)*18.));
-if(combModel==7||combModel==8){
- ADD(kCombRoot,521,1115,122,22,Select,"ROOT");
- ADD(kCombOctave,651,1115,122,22,Select,"OCTAVE");
- ADD(kCombScale,781,1115,227,22,Select,"NOTES");
-}
-ADD(kReverbOn,190,1162,78,29,Toggle,"ON");
-ADD(kReverbModel,76,1201,127,28,Select,"TYPE");
-if(value(kReverbModel)<.125)ADD(kReverbType,213,1201,125,28,Select,"MODE");
-ADD(kReverbSource,348,1201,169,28,Select,"SOURCE");
-ADD(kReverbRateV2,527,1201,112,28,Select,"RATE");
-ADD(kReverbKill,318,1162,112,29,Toggle,"KILL DRY");
-ADD(kReverbMix,76,1254,74,148,VSlider,"AMOUNT");
-ADD(kReverbLength,166,1254,74,148,VSlider,"LENGTH");
-if(value(kReverbSource)<.5)for(int i=0;i<16;++i)ADD(kReverbStep0+i,255+i*24,1254,16,121,Pad,"");
-ADD(kMix,683,1302,72,97,Knob,"MIX");
-ADD(kNormalize,765,1321,110,27,Toggle,"NORMALIZE");
-ADD(kMasterLimiter,765,1357,110,27,Toggle,"LIMITER");
-ADD(kLimiterCeiling,884,1308,127,27,Select,"LIMIT");
-// Locks only protect randomisation; manual editing and automation remain available.
-if(tab==0)ADD(kMixLock0,754,334,72,19,Toggle,"LOCK");
-if(tab==1)ADD(kMixLock0+1,480,346,72,21,Toggle,"LOCK");
-if(tab==2)ADD(kMixLock0+2,259,330,72,21,Toggle,"LOCK");
-if(tab==3)ADD(kMixLock0+3,336,292,72,21,Toggle,"LOCK");
-ADD(kMixLock0+4,77,1231,71,21,Toggle,"LOCK");
-ADD(kMixLock0+5,685,1400,69,19,Toggle,"LOCK");
+#undef BODY

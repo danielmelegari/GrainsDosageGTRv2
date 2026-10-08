@@ -20,7 +20,7 @@ int main(int argc,char** argv){
  for(int i=0;i<128;++i)state[kUiWave0+i]=.12+.65*std::abs(std::sin(i*1.74)*std::cos(i*.183));
  for(int i=0;i<waveformBins;++i){double h=.12+.65*std::abs(std::sin(i*.87)*std::cos(i*.0915));state[kUiWaveLow0+i]=.5-h*.5;state[kUiWaveHigh0+i]=.5+h*.5;}
  mockup::Painter p;
- std::cout<<"<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='1083' height='1452' viewBox='0 0 1083 1452'>";
+ std::cout<<"<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' width='1083' height='1050' viewBox='0 0 1083 1050'>";
  const char* assets[]={"assets/approved-rack/backplate.png","assets/approved-rack/controls.png"};
  std::cout<<"<defs>";
  for(int n=0;n<2;++n){std::ifstream f(assets[n],std::ios::binary);std::string data((std::istreambuf_iterator<char>(f)),{}),encoded;unsigned acc=0;int bits=0;for(unsigned char c:data){acc=(acc<<8)|c;bits+=8;while(bits>=6){bits-=6;encoded+=alphabet[(acc>>bits)&63];}}if(bits)encoded+=alphabet[(acc<<(6-bits))&63];while(encoded.size()%4)encoded+='=';std::cout<<"<image id='art"<<n<<"' width='"<<(n?1254:1083)<<"' height='"<<(n?1254:1452)<<"' xlink:href='data:image/png;base64,"<<encoded<<"'/>";}
@@ -41,5 +41,6 @@ int main(int argc,char** argv){
   for(int i=0;i<6;++i)if(id==slotTarget(0,i)){const char* dest[]={"FILTER CUTOFF","TRANSPOSE","GRAIN SIZE","GRAIN MIX","PITCH","DENSITY"};return dest[i];}
   return std::to_string(int(v*100))+"%";
  };
- mockup::render(p,[&](ParamID id){return state[id];},display,"PRESET..",tab,0,0,0,0);std::cout<<"</svg>";
+ mockup::RackState rack;rack.page=std::clamp(tab,0,2);rack.scroll[rack.page]=argc>2?std::atof(argv[2]):0;int clipId=0;p.clip=[&](mockup::Rect r){std::cout<<"<defs><clipPath id='clip"<<++clipId<<"'><rect x='"<<r.x<<"' y='"<<r.y<<"' width='"<<r.w<<"' height='"<<r.h<<"'/></clipPath></defs><g clip-path='url(#clip"<<clipId<<")'>";};p.unclip=[](){std::cout<<"</g>";};
+ mockup::render(p,[&](ParamID id){return state[id];},display,"PRESET..",0,0,0,0,0,nullptr,-1,-1,nullptr,mockup::RenderPass::All,rack);std::cout<<"</svg>";
 }
