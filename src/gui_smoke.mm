@@ -38,12 +38,14 @@ int main(int argc,char** argv){@autoreleasepool {try{
  c->setParamNormalized(kXYX,.5);c->setParamNormalized(kXYY,.5);
  auto routeValue=[&](ParamID id){return c->getParamNormalized(id);};
  auto original=mockup::routeChain(routeValue);
- send(NSEventTypeLeftMouseDown,1457,1556);send(NSEventTypeLeftMouseDragged,197,1556);send(NSEventTypeLeftMouseUp,197,1556);
+ send(NSEventTypeLeftMouseDown,1140,138);send(NSEventTypeLeftMouseDragged,138,138);send(NSEventTypeLeftMouseUp,138,138);
  auto moved=mockup::routeChain(routeValue);checkGui(moved[0]==original[4]&&moved[1]==original[0],"Routing inserts before first");
- send(NSEventTypeLeftMouseDown,329,1556);send(NSEventTypeLeftMouseDragged,1597,1556);send(NSEventTypeLeftMouseUp,1597,1556);
+ click(138,138);checkGui(tabFromValue(c->getParamNormalized(kUiTab))==original[4],"Moved top button selects its module");
+ auto led0=mockup::ledRect(0);toggle(enabled[original[4]],led0.x+led0.w/2,led0.y+led0.h/2);
+ send(NSEventTypeLeftMouseDown,138,138);send(NSEventTypeLeftMouseDragged,1270,138);send(NSEventTypeLeftMouseUp,1270,138);
  checkGui(mockup::routeChain(routeValue)==original,"Routing inserts after last");
  double beforeCancel=c->getParamNormalized(kRoutingOrder);
- send(NSEventTypeLeftMouseDown,329,1556);send(NSEventTypeLeftMouseDragged,100,100);send(NSEventTypeLeftMouseUp,100,100);
+ send(NSEventTypeLeftMouseDown,138,138);send(NSEventTypeLeftMouseDragged,100,100);send(NSEventTypeLeftMouseUp,100,100);
  checkGui(c->getParamNormalized(kRoutingOrder)==beforeCancel,"Routing outside drop cancels");
  ViewRect resized(0,0,816,759);checkGui(view->checkSizeConstraint(&resized)==kResultOk,"Resize constraints");view->onSize(&resized);checkGui([(id<GrainsGuiInspection>)surface controlsFit],"Resize keeps controls visible");
  [surface display];NSBitmapImageRep* bitmap=[surface bitmapImageRepForCachingDisplayInRect:surface.bounds];[surface cacheDisplayInRect:surface.bounds toBitmapImageRep:bitmap];

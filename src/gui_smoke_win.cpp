@@ -24,12 +24,14 @@ int main(){try{
  click(mockup::xy.x+13,mockup::xy.y+13);check(c->getParamNormalized(kXYX)<.015&&c->getParamNormalized(kXYY)>.985,"XY corner");
  auto routeValue=[&](ParamID id){return c->getParamNormalized(id);};
  auto original=mockup::routeChain(routeValue);
- send(WM_LBUTTONDOWN,1457,1556);send(WM_MOUSEMOVE,197,1556);send(WM_LBUTTONUP,197,1556);
+ send(WM_LBUTTONDOWN,1140,138);send(WM_MOUSEMOVE,138,138);send(WM_LBUTTONUP,138,138);
  auto moved=mockup::routeChain(routeValue);check(moved[0]==original[4]&&moved[1]==original[0],"Routing inserts before first");
- send(WM_LBUTTONDOWN,329,1556);send(WM_MOUSEMOVE,1597,1556);send(WM_LBUTTONUP,1597,1556);
+ click(138,138);check(tabFromValue(c->getParamNormalized(kUiTab))==original[4],"Moved top button selects its module");
+ auto led0=mockup::ledRect(0);toggle(enabled[original[4]],led0.x+led0.w/2,led0.y+led0.h/2);
+ send(WM_LBUTTONDOWN,138,138);send(WM_MOUSEMOVE,1270,138);send(WM_LBUTTONUP,1270,138);
  check(mockup::routeChain(routeValue)==original,"Routing inserts after last");
  double beforeCancel=c->getParamNormalized(kRoutingOrder);
- send(WM_LBUTTONDOWN,329,1556);send(WM_MOUSEMOVE,100,100);send(WM_LBUTTONUP,100,100);
+ send(WM_LBUTTONDOWN,138,138);send(WM_MOUSEMOVE,100,100);send(WM_LBUTTONUP,100,100);
  check(c->getParamNormalized(kRoutingOrder)==beforeCancel,"Routing outside drop cancels");
  ViewRect resized(0,0,816,759);check(view->checkSizeConstraint(&resized)==kResultOk,"Resize constraint");check(view->onSize(&resized)==kResultOk,"Resize");UpdateWindow(child);
  view->removed();view->release();c->terminate();c->release();DestroyWindow(parent);std::cout<<"PASS: native skin, tabs, controls, XY and resize\n";return 0;

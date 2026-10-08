@@ -5,7 +5,7 @@ The editor builds the panel art, text, controls and live visualizations with
 native drawing primitives. The supplied JPG is a reference, not a flattened
 background: values, switches, waveforms and knob pointers remain live.
 
-The design canvas is 1632 × 1600, initially displayed at about 60%. The SIZE
+The design canvas is 1632 × 1518, initially displayed at about 60%. The SIZE
 menu offers 50–100% scaling. SKIN → Purple Mockup restores the new colors if
 an older saved color theme is still selected.
 
@@ -32,4 +32,4 @@ g++ -std=c++17 -O2 tools/mockup_preview.cpp -o /tmp/mockup-preview
 
 The native screenshot from the workflow is the authoritative rendering check.
 
-Routing uses five draggable buttons in Output. Drop to the left or right of a button to insert; dropping outside cancels. A click alone preserves legacy routing. The waveform uses a fixed trailing window and fixed gain, with softened updates and a subdued highlight of the dominant active grain. Each modulation scope has a live phase cursor.
+The five module buttons directly under the preset header set the audio order. Drag a button left or right to insert its module in the chain; neighbouring buttons shift with it. A click selects that module, and its LED controls that module’s enabled state. Dropping outside cancels. The waveform uses a fixed trailing window and fixed gain, with softened updates and a subdued highlight of the dominant active grain. Each modulation scope has a live phase cursor.

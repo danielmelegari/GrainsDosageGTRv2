@@ -13,6 +13,6 @@ int main(){using namespace aztec;
  auto b=a;b.pitch=24;b.position=.7;qg::Engine one,two;one.set(a);two.set(b);one.prepare(8000);two.prepare(8000);one.set(a);two.set(b);
  for(int n=0;n<12000;++n){float l,r,x=.2f*std::sin(n*.071);one.process(x,-x,n/4000.,l,r);two.process(x,-x,n/4000.,l,r);}
  auto w1=one.grainView(),w2=two.grainView();assert(w1.low==w2.low&&w1.high==w2.high&&w1.seconds==w2.seconds);
- assert(mockup::routeInsertion(100,100)==-1&&mockup::routeInsertion(197,1556)==0&&mockup::routeInsertion(1597,1556)==5);
+ assert(mockup::routeInsertion(100,100)==-1&&mockup::routeInsertion(138,138)==0&&mockup::routeInsertion(1270,138)==5);
  std::cout<<"PASS: 3600 insertion moves, bounded waveform transitions, display independent of grain pitch/location, outside-drop cancellation\n";
 }

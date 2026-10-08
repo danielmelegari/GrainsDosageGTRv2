@@ -11,7 +11,7 @@
 #include <vector>
 
 namespace aztec { namespace mockup {
-constexpr double width=1632, height=1600;
+constexpr double width=1632, height=1518;
 struct Rect {double x,y,w,h; bool contains(double px,double py)const{return px>=x&&py>=y&&px<x+w&&py<y+h;}};
 constexpr Rect preset{532,31,364,43}, previous{911,31,50,43}, next{964,31,50,43};
 constexpr Rect load{1032,31,105,43}, save{1150,31,105,43};
@@ -30,9 +30,8 @@ inline int hitStep(double x,double y){for(int i=0;i<16;++i)if(stepRect(i).contai
 using Value=std::function<double(ParamID)>;
 using Display=std::function<std::string(ParamID,double)>;
 // Shared insertion semantics: moving a stage shifts its neighbours, never swaps.
-inline Rect routeRect(int i){return {196.+i*282,1534,266,44};}
-inline int hitRoute(double x,double y){for(int i=0;i<5;++i)if(routeRect(i).contains(x,y))return i;return -1;}
-inline int routeInsertion(double x,double y){if(y<1520||y>1590||x<180||x>1610)return -1;for(int i=0;i<5;++i)if(x<routeRect(i).x+routeRect(i).w/2)return i;return 5;}
+inline int hitRoute(double x,double y){return hitTab(x,y);}
+inline int routeInsertion(double x,double y){if(y<108||y>173||x<20||x>1290)return -1;for(int i=0;i<5;++i)if(x<tabRect(i).x+tabRect(i).w/2)return i;return 5;}
 inline std::array<int,5> routeChain(const Value& value){int n=int(std::round(value(kRoutingOrder)*120))-1;if(n>=0)return fiveModuleOrder(n);std::array<int,5> c{{0,1,2,3,4}};int old=int(std::round(value(kModuleOrder)*6));if(old<6){auto a=moduleOrders[std::clamp(old,0,5)];std::copy(a.begin(),a.end(),c.begin());}return c;}
 inline double moveRoute(std::array<int,5> c,int from,int insertion){int to=insertion-(insertion>from?1:0);int stage=c[from];if(to>from)for(int i=from;i<to;++i)c[i]=c[i+1];else for(int i=from;i>to;--i)c[i]=c[i-1];c[to]=stage;for(int i=0;i<120;++i)if(fiveModuleOrder(i)==c)return (i+1)/120.;return 0;}
 struct WaveVisual {
@@ -126,9 +125,17 @@ inline void render(Painter& p,const Value& value,const Display& display,const st
  p.text("INPUT DE-CLICKER",{1315,19,286,29},22,white,true);
  plate({15,103,1280,541});
  const char* tabs[]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLICE","GATER"};
- for(int i=0;i<5;++i){Rect r=tabRect(i);p.box(r,i==tab?panel:skin::C(skin::kPanelRaised),i==tab?edge:border,12);
-  p.text(tabs[i],{r.x+5,r.y,r.w-37,r.h},21,white,true);auto led=ledRect(i);bool on=value(stageEnabled[i])>=.5;
-  p.box({led.x+6,led.y+(led.h-10)/2,10,10},on?accent:skin::C(skin::kHairline),on?accent:muted,5);}
+ auto chain=routeChain(value);
+ int moving=drag>=0?chain[drag]:-1;
+ if(drag>=0&&insertion>=0&&insertion!=drag&&insertion!=drag+1)
+  chain=fiveModuleOrder(int(std::round(moveRoute(chain,drag,insertion)*120.))-1);
+ for(int i=0;i<5;++i){int stage=chain[i];Rect r=tabRect(i);bool selected=stage==tab;
+  p.box(r,selected?panel:skin::C(skin::kPanelRaised),stage==moving?accent:(selected?edge:border),12);
+  p.text(tabs[stage],{r.x+5,r.y,r.w-37,r.h},21,white,true);
+  auto led=ledRect(i);bool on=value(stageEnabled[stage])>=.5;
+  p.box({led.x+6,led.y+(led.h-10)/2,10,10},on?accent:skin::C(skin::kHairline),on?accent:muted,5);
+ }
+ if(drag>=0&&insertion>=0){double x=insertion==5?tabRect(4).x+tabRect(4).w+3:tabRect(insertion).x-3;p.line(x,118,x,162,accent,3);}
  p.box({1302,103,312,541},skin::C(skin::kPanelRaised),edge,16);
  p.box({1309,115,297,46},panel,edge,18);p.text("MASTER OPTIONS",{1309,115,297,46},24,white,true);
  button(random,tab==3?"RANDOM ONCE":"RANDOM");
@@ -186,13 +193,8 @@ inline void render(Painter& p,const Value& value,const Display& display,const st
   p.box(r,ink,border,8);double n=(qg::filterPattern(int(std::round(value(kFilterSeqPattern)*63)),i)+1)*.5;
   if(value(kFilterSeqOn)>.5)p.box({x+3,1285-n*65,9,5+n*65},active?accent:skin::mix(accent,ink,.4),active?white:skin::mix(accent,ink,.4),4);}
  plate({15,1326,1603,110});p.text("REVERB",{58,1337,94,36},20,white,false);
- plate({15,1453,1603,137});heading("OUTPUT",{60,1465,130,35});
+ plate({15,1453,1603,56});heading("OUTPUT",{60,1465,130,35});
  for(const auto& c:controls(value,tab,lfo,repeat,gate,reslice))renderControl(p,c,value,display,lfo);
- p.text("ROUTING",{40,1534,145,44},20,white,false);
- auto chain=routeChain(value);const char* routeNames[]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLICE","GATER"};
- bool parallel=value(kRoutingOrder)<.5/120&&value(kModuleOrder)>.99;
- for(int i=0;i<5;++i){auto r=routeRect(i);p.box(r,i==drag?panel:screen,i==drag?accent:edge,12);p.text(routeNames[chain[i]],{r.x+10,r.y,r.w-20,r.h},18,white,true);if(i<4)p.text(parallel&&i<2?"+":">",{r.x+r.w, r.y,16,r.h},16,muted,true);}
- if(drag>=0&&insertion>=0){double x=insertion==5?routeRect(4).x+routeRect(4).w+4:routeRect(insertion).x-5;p.line(x,1530,x,1582,accent,3);}
  p.box(skinMenu,ink,edge,16);p.text("SKIN",skinMenu,16,white,true);
  p.text("SIZE",zoomMenu,16,white,true);
 }
