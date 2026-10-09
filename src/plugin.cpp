@@ -33,14 +33,14 @@ std::array<double,kCount> defaults(){return initialParameters();}
 static constexpr int kParamEnd = int(kUiFilterSeqStep) + 1;
 bool loadState(IBStream* stream, std::array<double,kCount>& p) {
   IBStreamer in(stream,kLittleEndian); int32 magic=0;
-  if(!in.readInt32(magic) || (magic!=0x51473130 && magic!=0x51473131 && magic!=0x51473132 && magic!=0x51473133 && magic!=0x51473134 && magic!=0x51473135 && magic!=0x51473136 && magic!=0x51473137 && magic!=0x51473138 && magic!=0x51473139 && magic!=0x5147313A && magic!=0x5147313B && magic!=0x5147313C && magic!=0x5147313D && magic!=0x5147313E && magic!=0x5147313F && magic!=0x51473140 && magic!=0x51473141 && magic!=0x51473142 && magic!=0x51473143 && magic!=0x51473144 && magic!=0x51473145 && magic!=0x51473146 && magic!=0x51473147 && magic!=0x51473148 && magic!=0x51473149)) return false;
+  if(!in.readInt32(magic) || (magic!=0x51473130 && magic!=0x51473131 && magic!=0x51473132 && magic!=0x51473133 && magic!=0x51473134 && magic!=0x51473135 && magic!=0x51473136 && magic!=0x51473137 && magic!=0x51473138 && magic!=0x51473139 && magic!=0x5147313A && magic!=0x5147313B && magic!=0x5147313C && magic!=0x5147313D && magic!=0x5147313E && magic!=0x5147313F && magic!=0x51473140 && magic!=0x51473141 && magic!=0x51473142 && magic!=0x51473143 && magic!=0x51473144 && magic!=0x51473145 && magic!=0x51473146 && magic!=0x51473147 && magic!=0x51473148 && magic!=0x51473149 && magic!=0x5147314A)) return false;
   auto result=defaults();
   // Layouts: legacy versions store `count` plain doubles. Current saves
   // (0x51473145, written by getState) use the same prefix plus three extra
   // fields injected after kParamEnd: buffer size, freeze flag, then the array
   // continues at kGrainBuffer+2 through kCount-1.
   const bool current=magic>=0x51473145;
-  const int storedEnd=magic==0x51473149?int(kCount):magic==0x51473148?int(kModWaveRate0):magic==0x51473147?int(kMixLock0):magic==0x51473146?int(kReverbRateV2):kLegacySkinCount;
+  const int storedEnd=magic==0x5147314A?int(kCount):magic==0x51473149?int(kResliceAlgorithm):magic==0x51473148?int(kModWaveRate0):magic==0x51473147?int(kMixLock0):magic==0x51473146?int(kReverbRateV2):kLegacySkinCount;
   const int count = current ? int(kParamEnd) : magic==0x51473144 ? kLegacySkinCount : magic==0x51473143 ? int(kResliceRndOn) : magic==0x51473130 ? int(kGrainMix) : (magic==0x51473131 ? int(kLfo0) : (magic==0x51473132 ? int(kLegacyCount) : (magic==0x51473133 ? int(kModuleOrder) : (magic==0x51473134 ? int(kExtraRoutes0) : (magic==0x51473135 ? int(kGlitchMove) : (magic==0x51473136 ? int(kMasterFilter) : (magic==0x51473137 ? int(kNormalize) : (magic==0x51473138 ? int(kReverbLength) : (magic==0x51473139 ? int(kUiWave0) : (magic==0x5147313A ? int(kLfoSlots0) : (magic==0x5147313B ? int(kModWaveRnd0) : (magic==0x5147313C ? int(kReverbSource) : (magic==0x5147313D ? int(kLimiterCeiling) : (magic==0x5147313E ? int(kGaterEnabled) : (magic==0x5147313F ? int(kInputDeclick) : (magic==0x51473140 ? int(kFilterModel) : (magic==0x51473141 ? int(kGaterMinLength) : int(kGlitchTriggerRate))))))))))))))))));
   for(int i=0;i<count;++i) {
     double v=0.; if(!in.readDouble(v) || !std::isfinite(v)) return false;
@@ -130,7 +130,7 @@ public:
   Processor() {
     setControllerClass(controllerID);
     p_=defaults();
-    processContextRequirements.needTempo().needProjectTimeMusic().needTransportState();
+    processContextRequirements.needTempo().needProjectTimeMusic().needTransportState().needTimeSignature();
   }
   static FUnknown* create(void*) { return static_cast<IAudioProcessor*>(new Processor); }
   tresult PLUGIN_API initialize(FUnknown* c) override {
@@ -155,7 +155,7 @@ public:
   }
   tresult PLUGIN_API getState(IBStream* stream) override {
     IBStreamer out(stream,kLittleEndian);
-    if(!out.writeInt32(0x51473149)) return kResultFalse;
+    if(!out.writeInt32(0x5147314A)) return kResultFalse;
     for(int i=0;i<kParamEnd;++i) if(!out.writeDouble(p_[i])) return kResultFalse;
     // v0.14 additions: buffer size, freeze state, then the remaining tail ids
     // (RANDOM/PRESET slots) written like any other array entry.
@@ -220,7 +220,8 @@ public:
     }
     if(data.numInputs < 1 || data.numOutputs < 1 || data.inputs[0].numChannels<1 || data.outputs[0].numChannels<1) return kResultOk;
     data.outputs[0].silenceFlags=3;
-    auto s = settings(p_, tempo_, rate_);s.playing=!data.processContext||(data.processContext->state & ProcessContext::kPlaying); engine_.set(s);
+    double barBeats=4.;if(data.processContext&&(data.processContext->state&ProcessContext::kTimeSigValid)&&data.processContext->timeSigNumerator>0&&data.processContext->timeSigDenominator>0)barBeats=std::clamp(4.*data.processContext->timeSigNumerator/data.processContext->timeSigDenominator,.25,32.);
+    auto s = settings(p_, tempo_, rate_,barBeats);s.playing=!data.processContext||(data.processContext->state & ProcessContext::kPlaying); engine_.set(s);
     auto setMaster=[&](){const double ceilings[]={0.,-6.,-10.};master_.set(false,0,1000.,0.,value(p_,kMasterLimiter)>=.5,0,0.,ceilings[int(std::round(value(p_,kLimiterCeiling)*2.))]);};
     setMaster();
     // Momentary UI triggers consumed once per block (before the engine receives
@@ -234,7 +235,7 @@ public:
     const double beatIncrement = tempo_ / (60. * rate_);
     double peak=0.,squareL=0.,squareR=0.;
     for(int32 n=0;n<data.numSamples;++n) {
-      if(n>0 && applyChanges(n)) { s=settings(p_,tempo_,rate_);s.playing=!data.processContext||(data.processContext->state & ProcessContext::kPlaying); engine_.set(s);setMaster(); }
+      if(n>0 && applyChanges(n)) { s=settings(p_,tempo_,rate_,barBeats);s.playing=!data.processContext||(data.processContext->state & ProcessContext::kPlaying); engine_.set(s);setMaster(); }
       const double beat = fallbackBeat_ + n * beatIncrement;
       if(data.symbolicSampleSize == kSample32) {
         auto& in = data.inputs[0]; auto& out = data.outputs[0];
@@ -463,6 +464,13 @@ public:
     for(int i=kUiGaterStep;i<kInputDeclick;++i){auto* monitor=new RangeParameter(STR16("Gater Display"),i,nullptr,0,1,0);monitor->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(monitor);}
     toggle(STR16("Input De-click"),kInputDeclick,1.);range(STR16("De-click Sensitivity"),kDeclickSensitivity,STR16("%"),0,100,50);
     auto* model=new StringListParameter(STR16("Filter Model"),kFilterModel);for(auto label:qg::filterModels){String128 name{};UString(name,128).fromAscii(label);model->appendString(name);}parameters.addParameter(model);
+    auto* cutter=new StringListParameter(STR16("Reslice Algorithm"),kResliceAlgorithm);for(auto label:{STR16("CutDSG"),STR16("WarpDSG"),STR16("PushDSG")})cutter->appendString(label);parameters.addParameter(cutter);
+    auto* phrase=new StringListParameter(STR16("Reslice Phrase"),kReslicePhrase);for(auto label:{STR16("1 bar"),STR16("2 bars"),STR16("4 bars"),STR16("8 bars")})phrase->appendString(label);phrase->getInfo().defaultNormalizedValue=2./3.;phrase->setNormalized(2./3.);parameters.addParameter(phrase);
+    range(STR16("Reslice Repeat"),kResliceRepeat,STR16("%"),0,100,45);
+    range(STR16("Reslice Variation"),kResliceVariation,STR16("%"),0,100,50);
+    range(STR16("Reslice Fill"),kResliceFill,STR16("%"),0,100,50);
+    range(STR16("Reslice Reverse"),kResliceReverse,STR16("%"),0,100,10);
+    range(STR16("Reslice Seed"),kResliceSeed,nullptr,1,65535,1,65534);
     toggle(STR16("Reslice On"),kResliceEnabled,0.);
     auto* length=new StringListParameter(STR16("Reslice Window"),kResliceLength);for(auto label:{STR16("4/1"),STR16("2/1"),STR16("1/1"),STR16("1/2")})length->appendString(label);length->getInfo().defaultNormalizedValue=2./3.;length->setNormalized(2./3.);parameters.addParameter(length);
     range(STR16("Reslice Mix"),kResliceMix,STR16("%"),0,100,100);
@@ -541,6 +549,8 @@ public:
       for(int i=0;i<6;++i){String128 name{};UString(name,128).fromAscii(titles[i]);toggle(name,kMixLock0+i,0.);}}
     for(int l=0;l<4;++l)for(int t=0;t<8;++t)getParameterObject(routeID(l,t))->getInfo().flags=ParameterInfo::kIsHidden;
     getParameterObject(kFeedback)->getInfo().flags=ParameterInfo::kIsHidden;
+    for(int i=0;i<16;++i){getParameterObject(kResliceStep0+i)->getInfo().flags|=ParameterInfo::kIsHidden;getParameterObject(kResliceIndex0+i)->getInfo().flags|=ParameterInfo::kIsHidden;}
+    for(int id:{int(kResliceRndOn),int(kResliceRndRate)})getParameterObject(id)->getInfo().flags|=ParameterInfo::kIsHidden;
 
     for(int id:{int(kDivision),int(kAttack),int(kRelease)})getParameterObject(id)->getInfo().flags=ParameterInfo::kIsHidden;
     for(int i=0;i<16;++i)getParameterObject(kStep0+i)->getInfo().flags=ParameterInfo::kIsHidden;

@@ -5,17 +5,19 @@
 #include <set>
 #include <memory>
 #include <iostream>
-int main(){using namespace aztec;std::set<std::string> names,states;
+int main(){using namespace aztec;
+ auto oldEncode=[](const auto& values){std::ostringstream out;out<<"GrainsDosagePreset 1 "<<kResliceAlgorithm<<'\n'<<std::setprecision(17);for(int id=0;id<int(kResliceAlgorithm);++id)out<<id<<' '<<(presetParameter(id)?values[id]:0.)<<'\n';return out.str();};
+std::set<std::string> names,states;
  for(int bank=0;bank<3;++bank){std::set<int> routes;for(int i=0;i<128;++i){auto p=bankPreset(bank,i);auto name=bankPresetName(bank,i);assert(names.insert(name).second);assert(presetBank(name)==bank&&presetCategory(name)==i/16);for(double v:p)assert(std::isfinite(v)&&v>=0&&v<=1);routes.insert(int(std::round(p[kRoutingOrder]*120))-1);
   auto previous=bankPresetBeforeMixRevision(bank,i);bool changed=false;
   for(int id=0;id<kCount;++id)changed|=p[id]!=previous[id];
   assert(p[kGlitchEnabled]==0&&p[kGlitchMix]==0&&p[kGrainPan]==.5&&p[kPanMode]==0);
   for(int step=0;step<16;++step)assert(p[kResliceStep0+step]==1.);
-  auto full=bankPresetFullMixRevision(bank,i);assert(needsBankMixUpgrade(encodePreset([&](int id){return full[id];}),bank,i)==(full!=p));
+  auto full=bankPresetFullMixRevision(bank,i);assert(needsBankMixUpgrade(oldEncode(full),bank,i));
   for(int m=0;m<5;++m)assert(p[bankMixParameters[m]]==(p[bankMixEnabled[m]]>=.5?1.:0.));
-  auto oldText=encodePreset([&](int id){return previous[id];});assert(needsBankMixUpgrade(oldText,bank,i)==changed);
-  auto edited=previous;edited[kSize]=previous[kSize]==.123?.456:.123;assert(!needsBankMixUpgrade(encodePreset([&](int id){return edited[id];}),bank,i));
-  edited=previous;edited[kGrainMix]=.371;assert(!needsBankMixUpgrade(encodePreset([&](int id){return edited[id];}),bank,i));
+  auto oldText=oldEncode(previous);assert(needsBankMixUpgrade(oldText,bank,i));
+  auto edited=previous;edited[kSize]=previous[kSize]==.123?.456:.123;assert(!needsBankMixUpgrade(oldEncode(edited),bank,i));
+  edited=previous;edited[kGrainMix]=.371;assert(!needsBankMixUpgrade(oldEncode(edited),bank,i));
 
   auto encoded=encodePreset([&](int id){return p[id];});assert(states.insert(encoded).second);assert(!needsBankMixUpgrade(encoded,bank,i));std::array<double,kCount> decoded;assert(decodePreset(encoded,decoded));for(int id=0;id<kCount;++id)if(presetParameter(id))assert(p[id]==decoded[id]);
   if(bank==2){assert(p[kChaos]<=.05&&p[kReverbOn]==1);assert(p[lfoID(0,lGrid)]>=.9);}

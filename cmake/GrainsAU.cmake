@@ -26,7 +26,7 @@ set_target_properties(GrainsDosageAU PROPERTIES OUTPUT_NAME GrainsDosage
   XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER com.danielmelegari.aztecgrains.au)
 # Copy the real bundle, not the SDK's development-only absolute symlink.
 add_custom_command(TARGET GrainsDosageAU POST_BUILD
-  COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_BUNDLE_DIR:GrainsDosageAU>/Contents/Resources"
-  COMMAND "${CMAKE_COMMAND}" -E copy_directory "$<TARGET_BUNDLE_DIR:GrainsDosage>"
-    "$<TARGET_BUNDLE_DIR:GrainsDosageAU>/Contents/Resources/plugin.vst3"
+  COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/AU/$<CONFIG>/GrainsDosage.component/Contents/Resources"
+  COMMAND "${CMAKE_COMMAND}" -E copy_directory "${CMAKE_BINARY_DIR}/VST3/$<CONFIG>/GrainsDosage.vst3"
+    "${CMAKE_BINARY_DIR}/AU/$<CONFIG>/GrainsDosage.component/Contents/Resources/plugin.vst3"
   VERBATIM)

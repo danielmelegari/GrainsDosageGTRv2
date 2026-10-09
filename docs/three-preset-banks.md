@@ -30,16 +30,19 @@ The approved skin, audio buffer optimizations and GUI refresh rate are retained.
 Knob label/face/readout spacing has increased; each module number occupies its
 own badge and the drag handle sits separately on the right of the title.
 
-All 384 presets set Granulizer, Beat Repeater, Reslice and Reverb Mix
-strictly to 100% when enabled and 0% when disabled. Gater has no separate Mix
-parameter. Preslicer is retired: its old parameter IDs remain reserved so old
-sessions still load, but it has no GUI card or audio contribution. The banks are
-revoiced for four modules, including replacing Preslicer patches with Reslice
-patterns. All Reslice steps start ON, with the module itself allowed to be OFF.
-Pan starts centred in Manual mode. The previous two factory revisions upgrade
-automatically; user-edited files remain intact.
+All 384 presets set Granulizer, Beat Repeater, Reslice and Reverb Mix strictly
+to 100% when enabled and 0% when disabled. Gater has no separate Mix control.
+Preslicer is retired; its parameter IDs stay reserved so old sessions remain
+readable. Its factory patches are revoiced for the remaining four modules.
+
+Reslice now has only CutDSG, WarpDSG and PushDSG. Every bank includes all three
+algorithms, with slower and gentler settings in Forest Escape and denser cutting
+in Circuit Fractures. Previous untouched factory files upgrade automatically;
+user-edited presets are preserved. Older Reslice sessions load with CutDSG and
+sensible new-control defaults; their sound changes because the manual sequencer
+has been replaced at the user's request.
 
 Beat Repeater Random changes all sixteen step divisions. Granulizer Random
-centres Pan, selects Manual pan mode and randomizes its sound controls while
-respecting Mix locks. Reslice Step RND changes every Source Slice on the selected
-RND Rate grid (2, 4 or 8 quarter-note beats), without turning steps off.
+centres Pan, selects Manual pan mode and randomizes its own controls, including
+buffer, Density Flow and Freeze, while respecting Mix locks. Master Options are
+not changed by Granulizer Random.

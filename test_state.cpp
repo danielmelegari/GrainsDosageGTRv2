@@ -47,6 +47,11 @@ int main() {
    for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);for(int i=kFreeze+1;i<kModWaveRate0;++i)out.writeDouble(expected[i]);
    old.seek(0,IBStream::kIBSeekSet,nullptr);auto restored=defaults();assert(loadState(&old,restored)&&restored==expected);assert(settings(restored,120,48000).lfos[0].waveRandom==3);
   }
+  // Pre-generative release: appended cutter controls keep their new defaults.
+  {auto expected=defaults();expected[kResliceEnabled]=1.;MemoryStream old;IBStreamer out(&old,kLittleEndian);out.writeInt32(0x51473149);
+   for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);for(int i=kFreeze+1;i<kResliceAlgorithm;++i)out.writeDouble(expected[i]);
+   old.seek(0,IBStream::kIBSeekSet,nullptr);auto restored=defaults();assert(loadState(&old,restored)&&restored==expected);assert(restored[kResliceRepeat]==.45&&restored[kResliceAlgorithm]==0.);
+  }
   // Previous split-format state must not consume newly appended fields.
   {
     auto expected=defaults(); expected[kSize]=.73; expected[kModuleOrder]=1.;
@@ -194,7 +199,7 @@ int main() {
     MemoryStream rt3; assert(p2.getState(&rt3)==kResultOk);
     rt.seek(0,IBStream::kIBSeekSet,nullptr); rt3.seek(0,IBStream::kIBSeekSet,nullptr);
     int32 m1=0,m2=0;IBStreamer r1(&rt,kLittleEndian),r2(&rt3,kLittleEndian);
-    r1.readInt32(m1);r2.readInt32(m2);assert(m1==m2&&m1==0x51473149);
+    r1.readInt32(m1);r2.readInt32(m2);assert(m1==m2&&m1==0x5147314A);
     // getState layout: kParamEnd values, buffer size, freeze flag, then the tail
     // (kBypassReserved lives in this region) up to kCount.
     const int fields=kParamEnd+2+(int(kCount)-int(kFreeze)-1);

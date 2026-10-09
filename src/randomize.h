@@ -3,9 +3,9 @@
 #include <cstdint>
 namespace aztec {
 template<class Getter,class Setter> void randomizeReslice(uint32_t& seed,Getter get,Setter set){
- set(kResliceRndOn,0.); // One-shot mode stays fixed after this edit.
- for(int i=0;i<16;++i){seed^=seed<<13;seed^=seed>>17;seed^=seed<<5;
-   int old=int(std::round(get(kResliceIndex0+i)*15.));set(kResliceIndex0+i,((old+1+int(seed%15))%16)/15.);}
+ seed^=seed<<13;seed^=seed>>17;seed^=seed<<5;
+ auto old=uint32_t(std::round(get(kResliceSeed)*65534.));set(kResliceSeed,double((old+1+seed%65534)%65535)/65534.);
+
 }
 template<class Setter> void randomizeModule(int module,int selectedStep,uint32_t& seed,Setter set){
   auto rnd=[&](){seed^=seed<<13;seed^=seed>>17;seed^=seed<<5;return double(seed&0xffffff)/16777215.;};

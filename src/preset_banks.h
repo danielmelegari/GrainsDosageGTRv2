@@ -58,7 +58,7 @@ inline std::array<double,kCount> bankPresetFullMixRevision(int bank,int index){
  for(int i=0;i<5;++i)p[bankMixParameters[i]]=p[bankMixEnabled[i]]>=.5?1.:0.;
  return p;
 }
-inline std::array<double,kCount> bankPreset(int bank,int index){
+inline std::array<double,kCount> bankPresetFourModuleRevision(int bank,int index){
  auto p=bankPresetFullMixRevision(bank,index);bool retired=p[kGlitchEnabled]>.5;
  p[kGlitchEnabled]=p[kGlitchMix]=0.;p[kGrainPan]=.5;p[kPanMode]=0.;
  for(int i=0;i<16;++i)p[kResliceStep0+i]=1.;
@@ -69,14 +69,22 @@ inline std::array<double,kCount> bankPreset(int bank,int index){
  for(auto id:{kXTarget,kYTarget})if(retiredPreslicerParam(int(std::round(p[id]*kXYX))-1))p[id]=double(kSize+1)/kXYX;
  return p;
 }
+inline std::array<double,kCount> bankPreset(int bank,int index){
+ auto p=bankPresetFourModuleRevision(bank,index);int v=index%16,family=index/16;
+ p[kResliceAlgorithm]=((index+family)%3)/2.;p[kReslicePhrase]=(bank==2?2+v%2:v%4)/3.;
+ p[kResliceRepeat]=bank==2?.15+.015*v:.3+.035*v;p[kResliceVariation]=bank==2?.12+.015*v:.35+.035*v;
+ p[kResliceFill]=bank==2?.08+.01*v:.3+.04*v;p[kResliceReverse]=bank==2?.015*(v%5):.04*(v%10);
+ p[kResliceSeed]=(1+index+bank*128)/65534.;
+ p[kResliceRndOn]=0.; // Retired sequencer mode; the cutters evolve continuously.
+ return p;
+}
 // Only upgrade untouched factory files. User edits and session states are preserved.
 inline bool needsBankMixUpgrade(const std::string& text,int bank,int index){
  std::array<double,kCount> saved{};if(!decodePreset(text,saved))return false;
- const auto previous=bankPresetBeforeMixRevision(bank,index),fullMix=bankPresetFullMixRevision(bank,index),current=bankPreset(bank,index);bool matchesOld=true,matchesFull=true,changed=false;
- for(int id=0;id<kCount;++id)if(presetParameter(id)){
-  matchesOld&=saved[id]==previous[id];matchesFull&=saved[id]==fullMix[id];changed|=saved[id]!=current[id];
- }
- return changed&&(matchesOld||matchesFull);
+ std::istringstream header(text);std::string magic;int version=0,count=0;header>>magic>>version>>count;
+ if(count>int(kResliceAlgorithm))return false; // Never rewrite this generation's user saves.
+ const auto previous=bankPresetBeforeMixRevision(bank,index),fullMix=bankPresetFullMixRevision(bank,index),four=bankPresetFourModuleRevision(bank,index);
+ bool a=true,b=true,c=true;for(int id=0;id<int(kResliceAlgorithm);++id)if(presetParameter(id)){a&=saved[id]==previous[id];b&=saved[id]==fullMix[id];c&=saved[id]==four[id];}
+ return a||b||c;
 }
-
 }

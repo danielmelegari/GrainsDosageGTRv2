@@ -21,7 +21,10 @@ if(state.page==0){
    BODY(kRepeatMix,x+25,y+112,128,105,Knob,"MIX");BODY(kMixLock0+2,x+164,y+158,90,24,Toggle,"LOCK");BODY(kRepeatDuration,x+285,y+137,300,64,Slider,"DURATION");BODY(kRepeatChance,x+623,y+137,300,64,Slider,"CHANCE");
    BODY(kRepeatStep0+selectedRepeat,x+26,y+304,139,31,Toggle,"STEP ON");BODY(kRepeatRate0+selectedRepeat,x+187,y+304,233,31,Select,"DIVISION");BODY(kRepeatPitch0+selectedRepeat,x+456,y+299,240,37,Slider,"STEP PITCH");
   }else if(stage==3){
-   BODY(kResliceLength,x+27,y+69,214,51,Slider,"WINDOW");BODY(kResliceMix,x+267,y+69,170,51,Slider,"MIX");BODY(kMixLock0+3,x+451,y+87,60,24,Toggle,"LOCK");BODY(kResliceRndOn,x+519,y+81,166,32,Toggle,"STEP RND");BODY(kResliceRndRate,x+714,y+81,225,32,Select,"RND RATE");BODY(kResliceIndex0+selectedReslice,x+27,y+235,344,31,Select,"SOURCE SLICE");
+   BODY(kResliceAlgorithm,x+27,y+66,292,32,Select,"MODE");BODY(kReslicePhrase,x+335,y+66,289,32,Select,"PHRASE");BODY(kResliceLength,x+642,y+66,297,32,Select,"BUFFER");
+   const ParamID ids[]={kResliceRepeat,kResliceVariation,kResliceFill,kResliceReverse,kResliceMix};const char* labels[]={"REPEAT","VARIATION","FILL","REVERSE","MIX"};for(int i=0;i<5;++i)BODY(ids[i],x+37+i*180,y+111,140,113,Knob,labels[i]);
+   BODY(kMixLock0+3,x+702,y+279,91,25,Toggle,"LOCK");
+
   }else{
    BODY(kGaterGrid,x+27,y+69,175,32,Select,"RATE");BODY(kGaterLengthRnd,x+227,y+69,183,32,Toggle,"LENGTH RND");BODY(kGaterStepRnd,x+436,y+69,180,32,Toggle,"STEP RND");BODY(kGaterLatch,x+643,y+69,150,32,Toggle,"LATCH");
    BODY(kGaterChance,x+27,y+125,211,62,Slider,"CHANCE");BODY(kGaterMinLength,x+260,y+125,211,62,Slider,"MIN LENGTH");BODY(kGaterLength0+selectedGate,x+493,y+125,211,62,Slider,"STEP LENGTH");BODY(kGaterSustain0+selectedGate,x+726,y+125,211,62,Slider,"SUSTAIN");
