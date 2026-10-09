@@ -221,8 +221,14 @@ class WinEditor final:public CPluginView{
     folder+=L"\\Presets";if(!CreateDirectoryW(folder.c_str(),nullptr)&&GetLastError()!=ERROR_ALREADY_EXISTS)return {};
     for(int bank=0;bank<presetBankCount;++bank)for(int i=0;i<presetsPerBank;++i){std::string name=bankPresetName(bank,i);std::wstring path=folder+L"\\"+std::wstring(name.begin(),name.end())+L".gdspreset";
       HANDLE f=CreateFileW(path.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
-      if(f==INVALID_HANDLE_VALUE){if(GetLastError()==ERROR_FILE_EXISTS||GetLastError()==ERROR_ALREADY_EXISTS)continue;return {};}
-      auto p=bankPreset(bank,i);auto text=encodePreset([&](int id){return p[id];});DWORD n=0;bool ok=WriteFile(f,text.data(),DWORD(text.size()),&n,nullptr)&&n==text.size();CloseHandle(f);if(!ok){DeleteFileW(path.c_str());return {};}
+      bool existing=false;
+      if(f==INVALID_HANDLE_VALUE){if(GetLastError()!=ERROR_FILE_EXISTS&&GetLastError()!=ERROR_ALREADY_EXISTS)return {};existing=true;
+        f=CreateFileW(path.c_str(),GENERIC_READ|GENERIC_WRITE,0,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);if(f==INVALID_HANDLE_VALUE)continue;
+        LARGE_INTEGER size{};if(!GetFileSizeEx(f,&size)||size.QuadPart>65536){CloseHandle(f);continue;}std::string old(size_t(size.QuadPart),'\0');DWORD read=0;
+        if(!ReadFile(f,old.data(),DWORD(old.size()),&read,nullptr)||read!=old.size()||!needsBankMixUpgrade(old,bank,i)){CloseHandle(f);continue;}
+        SetFilePointer(f,0,nullptr,FILE_BEGIN);
+      }
+      auto p=bankPreset(bank,i);auto text=encodePreset([&](int id){return p[id];});DWORD n=0;bool ok=WriteFile(f,text.data(),DWORD(text.size()),&n,nullptr)&&n==text.size();if(ok)ok=SetEndOfFile(f)!=0;CloseHandle(f);if(!ok){if(!existing)DeleteFileW(path.c_str());return {};}
     }return folder;
   }
   void setPresetName(const std::wstring& path){auto pos=path.find_last_of(L"\\/");presetName=path.substr(pos==std::wstring::npos?0:pos+1);auto dot=presetName.find_last_of(L'.');if(dot!=std::wstring::npos)presetName.resize(dot);}

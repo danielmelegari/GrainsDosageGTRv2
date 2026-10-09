@@ -517,8 +517,10 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   NSURL* folder=[NSURL fileURLWithPath:path isDirectory:YES];NSError* error=nil;
   if(![[NSFileManager defaultManager] createDirectoryAtURL:folder withIntermediateDirectories:YES attributes:nil error:&error]){NSAlert* alert=[[NSAlert alloc] init];alert.messageText=@"Cannot create the preset folder";alert.informativeText=error.localizedDescription;[alert runModal];return nil;}
   for(int bank=0;bank<aztec::presetBankCount;++bank)for(int i=0;i<aztec::presetsPerBank;++i){NSString* name=[[NSString stringWithUTF8String:aztec::bankPresetName(bank,i).c_str()] stringByAppendingPathExtension:@"gdspreset"];NSURL* url=[folder URLByAppendingPathComponent:name];
-    if(![[NSFileManager defaultManager] fileExistsAtPath:url.path]){auto p=aztec::bankPreset(bank,i);auto bytes=aztec::encodePreset([&](int id){return p[id];});NSData* data=[NSData dataWithBytes:bytes.data() length:bytes.size()];
-      if(![data writeToURL:url options:NSDataWritingWithoutOverwriting error:&error]&&![[NSFileManager defaultManager] fileExistsAtPath:url.path]){NSAlert* alert=[[NSAlert alloc] init];alert.messageText=@"Cannot install the factory presets";alert.informativeText=error.localizedDescription;[alert runModal];return nil;}}
+    BOOL exists=[[NSFileManager defaultManager] fileExistsAtPath:url.path];
+    if(exists){NSNumber* size=nil;[url getResourceValue:&size forKey:NSURLFileSizeKey error:nil];if(!size||size.unsignedLongLongValue>65536)continue;NSData* old=[NSData dataWithContentsOfURL:url];if(!old||!aztec::needsBankMixUpgrade(std::string((const char*)old.bytes,old.length),bank,i))continue;}
+    auto p=aztec::bankPreset(bank,i);auto bytes=aztec::encodePreset([&](int id){return p[id];});NSData* data=[NSData dataWithBytes:bytes.data() length:bytes.size()];
+    if(![data writeToURL:url options:(exists?NSDataWritingAtomic:NSDataWritingWithoutOverwriting) error:&error]&&(exists||![[NSFileManager defaultManager] fileExistsAtPath:url.path])){NSAlert* alert=[[NSAlert alloc] init];alert.messageText=@"Cannot install the factory presets";alert.informativeText=error.localizedDescription;[alert runModal];return nil;}
   }
   return folder;
 }

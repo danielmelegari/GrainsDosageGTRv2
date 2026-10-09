@@ -1,5 +1,6 @@
 #pragma once
 #include "factory_presets.h"
+#include "preset_io.h"
 #include <cstdio>
 namespace aztec {
 constexpr int presetBankCount=3,presetsPerBank=128;
@@ -16,7 +17,8 @@ inline std::string bankPresetName(int bank,int index){
  const char* shortFamily[2][8]={{"Micro","Clock","Debris","Reverse","Pulse","Resonant","Spatial","Hybrid"},{"Moss","Canopy","Root","Spiral","Night","Woodland","Clearing","Journey"}};
  return std::string(number)+shortFamily[bank-1][index/16]+" "+(bank==1?fragments[index%16]:forest[index%16]);
 }
-inline std::array<double,kCount> bankPreset(int bank,int index){
+// Previous release retained solely to recognize untouched installed factory files.
+inline std::array<double,kCount> bankPresetBeforeMixRevision(int bank,int index){
  if(bank==0)return factoryPreset(index);const int family=index/16,v=index%16;
  auto p=initialParameters();p[kMix]=1;p[kMasterLimiter]=1;p[kLimiterCeiling]=.85;p[kGrainBuffer]=bank==1?.5:1.;
  p[kRoutingOrder]=(1+(index*37+(bank==1?17:53))%120)/120.;p[kGrainEnabled]=1;p[kDensityFlow]=1;p[kGrainPan]=.5;p[kPanMode]=v%3==0?.5:0.;
@@ -49,4 +51,22 @@ inline std::array<double,kCount> bankPreset(int bank,int index){
  }
  for(auto& value:p)value=std::clamp(value,0.,1.);return p;
 }
+constexpr ParamID bankMixEnabled[]={kGrainEnabled,kGlitchEnabled,kRepeatEnabled,kResliceEnabled,kReverbOn};
+constexpr ParamID bankMixParameters[]={kGrainMix,kGlitchMix,kRepeatMix,kResliceMix,kReverbMix};
+inline std::array<double,kCount> bankPreset(int bank,int index){
+ auto p=bankPresetBeforeMixRevision(bank,index);
+ for(int i=0;i<5;++i)p[bankMixParameters[i]]=p[bankMixEnabled[i]]>=.5?1.:0.;
+ return p;
+}
+// Only upgrade untouched factory files. User edits and session states are preserved.
+inline bool needsBankMixUpgrade(const std::string& text,int bank,int index){
+ std::array<double,kCount> saved{};if(!decodePreset(text,saved))return false;
+ const auto previous=bankPresetBeforeMixRevision(bank,index),current=bankPreset(bank,index);bool changed=false;
+ for(int id=0;id<kCount;++id)if(presetParameter(id)){
+  if(saved[id]!=previous[id])return false;
+  changed|=saved[id]!=current[id];
+ }
+ return changed;
+}
+
 }
