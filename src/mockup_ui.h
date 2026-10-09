@@ -200,7 +200,7 @@ inline void render(Painter& p,const Value& value,const Display& display,const st
   for(int ch=0;ch<2;++ch){auto r=pos({92.+ch*185,1376,169,96});if(fixed&&visible(r))sprite(p,Meter,r);if(live&&visible(r)){double level=motion?motion->meters[ch]:value(kUiOutputL+ch),db=20*std::log10(std::max(.00001,level)),a=(-144.+108*std::clamp((db+36)/39.,0.,1.))*3.141592653589793/180;p.line(r.x+84,r.y+83,r.x+84+60*std::cos(a),r.y+83+60*std::sin(a),{153,38,29},1.3);}}
   if(fixed){button(pos(skinMenu),"SKIN");button(pos(zoomMenu),"SIZE");}
  }else{auto r=pos({54,210,974,832});if(fixed){rackPanel(p,r);title(r,"MORPH XY");xyPanel(p,pos(xy));}if(live){auto r=pos(xy);auto pt=xyPoint(r,value(kXYX),value(kXYY));if(p.clip)p.clip(xySurface(r));p.box({pt.first-9,pt.second-9,18,18},{24,46,48},{158,225,208},9);p.box({pt.first-5,pt.second-5,10,10},accent,accent,5);if(p.unclip)p.unclip();}}
- if(state.page==0&&motion&&motion->ready&&(drag>=0||motion->routing))for(auto& c:list)if(c.id!=kInputDeclick&&c.id!=kDeclickSensitivity){for(int stage=0;stage<5;++stage)if(c.r.y>=tops[stage]&&c.r.y<tops[stage]+moduleHeight(stage)){c.r.y+=motion->y[stage]-state.offset()-tops[stage];break;}}
+ if(state.page==0&&motion&&motion->ready&&(drag>=0||motion->routing))for(auto& c:list)if(c.id!=kInputDeclick&&c.id!=kDeclickSensitivity){for(int stage:{0,2,3,4})if(c.r.y>=tops[stage]&&c.r.y<tops[stage]+moduleHeight(stage)){c.r.y+=motion->y[stage]-state.offset()-tops[stage];break;}}
  if(fixed)for(const auto& c:list)if(c.r.y!=65&&c.id!=kDeclickSensitivity&&c.kind!=Pad&&visible(c.r))renderControl(p,c,value,display,lfo);
  if(p.unclip)p.unclip();
  if(fixed)for(const auto& c:list)if(c.id==kInputDeclick||c.id==kDeclickSensitivity)renderControl(p,c,value,display,lfo);

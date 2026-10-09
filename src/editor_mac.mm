@@ -159,7 +159,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   bool dragXY,routeMoved;
   aztec::mockup::WaveVisual waveVisual;
   aztec::mockup::Motion motion;
-  std::array<int,5> routingAtDrag;
+  std::array<int,4> routingAtDrag;
   aztec::Kind dragKind;
   NSRect dragRect;
   NSPoint origin;

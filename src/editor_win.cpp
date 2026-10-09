@@ -46,7 +46,7 @@ class WinEditor final:public CPluginView{
   std::array<double,kCount> lastDisplayValues{};
   int animationFrames=0;
   aztec::mockup::Motion motion;
-  std::array<int,5> routingAtDrag;
+  std::array<int,4> routingAtDrag;
   double originX=0,originY=0,dragValue=0,dragWidth=1,dragHeight=180;Kind dragKind=Knob;bool dragXY=false,routeMoved=false;
   uint32_t seed=0;HDC dc=nullptr;
   std::unique_ptr<Gdiplus::Bitmap> mockupKnob, rackBackplate, rackAtlas;
