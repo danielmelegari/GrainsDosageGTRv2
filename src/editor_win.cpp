@@ -3,7 +3,7 @@
 #include <windowsx.h>
 #include <commdlg.h>
 #include "preset_io.h"
-#include "factory_presets.h"
+#include "preset_banks.h"
 #include <shlobj.h>
 #include <shellapi.h>
 #include <gdiplus.h>
@@ -11,6 +11,7 @@
 #include <shlwapi.h>
 #include <filesystem>
 #include "editor.h"
+#include "value_entry.h"
 #include "parameters.h"
 #include "skin_spec.h"
 #include "skin_theme.h"
@@ -177,6 +178,24 @@ class WinEditor final:public CPluginView{
   std::wstring display(ParamID id,double v){String128 s{};controller->getParamStringByValue(id,v,s);std::wstring out(reinterpret_cast<wchar_t*>(s));auto p=info(id);
     if(!(p.flags&ParameterInfo::kIsList)&&out.find(L'.')!=std::wstring::npos){wchar_t b[64];swprintf(b,64,L"%.2f",wcstod(out.c_str(),nullptr));out=b;while(out.back()==L'0')out.pop_back();if(out.back()==L'.')out.pop_back();}
     if(p.units[0]){out+=L" ";out+=reinterpret_cast<wchar_t*>(p.units);}return out;}
+  struct ValueDialog {WinEditor* editor;ParamID id;};
+  static INT_PTR CALLBACK valueDialogProc(HWND dialog,UINT msg,WPARAM wp,LPARAM lp){
+    auto* state=reinterpret_cast<ValueDialog*>(GetWindowLongPtrW(dialog,DWLP_USER));
+    if(msg==WM_INITDIALOG){state=reinterpret_cast<ValueDialog*>(lp);SetWindowLongPtrW(dialog,DWLP_USER,lp);auto* e=state->editor;
+      SetWindowTextW(dialog,reinterpret_cast<const wchar_t*>(e->info(state->id).title));
+      CreateWindowW(L"STATIC",L"Value (displayed units or exact option name)",WS_CHILD|WS_VISIBLE,16,16,380,22,dialog,(HMENU)102,nullptr,nullptr);
+      HWND input=CreateWindowExW(WS_EX_CLIENTEDGE,L"EDIT",e->display(state->id,e->value(state->id)).c_str(),WS_CHILD|WS_VISIBLE|WS_TABSTOP|ES_AUTOHSCROLL,16,44,380,28,dialog,(HMENU)101,nullptr,nullptr);
+      CreateWindowW(L"BUTTON",L"Apply",WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_DEFPUSHBUTTON,216,88,85,28,dialog,(HMENU)IDOK,nullptr,nullptr);
+      CreateWindowW(L"BUTTON",L"Cancel",WS_CHILD|WS_VISIBLE|WS_TABSTOP,311,88,85,28,dialog,(HMENU)IDCANCEL,nullptr,nullptr);
+      SetFocus(input);SendMessageW(input,EM_SETSEL,0,-1);return FALSE;
+    }
+    if(msg==WM_COMMAND&&state){if(LOWORD(wp)==IDCANCEL){EndDialog(dialog,0);return TRUE;}if(LOWORD(wp)==IDOK){wchar_t buffer[256]{};GetDlgItemTextW(dialog,101,buffer,256);double v=0;if(parseParameterEntry(state->editor->controller,state->id,utf8(buffer),v)){state->editor->edit(state->id,v);EndDialog(dialog,1);}else{SetDlgItemTextW(dialog,102,L"Invalid value or outside the control's range.");SetFocus(GetDlgItem(dialog,101));SendDlgItemMessageW(dialog,101,EM_SETSEL,0,-1);}return TRUE;}}
+    if(msg==WM_CLOSE){EndDialog(dialog,0);return TRUE;}return FALSE;
+  }
+  void editValue(ParamID id){
+    alignas(DLGTEMPLATE) unsigned char storage[128]{};auto* t=reinterpret_cast<DLGTEMPLATE*>(storage);t->style=WS_POPUP|WS_CAPTION|WS_SYSMENU|DS_MODALFRAME|DS_CENTER;t->cx=220;t->cy=84;
+    ValueDialog state{this,id};DialogBoxIndirectParamW(GetModuleHandleW(nullptr),t,window,valueDialogProc,reinterpret_cast<LPARAM>(&state));
+  }
   std::wstring presetName=L"PRESETS ▾";
   void loadSkinArt(){aztec::theme::loadSkinFile(aztec::theme::defaultPath());}
   void saveSkin(){aztec::theme::saveSkinFile(aztec::theme::defaultPath());}
@@ -200,10 +219,10 @@ class WinEditor final:public CPluginView{
     std::wstring folder=std::wstring(root)+L"\\GrainsDosage";
     if(!CreateDirectoryW(folder.c_str(),nullptr)&&GetLastError()!=ERROR_ALREADY_EXISTS)return {};
     folder+=L"\\Presets";if(!CreateDirectoryW(folder.c_str(),nullptr)&&GetLastError()!=ERROR_ALREADY_EXISTS)return {};
-    for(int i=0;i<factoryPresetCount;++i){std::string name=factoryNames[i];std::wstring path=folder+L"\\"+std::wstring(name.begin(),name.end())+L".gdspreset";
+    for(int bank=0;bank<presetBankCount;++bank)for(int i=0;i<presetsPerBank;++i){std::string name=bankPresetName(bank,i);std::wstring path=folder+L"\\"+std::wstring(name.begin(),name.end())+L".gdspreset";
       HANDLE f=CreateFileW(path.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
       if(f==INVALID_HANDLE_VALUE){if(GetLastError()==ERROR_FILE_EXISTS||GetLastError()==ERROR_ALREADY_EXISTS)continue;return {};}
-      auto p=factoryPreset(i);auto text=encodePreset([&](int id){return p[id];});DWORD n=0;bool ok=WriteFile(f,text.data(),DWORD(text.size()),&n,nullptr)&&n==text.size();CloseHandle(f);if(!ok){DeleteFileW(path.c_str());return {};}
+      auto p=bankPreset(bank,i);auto text=encodePreset([&](int id){return p[id];});DWORD n=0;bool ok=WriteFile(f,text.data(),DWORD(text.size()),&n,nullptr)&&n==text.size();CloseHandle(f);if(!ok){DeleteFileW(path.c_str());return {};}
     }return folder;
   }
   void setPresetName(const std::wstring& path){auto pos=path.find_last_of(L"\\/");presetName=path.substr(pos==std::wstring::npos?0:pos+1);auto dot=presetName.find_last_of(L'.');if(dot!=std::wstring::npos)presetName.resize(dot);}
@@ -224,10 +243,12 @@ class WinEditor final:public CPluginView{
     std::vector<std::wstring> names;WIN32_FIND_DATAW data{};HANDLE search=FindFirstFileW((folder+L"\\*.gdspreset").c_str(),&data);
     if(search!=INVALID_HANDLE_VALUE){do{if(!(data.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY))names.emplace_back(data.cFileName);}while(FindNextFileW(search,&data));FindClose(search);}
     std::sort(names.begin(),names.end(),presetFileLess);HMENU menu=CreatePopupMenu();
-    for(int category=0;category<factoryCategoryCount+2;++category){HMENU group=CreatePopupMenu();int count=0;
-      for(size_t i=0;i<names.size();++i){auto label=names[i].substr(0,names[i].find_last_of(L'.'));if(presetCategory(label)!=category)continue;
-        AppendMenuW(group,MF_STRING|(label==presetName?MF_CHECKED:0),UINT_PTR(i+1),label.c_str());++count;}
-      if(count){std::string title=factoryCategories[category];std::wstring wide;for(char ch:title){wide+=wchar_t(ch);if(ch=='&')wide+=L'&';}AppendMenuW(menu,MF_POPUP,UINT_PTR(group),wide.c_str());}else DestroyMenu(group);
+    for(int bank=0;bank<4;++bank){HMENU pack=CreatePopupMenu();int groups=0;
+      for(int category=0;category<factoryCategoryCount+2;++category){if(bank>0&&bank<3&&category>=8)continue;if(bank==3&&category!=9)continue;if(bank==0&&category==9)continue;HMENU group=CreatePopupMenu();int count=0;
+        for(size_t i=0;i<names.size();++i){auto label=names[i].substr(0,names[i].find_last_of(L'.'));int cat=presetCategory(label),b=cat==9?3:presetBank(label);if(b!=bank||cat!=category)continue;AppendMenuW(group,MF_STRING|(label==presetName?MF_CHECKED:0),UINT_PTR(i+1),label.c_str());++count;}
+        if(count){std::string title=bank<3?bankCategoryName(bank,category):"User Presets";std::wstring label;for(char ch:title){label+=wchar_t(ch);if(ch=='&')label+=L'&';}AppendMenuW(pack,MF_POPUP,UINT_PTR(group),label.c_str());++groups;}else DestroyMenu(group);
+      }
+      if(groups){std::string title=bank<3?presetBankNames[bank]:"User Presets";std::wstring label(title.begin(),title.end());AppendMenuW(menu,MF_POPUP,UINT_PTR(pack),label.c_str());}else DestroyMenu(pack);
     }
     AppendMenuW(menu,MF_SEPARATOR,0,nullptr);AppendMenuW(menu,MF_STRING,UINT_PTR(names.size()+1),L"Open Preset Folder…");POINT point;GetCursorPos(&point);int choice=TrackPopupMenu(menu,TPM_RETURNCMD,point.x,point.y,0,window,nullptr);DestroyMenu(menu);
     if(choice==int(names.size()+1))ShellExecuteW(window,L"open",folder.c_str(),nullptr,nullptr,SW_SHOWNORMAL);
@@ -317,6 +338,7 @@ class WinEditor final:public CPluginView{
     int st=-1,step=mockup::hitStep(x,y,val,rackState,st);if(step>=0){if(st==2){selectedRepeat=step;if(dbl)edit(kRepeatStep0+step,value(kRepeatStep0+step)>.5?0.:1.);}if(st==3){selectedReslice=step;if(dbl)edit(kResliceStep0+step,value(kResliceStep0+step)>.5?0.:1.);}if(st==4){selectedGate=step;if(GetKeyState(VK_SHIFT)&0x8000){double v=value(kGaterRelease0+step)>.5?0.:1.;edit(kGaterRelease0+step,v);if(v>.5)edit(kGaterState0+step,0.);}else{edit(kGaterRelease0+step,0.);edit(kGaterState0+step,value(kGaterState0+step)>.25?0.:1.);}}InvalidateRect(window,nullptr,FALSE);return;}
     auto xy=rackState.position(mockup::xy);if(rackState.page==2&&y>=mockup::bodyTop&&hit(xy)){dragXY=true;controller->beginEdit(kXYX);controller->beginEdit(kXYY);auto v=mockup::xyValue(xy,x,y);change(kXYX,v.first);change(kXYY,v.second);SetCapture(window);return;}
     for(const auto& c:controls)if((y>=mockup::bodyTop||c.id==kInputDeclick||c.id==kDeclickSensitivity)&&inside(x,y,c.x,c.y,c.w,c.h)){
+      if(mockup::valueRect({c.x,c.y,c.w,c.h},mockup::Kind(c.kind),c.id,c.label).contains(x,y)){editValue(c.id);return;}
       if(c.kind==PanMode){edit(c.id,std::clamp(int((x-c.x)/(c.w/3)),0,2)/2.);return;}
       if(c.kind==Toggle||c.kind==Pad){edit(c.id,value(c.id)>.5?0:1);return;}
       if(dbl){edit(c.id,info(c.id).defaultNormalizedValue);return;}
@@ -337,6 +359,7 @@ class WinEditor final:public CPluginView{
         if(e->dragSlot>=0&&e->routeMoved){double d=e->routePointerY<mockup::bodyTop+45?-18:e->routePointerY>mockup::height-45?18:0;if(d){mockup::scrollBy(e->rackState,d);e->dropSlot=mockup::routeInsertion(e->routePointerX,e->routePointerY,[&](ParamID id){return e->value(id);},e->rackState);}}if(changed)e->animationFrames=12;
         if(e->animationFrames>0||e->dragSlot>=0){--e->animationFrames;if(e->rackState.page==0&&mockup::visible(mockup::waveRect([&](ParamID id){return e->value(id);},e->rackState)))e->waveVisual.update([&](ParamID id){return e->lastDisplayValues[id];});InvalidateRect(hwnd,nullptr,FALSE);}return 0;}
       case WM_PAINT:{PAINTSTRUCT ps;HDC screen=BeginPaint(hwnd,&ps);RECT r;GetClientRect(hwnd,&r);HDC mem=CreateCompatibleDC(screen);auto bitmap=CreateCompatibleBitmap(screen,r.right*2,r.bottom*2);auto old=SelectObject(mem,bitmap);PatBlt(mem,0,0,r.right*2,r.bottom*2,BLACKNESS);mockup::Viewport fit(r.right,r.bottom);SetMapMode(mem,MM_ANISOTROPIC);SetWindowExtEx(mem,int(mockup::width),int(mockup::height),nullptr);SetViewportExtEx(mem,int(std::round(mockup::width*fit.scale*2)),int(std::round(mockup::height*fit.scale*2)),nullptr);SetViewportOrgEx(mem,int(std::round(fit.x*2)),int(std::round(fit.y*2)),nullptr);e->dc=mem;e->draw();SetMapMode(mem,MM_TEXT);SetViewportOrgEx(mem,0,0,nullptr);SetStretchBltMode(screen,HALFTONE);SetBrushOrgEx(screen,0,0,nullptr);StretchBlt(screen,0,0,r.right,r.bottom,mem,0,0,r.right*2,r.bottom*2,SRCCOPY);SelectObject(mem,old);DeleteObject(bitmap);DeleteDC(mem);EndPaint(hwnd,&ps);return 0;}
+      case WM_RBUTTONDOWN:e->point(lp,x,y);e->layout();for(const auto& c:e->controls)if((y>=mockup::bodyTop||c.id==kInputDeclick||c.id==kDeclickSensitivity)&&inside(x,y,c.x,c.y,c.w,c.h)){e->editValue(c.id);break;}return 0;
       case WM_LBUTTONDOWN:case WM_LBUTTONDBLCLK:e->point(lp,x,y);e->down(x,y,msg==WM_LBUTTONDBLCLK);return 0;
       case WM_MOUSEMOVE:e->point(lp,x,y);if(e->dragScroll){auto b=mockup::scrollbar(),t=mockup::scrollThumb(e->rackState);e->rackState.scroll[e->rackState.page]=std::clamp(e->scrollOrigin+(y-e->originY)*mockup::maxScroll(e->rackState)/std::max(1.,b.h-t.h),0.,mockup::maxScroll(e->rackState));InvalidateRect(hwnd,nullptr,FALSE);}else if(e->dragSlot>=0){e->routePointerX=x;e->routePointerY=y;if(std::hypot(x-e->originX,y-e->originY)>8)e->routeMoved=true;if(e->routeMoved)e->dropSlot=mockup::routeInsertion(x,y,[&](ParamID id){return e->value(id);},e->rackState);InvalidateRect(hwnd,nullptr,FALSE);}else if(e->dragXY){auto xy=e->rackState.position(mockup::xy);auto v=mockup::xyValue(xy,x,y);e->change(kXYX,v.first);e->change(kXYY,v.second);}else if(e->dragID>=0){double delta=(e->dragKind==Slider||e->dragKind==Pan)?(x-e->originX)/e->dragWidth:(e->originY-y)/(e->dragKind==VSlider?std::max(1.,e->dragHeight-42):180.);if(GetKeyState(VK_SHIFT)&0x8000)delta*=.1;e->dragValue=std::clamp(e->dragValue+delta,0.,1.);e->originX=x;e->originY=y;e->change(ParamID(e->dragID),e->dragValue);}return 0;
       case WM_LBUTTONUP:if(e->dragSlot>=0&&e->dropSlot>=0&&e->dropSlot!=e->dragSlot&&e->dropSlot!=e->dragSlot+1)e->edit(kRoutingOrder,mockup::moveRoute(e->routingAtDrag,e->dragSlot,e->dropSlot));e->end();ReleaseCapture();InvalidateRect(hwnd,nullptr,FALSE);return 0;

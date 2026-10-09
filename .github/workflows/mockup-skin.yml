@@ -47,22 +47,28 @@ jobs:
       - name: Export preset bank
         shell: bash
         run: |
-          mkdir -p GrainsDosage-Routing-Bank-128
-          build/preset-bank/Release/grains_export_presets GrainsDosage-Routing-Bank-128
+          mkdir -p GrainsDosage-Legacy-128 GrainsDosage-Circuit-Fractures-128 GrainsDosage-Forest-Escape-128
+          build/preset-bank/Release/grains_export_presets GrainsDosage-Legacy-128 0
+          build/preset-bank/Release/grains_export_presets GrainsDosage-Circuit-Fractures-128 1
+          build/preset-bank/Release/grains_export_presets GrainsDosage-Forest-Escape-128 2
       - name: Package Mac VST3
         if: runner.os == 'macOS'
         shell: bash
         run: |
           lipo build/VST3/Release/GrainsDosage.vst3/Contents/MacOS/GrainsDosage -verify_arch x86_64 arm64
           codesign --force --sign - --timestamp=none build/VST3/Release/GrainsDosage.vst3
-          ditto -c -k --keepParent GrainsDosage-Routing-Bank-128 GrainsDosage-Purple-Presets-128.zip
+          for bank in Legacy Circuit-Fractures Forest-Escape; do
+            ditto -c -k --keepParent "GrainsDosage-$bank-128" "GrainsDosage-Purple-$bank-128.zip"
+          done
           ditto -c -k --sequesterRsrc --keepParent build/VST3/Release/GrainsDosage.vst3 GrainsDosage-Purple-macOS-Universal.vst3.zip
       - name: Package Windows VST3
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           Compress-Archive -Path build/VST3/Release/GrainsDosage.vst3 -DestinationPath GrainsDosage-Purple-Windows.vst3.zip
-          Compress-Archive -Path GrainsDosage-Routing-Bank-128 -DestinationPath GrainsDosage-Purple-Presets-128.zip
+          foreach ($bank in @('Legacy', 'Circuit-Fractures', 'Forest-Escape')) {
+            Compress-Archive -Path "GrainsDosage-$bank-128" -DestinationPath "GrainsDosage-Purple-$bank-128.zip"
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: GrainsDosage-Purple-${{ runner.os }}

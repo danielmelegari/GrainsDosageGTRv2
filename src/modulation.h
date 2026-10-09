@@ -17,7 +17,7 @@ struct LfoSettings {
   int randomSteps = 1;
   int wave = 0; // 0..127 periodic waves, 128 S&H, 129 S&G
   double speed=1.;
-  int waveRandom=0; // Off, 1/1, 1/2, 1/4, 1/8 (host quarter-note beats)
+  int waveRandom=0; // Off, 1/1, 1/2, 1/4, 1/8, 2/1, 4/1 (host quarter-note beats)
   double hz = 1., beats = 4., depth = 1., phase = 0., glide = 1.;
   std::array<double, modTargetCount> positive{},negative{};
   std::array<double, modTargetCount> amount{}; // bipolar normalized destination range
@@ -96,9 +96,9 @@ public:
       const int wraps=int(std::floor(freePhase_)); freePhase_-=wraps; freeCycle_+=wraps;
     }
     position_=position;displayCycle_=cycle;
-    const double intervals[]={4.,2.,1.,.5};
+    const double intervals[]={4.,2.,1.,.5,8.,16.};
     int wave=std::clamp(s.wave,0,129);
-    if(s.waveRandom>0){int64_t step=int64_t(std::floor(beat/intervals[std::clamp(s.waveRandom-1,0,3)]+1e-9));wave=std::clamp(int((cycleNoise(step,seed_+0x57a9ULL)+1.)*.5*waveCount),0,waveCount-1);}
+    if(s.waveRandom>0){int64_t step=int64_t(std::floor(beat/intervals[std::clamp(s.waveRandom-1,0,5)]+1e-9));wave=std::clamp(int((cycleNoise(step,seed_+0x57a9ULL)+1.)*.5*waveCount),0,waveCount-1);}
     activeWave_=wave;
     if(previousWave_>=0&&previousWave_!=wave){transition_=s.waveRandom>0?0.:1.;transitionFrom_=lastOutput_;}
     previousWave_=wave;

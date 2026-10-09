@@ -64,7 +64,7 @@ inline std::vector<std::wstring> presetFilesIn(const std::wstring& utf16director
 }
 inline bool presetFileLess(const std::wstring& a,const std::wstring& b){
  auto stem=[](std::wstring s){if(s.size()>=presetExtLen)s.resize(s.size()-presetExtLen);return s;};
- int ca=presetCategory(stem(a)),cb=presetCategory(stem(b));if(ca!=cb)return ca<cb;
+ int ca=presetCategory(stem(a)),cb=presetCategory(stem(b));int ba=ca==9?3:presetBank(stem(a)),bb=cb==9?3:presetBank(stem(b));if(ba!=bb)return ba<bb;if(ca!=cb)return ca<cb;
  auto lower=[](std::wstring s){for(auto& c:s)c=wchar_t(towlower(c));return s;};return lower(a)<lower(b);
 }
 inline std::wstring nextPresetFile(const std::wstring& utf16directory,int direction,const std::wstring& current){

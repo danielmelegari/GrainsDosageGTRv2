@@ -60,6 +60,12 @@ inline std::vector<Control> controls(const Value& value,int currentTab,int selec
  #undef ADD
  return result;
 }
+inline Rect valueRect(Rect r,Kind kind,ParamID id,const std::string& label){
+ if(kind==Knob)return {r.x+10,r.y+r.h-22,r.w-20,22};
+ if(kind==VSlider)return {r.x,r.y+r.h-16,r.w,16};
+ if(kind==Slider||kind==Pan){if(id>=kLfoSlots0&&id<kLfoSpeed0)return {r.x+r.w-33,r.y,33,r.h};if(r.h>=40)return {r.x,r.y+r.h-19,r.w,19};return {r.x+r.w-32,r.y,32,r.h};}
+ return {};
+}
 struct Motion {
  std::array<double,5> y{};std::array<double,16> gate{};std::array<double,2> meters{};bool ready=false,routing=false;std::chrono::steady_clock::time_point last{};
  void update(const Value& value,int drag,int insertion){auto now=std::chrono::steady_clock::now();double dt=ready?std::clamp(std::chrono::duration<double>(now-last).count(),0.,.1):0.;last=now;auto chain=routeChain(value);if(drag>=0&&insertion>=0)chain=fiveModuleOrder(int(std::round(moveRoute(chain,drag,insertion)*120))-1);double ease=1-std::exp(-dt/.065),top=430;routing=false;for(int stage:chain){y[stage]=ready?y[stage]+ease*(top-y[stage]):top;if(std::abs(top-y[stage])>.8)routing=true;top+=moduleHeight(stage)+14;}int playing=int(std::round(value(kUiGaterStep)*15));for(int i=0;i<16;++i){double target=i==playing&&value(kGaterEnabled)>.5?std::min(value(kUiGaterPhase),value(kUiGaterLength0+i)):0.;gate[i]+=(1-std::exp(-dt/.025))*(target-gate[i]);}for(int ch=0;ch<2;++ch){double target=value(kUiOutputL+ch);meters[ch]+=(1-std::exp(-dt/(target>meters[ch]?.075:.3)))*(target-meters[ch]);}ready=true;}
@@ -111,9 +117,9 @@ inline void renderControl(Painter& p,const Control& c,const Value& value,const D
  const auto r=c.r;const double v=std::clamp(value(c.id),0.,1.);
  const Rgb white{230,233,237},muted{170,173,184},accent{100,204,182},ink{20,22,24};
  if(c.kind==Knob){
-  double diameter=std::min(r.w-18,r.h-44);
+  double diameter=std::min(r.w-22,r.h-60);
   p.text(c.label,{r.x,r.y,r.w,21},14,white,true);
-  rackKnob(p,{r.x+(r.w-diameter)/2,r.y+22,diameter,diameter},v);
+  rackKnob(p,{r.x+(r.w-diameter)/2,r.y+29,diameter,diameter},v);
   Rect read{r.x+10,r.y+r.h-22,r.w-20,22};pill(p,read);p.text(display(c.id,v),read,12,white,true);
  }else if(c.kind==Toggle){
   bool on=v>=.5;
@@ -123,8 +129,8 @@ inline void renderControl(Painter& p,const Control& c,const Value& value,const D
   std::string title=c.label=="ON"?(on?"ON":"OFF"):c.label;if(c.id==kFreeze&&on)title="FROZEN";
   p.text(title,{r.x+22,r.y,r.w-27,r.h},std::min(15.,r.h*.43),white,true);
  }else if(c.kind==Select){
-  pill(p,r);double shown=c.id==lfoID(lfo,lWave)&&value(kModWaveRnd0+lfo)>0?value(kUiModWave0+lfo):v;
-  auto label=display(c.id,shown);if(c.id==kReverbSource)label=v>=.5?"RANDOM IMP.":"STEP SEQ.";
+  pill(p,r);double shown=c.id==lfoID(lfo,lWave)&&modWaveSelection(value,lfo)>0?value(kUiModWave0+lfo):v;
+  auto label=display(c.id,shown);if(c.id>=kModWaveRate0&&c.id<kCount&&v<.5/7){const char* names[]={"Off","1/1","1/2","1/4","1/8","2/1","4/1"};label=names[modWaveSelection(value,int(c.id-kModWaveRate0))];}if(c.id==kReverbSource)label=v>=.5?"RANDOM IMP.":"STEP SEQ.";
   if(c.id==kFilterSeqMode)label=v>=.5?"S&G":"ARP";
   const auto legacy=label.find(" (legacy)");if(legacy!=std::string::npos)label.erase(legacy);
   if(c.id==kReverbRateV2&&v<.5/6){int old=value(kReverbSource)>=.5?kReverbRandomRate:kReverbGrid;label=display(old,value(old));}
@@ -177,7 +183,7 @@ inline void render(Painter& p,const Value& value,const Display& display,const st
  if(state.page==0){
   Rect master=pos({54,210,974,188});if(fixed){rackPanel(p,master);title(master,"MASTER OPTIONS");p.text("SIGNAL CHAIN ↓  •  FIRST MODULE AT THE TOP",pos({78,404,520,20}),11,muted,false);p.text("DRAG A MODULE UP OR DOWN TO REORDER",pos({619,404,385,20}),11,muted,true);}
   auto chain=routeChain(value);for(int stage:chain){auto r=moduleRect(stage,value,state);double dy=(motion&&motion->ready&&(drag>=0||motion->routing))?motion->y[stage]-state.offset()-r.y:0;r.y+=dy;if(!visible(r))continue;
-   if(fixed){rackPanel(p,r);title(r,moduleNames[stage]);p.text(std::to_string(1+int(std::find(chain.begin(),chain.end(),stage)-chain.begin())),{r.x+12,r.y+19,19,21},12,accent,true);for(int j=0;j<3;++j)for(int k=0;k<2;++k)p.box({r.x+15+k*5,r.y+45+j*5,2,2},muted,muted,1);auto rr=randomRect(stage,value,state);rr.y+=dy;button(rr,stage==3?"RANDOM ONCE":"RANDOM");}
+   if(fixed){rackPanel(p,r);p.box({r.x+36,r.y+13,32,30},{25,28,35},{91,96,106},5);p.text(std::to_string(1+int(std::find(chain.begin(),chain.end(),stage)-chain.begin())),{r.x+36,r.y+13,32,30},14,accent,true);p.text(moduleNames[stage],{r.x+86,r.y+16,480,26},20,white,false);for(int j=0;j<3;++j)for(int k=0;k<2;++k)p.box({r.x+635+k*6,r.y+20+j*6,2,2},muted,muted,1);auto rr=randomRect(stage,value,state);rr.y+=dy;button(rr,stage==3?"RANDOM ONCE":"RANDOM");}
 
    if(live&&stage==0){auto w=waveRect(value,state);w.y+=dy;p.box(w,screen,{76,75,82},10);WaveVisual direct;if(!visual){for(int i=0;i<waveformBins;++i){direct.lo[i]=value(kUiWaveLow0+i)*2-1;direct.hi[i]=value(kUiWaveHigh0+i)*2-1;}direct.active=value(kUiGrainActive);visual=&direct;}double scale=w.h/2-6,mid=w.y+w.h/2;auto env=[&](int first,int last){std::vector<std::pair<double,double>> pts;for(int i=first;i<=last;++i)pts.push_back({w.x+4+i*(w.w-8)/(waveformBins-1),mid-visual->hi[i]*scale});for(int i=last;i>=first;--i)pts.push_back({w.x+4+i*(w.w-8)/(waveformBins-1),mid-visual->lo[i]*scale});return pts;};auto base=skin::mix(screen,muted,.35);p.polygon(env(0,waveformBins-1),base);p.line(w.x+4,mid,w.x+w.w-4,mid,{63,80,76},1);if(visual->active>.01){double start=std::min(value(kUiGrainStart),value(kUiGrainEnd)),end=std::max(value(kUiGrainStart),value(kUiGrainEnd));int first=std::clamp(int(start*(waveformBins-1)),0,waveformBins-1),last=std::clamp(int(std::ceil(end*(waveformBins-1))),first,waveformBins-1);auto lit=skin::mix(base,accent,.45*visual->active);p.polygon(env(first,last),lit);double x=w.x+4+value(kUiGrainHead)*(w.w-8);p.line(x,w.y+6,x,w.y+w.h-6,lit,1.5);}}
    if(live&&stage==1)p.text(value(kUiGlitch)>.5?"PROCESSING SLICE":"WAITING FOR TRIGGER",{r.x+29,r.y+r.h-37,r.w-58,22},12,accent,true);
@@ -187,7 +193,7 @@ inline void render(Painter& p,const Value& value,const Display& display,const st
  }else if(state.page==1){
   for(auto r:{Rect{54,210,974,475},Rect{54,699,480,294},Rect{548,699,480,294},Rect{54,1007,974,305},Rect{54,1326,974,210}})if(fixed)rackPanel(p,pos(r));title(pos({54,210,974,475}),"MODULATION");title(pos({54,699,480,294}),"FILTER");title(pos({548,699,480,294}),"FILTER SEQUENCER");title(pos({54,1007,974,305}),"REVERB");title(pos({54,1326,974,210}),"OUTPUT");
   if(fixed){for(int i=0;i<4;++i){auto r=pos(lfoRect(i));pill(p,r);p.text(std::to_string(i+1),r,17,i==lfo?accent:white,true);}xyPanel(p,pos(scope),false);}
-  if(live&&visible(pos(scope))){auto sc=pos(scope);qg::Lfo preview;double cycle=std::round(value(kUiLfoCycle0+lfo)*4294967295.-2147483648.);int64_t epoch=int64_t(std::round(value(kUiLfoEpoch0+lfo)*4294967295.-2147483648.));preview.prepare(0x13579BDFULL+uint64_t(lfo)*104729+(value(lfoID(lfo,lReset))>=.5?uint64_t(epoch)*0x9e3779b97f4a7c15ULL:0));qg::LfoSettings shape;shape.enabled=true;shape.beats=1;shape.wave=int(std::round(value(value(kModWaveRnd0+lfo)>0?kUiModWave0+lfo:lfoID(lfo,lWave))*129));shape.randomSteps=1+int(std::round(value(kRandomSteps0+lfo)*63));shape.depth=value(lfoID(lfo,lDepth));shape.phase=0;shape.glide=.01+.99*value(lfoID(lfo,lGlide));auto glass=xySurface(sc);std::vector<std::pair<double,double>> pts;for(int i=0;i<=210;++i)pts.push_back({glass.x+3+i*(glass.w-6)/210,glass.y+glass.h/2-std::clamp(preview.process(shape,cycle+i/210.,48000,false,0),-1.,1.)*(glass.h/2-5)});if(p.polyline)p.polyline(pts,accent,2);else for(size_t i=1;i<pts.size();++i)p.line(pts[i-1].first,pts[i-1].second,pts[i].first,pts[i].second,accent,2);double x=glass.x+3+xyNormalized(value(kUiLfoPhase0+lfo))*(glass.w-6);p.line(x,glass.y+3,x,glass.y+glass.h-3,white,1);}
+  if(live&&visible(pos(scope))){auto sc=pos(scope);qg::Lfo preview;double cycle=std::round(value(kUiLfoCycle0+lfo)*4294967295.-2147483648.);int64_t epoch=int64_t(std::round(value(kUiLfoEpoch0+lfo)*4294967295.-2147483648.));preview.prepare(0x13579BDFULL+uint64_t(lfo)*104729+(value(lfoID(lfo,lReset))>=.5?uint64_t(epoch)*0x9e3779b97f4a7c15ULL:0));qg::LfoSettings shape;shape.enabled=true;shape.beats=1;shape.wave=int(std::round(value(modWaveSelection(value,lfo)>0?kUiModWave0+lfo:lfoID(lfo,lWave))*129));shape.randomSteps=1+int(std::round(value(kRandomSteps0+lfo)*63));shape.depth=value(lfoID(lfo,lDepth));shape.phase=0;shape.glide=.01+.99*value(lfoID(lfo,lGlide));auto glass=xySurface(sc);std::vector<std::pair<double,double>> pts;for(int i=0;i<=210;++i)pts.push_back({glass.x+3+i*(glass.w-6)/210,glass.y+glass.h/2-std::clamp(preview.process(shape,cycle+i/210.,48000,false,0),-1.,1.)*(glass.h/2-5)});if(p.polyline)p.polyline(pts,accent,2);else for(size_t i=1;i<pts.size();++i)p.line(pts[i-1].first,pts[i-1].second,pts[i].first,pts[i].second,accent,2);double x=glass.x+3+xyNormalized(value(kUiLfoPhase0+lfo))*(glass.w-6);p.line(x,glass.y+3,x,glass.y+glass.h-3,white,1);}
   if(live&&visible(pos({573,836,428,104})))for(int i=0;i<32;++i){auto r=pos({573+i*13.4,836,9,104});p.box(r,ink,ink,4);double n=(qg::filterPattern(int(std::round(value(kFilterSeqPattern)*63)),i)+1)*.5;bool active=value(kFilterSeqOn)>.5&&i==int(std::round(value(kUiFilterSeqStep)*31));if(value(kFilterSeqOn)>.5)p.box({r.x+1,r.y+101-n*97,7,3+n*97},active?white:accent,accent,3);if(i%4==0)p.text(std::to_string(i+1),{r.x-4,r.y+108,18,15},9,muted,true);}
   if(fixed&&value(kReverbSource)>=.5)p.text("RANDOM IMPULSE",pos({305,1140,640,75}),18,muted,true);
   if(live&&value(kReverbSource)<.5)for(int i=0;i<16;++i){auto r=pos({300.+i*43,1118,26,138});if(visible(r))renderControl(p,{ParamID(kReverbStep0+i),r,Pad,""},value,display,lfo);p.text(std::to_string(i+1),{r.x-3,r.y+r.h+5,r.w+6,18},12,white,true);}

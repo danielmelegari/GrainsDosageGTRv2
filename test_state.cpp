@@ -1,5 +1,6 @@
 // Exercise the actual plugin state reader and controller parameter definitions.
 #include "src/plugin.cpp"
+#include "src/value_entry.h"
 #include "public.sdk/source/common/memorystream.h"
 #include <cassert>
 #include <iostream>
@@ -40,6 +41,11 @@ int main() {
       assert(actual[lfoID(i,lEnabled)]==0.);
       for(int t=0;t<6;++t) assert(actual[lfoID(i,lRoute0+t)]==.5);
     }
+  }
+  // The preceding release's tail ends before the new MOD W rate selectors.
+  {auto expected=defaults();expected[kModWaveRnd0]=.75;MemoryStream old;IBStreamer out(&old,kLittleEndian);out.writeInt32(0x51473148);
+   for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);for(int i=kFreeze+1;i<kModWaveRate0;++i)out.writeDouble(expected[i]);
+   old.seek(0,IBStream::kIBSeekSet,nullptr);auto restored=defaults();assert(loadState(&old,restored)&&restored==expected);assert(settings(restored,120,48000).lfos[0].waveRandom==3);
   }
   // Previous split-format state must not consume newly appended fields.
   {
@@ -97,6 +103,16 @@ int main() {
   // are state-only slots and were never registered either; derive the expected
   // count dynamically by subtracting every id that has no parameter object, so
   // this assertion cannot rot when new tail ids are appended to the enum.
+  {double v=0;assert(parseParameterEntry(&controller,kSize,"125 ms",v)&&std::abs(v-(125.-15)/235)<1e-9);
+   assert(parseParameterEntry(&controller,kGrainMix,"37,5 %",v)&&v==.375);
+   assert(parseParameterEntry(&controller,kPitch,"-12 st",v)&&v==.375);
+   assert(parseParameterEntry(&controller,kFilterCutoff,"1000 Hz",v)&&std::abs(v-std::log(50.)/std::log(1000.))<1e-9);
+   assert(parseParameterEntry(&controller,kRepeatDivision,"1/16",v)&&v==4./15.);
+   assert(parseParameterEntry(&controller,kModWaveRate0,"2/1",v)&&v==6./7.);
+   assert(parseParameterEntry(&controller,kModWaveRate0,"4/1",v)&&v==1.);
+   for(auto text:{"", "nan", "inf", "30 rubbish", "-1", "101%"})assert(!parseParameterEntry(&controller,kGrainMix,text,v));
+   assert(!parseParameterEntry(&controller,kFilterCutoff,"30000 Hz",v));assert(!parseParameterEntry(&controller,kRepeatDivision,"garbage",v));
+  }
   int registeredIds=0; for(int i=0;i<int(kCount);++i) if(controller.getParameterObject(ParamID(i))) ++registeredIds;
   assert(controller.getParameterCount()==registeredIds);
   assert(controller.getParameterObject(ParamID(kBypassReserved))==nullptr);
@@ -178,7 +194,7 @@ int main() {
     MemoryStream rt3; assert(p2.getState(&rt3)==kResultOk);
     rt.seek(0,IBStream::kIBSeekSet,nullptr); rt3.seek(0,IBStream::kIBSeekSet,nullptr);
     int32 m1=0,m2=0;IBStreamer r1(&rt,kLittleEndian),r2(&rt3,kLittleEndian);
-    r1.readInt32(m1);r2.readInt32(m2);assert(m1==m2&&m1==0x51473148);
+    r1.readInt32(m1);r2.readInt32(m2);assert(m1==m2&&m1==0x51473149);
     // getState layout: kParamEnd values, buffer size, freeze flag, then the tail
     // (kBypassReserved lives in this region) up to kCount.
     const int fields=kParamEnd+2+(int(kCount)-int(kFreeze)-1);

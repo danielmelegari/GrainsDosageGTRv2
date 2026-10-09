@@ -1,5 +1,6 @@
 #import <Cocoa/Cocoa.h>
 #include "editor.h"
+#include "value_entry.h"
 // Header order matters: every non-aztec dependency (qg DSP helpers in
 // filter_sequencer.h, the skin palette in skin_spec/skin_theme, the per-module
 // PNG registry in gui/modules_loader.h) is included at GLOBAL scope here. The
@@ -15,7 +16,7 @@
 #include "filter_sequencer.h"
 #include "randomize.h"
 #include "preset_io.h"
-#include "factory_presets.h"
+#include "preset_banks.h"
 #include "public.sdk/source/common/pluginview.h"
 #include <algorithm>
 #include <array>
@@ -60,6 +61,7 @@ public:
     // @interface.
     if(id==kRandomAll&&surface_)dispatch_async(dispatch_get_main_queue(),^{[(NSView*)surface_ setNeedsDisplay:YES];});
   }
+  bool parse(ParamID id,const std::string& text,double& v){return parseParameterEntry(controller_,id,text,v);}
   void edit(ParamID id,double v) {begin(id);change(id,v);end(id);}
   void selectTab(int tab){controller_->setParamNormalized(kUiTab,tabToValue(tab));}
   void zoom(double scale);
@@ -455,7 +457,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   if(selection!=sceneSelection){sceneSelection=selection;rebuild=true;}
   for(int id=0;id<kCount;++id)if(!isMonitor(id)){double v=owner->value(id);if(sceneValues[id]!=v){sceneValues[id]=v;changedControls.push_back(ParamID(id));}}
   const int activeWave=kUiModWave0+selectedLfo;
-  if(owner->value(kModWaveRnd0+selectedLfo)>0&&sceneValues[activeWave]!=owner->value(activeWave)){sceneValues[activeWave]=owner->value(activeWave);rebuild=true;}
+  if(modWaveSelection([&](ParamID id){return owner->value(id);},selectedLfo)>0&&sceneValues[activeWave]!=owner->value(activeWave)){sceneValues[activeWave]=owner->value(activeWave);rebuild=true;}
   std::vector<mockup::Control> patches;
   if(!rebuild&&!changedControls.empty()){
     auto list=mockup::controls([&](ParamID id){return owner->value(id);},[self tab],selectedLfo,selectedRepeat,selectedGate,selectedReslice,rackState);
@@ -514,8 +516,8 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   NSString* path=[NSHomeDirectory() stringByAppendingPathComponent:@"Library/Audio/Presets/GrainsDosage"];
   NSURL* folder=[NSURL fileURLWithPath:path isDirectory:YES];NSError* error=nil;
   if(![[NSFileManager defaultManager] createDirectoryAtURL:folder withIntermediateDirectories:YES attributes:nil error:&error]){NSAlert* alert=[[NSAlert alloc] init];alert.messageText=@"Cannot create the preset folder";alert.informativeText=error.localizedDescription;[alert runModal];return nil;}
-  for(int i=0;i<aztec::factoryPresetCount;++i){NSString* name=[[NSString stringWithUTF8String:aztec::factoryNames[i]] stringByAppendingPathExtension:@"gdspreset"];NSURL* url=[folder URLByAppendingPathComponent:name];
-    if(![[NSFileManager defaultManager] fileExistsAtPath:url.path]){auto p=aztec::factoryPreset(i);auto bytes=aztec::encodePreset([&](int id){return p[id];});NSData* data=[NSData dataWithBytes:bytes.data() length:bytes.size()];
+  for(int bank=0;bank<aztec::presetBankCount;++bank)for(int i=0;i<aztec::presetsPerBank;++i){NSString* name=[[NSString stringWithUTF8String:aztec::bankPresetName(bank,i).c_str()] stringByAppendingPathExtension:@"gdspreset"];NSURL* url=[folder URLByAppendingPathComponent:name];
+    if(![[NSFileManager defaultManager] fileExistsAtPath:url.path]){auto p=aztec::bankPreset(bank,i);auto bytes=aztec::encodePreset([&](int id){return p[id];});NSData* data=[NSData dataWithBytes:bytes.data() length:bytes.size()];
       if(![data writeToURL:url options:NSDataWritingWithoutOverwriting error:&error]&&![[NSFileManager defaultManager] fileExistsAtPath:url.path]){NSAlert* alert=[[NSAlert alloc] init];alert.messageText=@"Cannot install the factory presets";alert.informativeText=error.localizedDescription;[alert runModal];return nil;}}
   }
   return folder;
@@ -536,12 +538,16 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   NSArray<NSURL*>* files=[[NSFileManager defaultManager] contentsOfDirectoryAtURL:folder includingPropertiesForKeys:nil options:NSDirectoryEnumerationSkipsHiddenFiles error:nil];
   files=[files sortedArrayUsingComparator:^NSComparisonResult(NSURL* a,NSURL* b){int ca=aztec::presetCategory(std::string(a.lastPathComponent.stringByDeletingPathExtension.UTF8String)),cb=aztec::presetCategory(std::string(b.lastPathComponent.stringByDeletingPathExtension.UTF8String));if(ca!=cb)return ca<cb?NSOrderedAscending:NSOrderedDescending;return [a.lastPathComponent localizedStandardCompare:b.lastPathComponent];}];
   NSMenu* menu=[[NSMenu alloc] initWithTitle:@"Presets"];
-  for(int category=0;category<aztec::factoryCategoryCount+2;++category){
-    NSMenu* group=[[NSMenu alloc] initWithTitle:[NSString stringWithUTF8String:aztec::factoryCategories[category]]];
-    for(NSURL* url in files)if([url.pathExtension.lowercaseString isEqualToString:@"gdspreset"]){NSString* name=url.lastPathComponent.stringByDeletingPathExtension;
-      if(aztec::presetCategory(std::string(name.UTF8String))!=category)continue;
-      NSMenuItem* item=[[NSMenuItem alloc] initWithTitle:name action:@selector(choosePreset:) keyEquivalent:@""];item.target=self;item.representedObject=url;item.state=[name isEqualToString:presetName]?NSControlStateValueOn:NSControlStateValueOff;[group addItem:item];}
-    if(group.numberOfItems){NSMenuItem* parent=[[NSMenuItem alloc] initWithTitle:group.title action:nullptr keyEquivalent:@""];parent.submenu=group;[menu addItem:parent];}
+  for(int bank=0;bank<4;++bank){NSString* bankTitle=bank<3?[NSString stringWithUTF8String:aztec::presetBankNames[bank]]:@"User Presets";NSMenu* bankMenu=[[NSMenu alloc] initWithTitle:bankTitle];
+   for(int category=0;category<aztec::factoryCategoryCount+2;++category){
+    if(bank>0&&bank<3&&category>=8)continue;if(bank==3&&category!=9)continue;if(bank==0&&category==9)continue;
+    NSString* categoryTitle=bank<3?[NSString stringWithUTF8String:aztec::bankCategoryName(bank,category)]:@"User Presets";
+    NSMenu* group=[[NSMenu alloc] initWithTitle:categoryTitle];
+    for(NSURL* url in files)if([url.pathExtension.lowercaseString isEqualToString:@"gdspreset"]){NSString* name=url.lastPathComponent.stringByDeletingPathExtension;std::string key(name.UTF8String);int cat=aztec::presetCategory(key),pack=cat==9?3:aztec::presetBank(key);
+      if(pack!=bank||cat!=category)continue;NSMenuItem* item=[[NSMenuItem alloc] initWithTitle:name action:@selector(choosePreset:) keyEquivalent:@""];item.target=self;item.representedObject=url;item.state=[name isEqualToString:presetName]?NSControlStateValueOn:NSControlStateValueOff;[group addItem:item];}
+    if(group.numberOfItems){NSMenuItem* parent=[[NSMenuItem alloc] initWithTitle:group.title action:nullptr keyEquivalent:@""];parent.submenu=group;[bankMenu addItem:parent];}
+   }
+   if(bankMenu.numberOfItems){NSMenuItem* parent=[[NSMenuItem alloc] initWithTitle:bankTitle action:nullptr keyEquivalent:@""];parent.submenu=bankMenu;[menu addItem:parent];}
   }
   [menu addItem:[NSMenuItem separatorItem]];NSMenuItem* open=[[NSMenuItem alloc] initWithTitle:@"Open Preset Folder…" action:@selector(choosePreset:) keyEquivalent:@""];open.target=self;open.tag=-1;open.representedObject=folder;[menu addItem:open];[NSMenu popUpContextMenu:menu withEvent:event forView:self];
 }
@@ -607,6 +613,8 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   auto xy=rackState.position(mockup::xy);
   if(rackState.page==2&&p.y>=mockup::bodyTop&&hit(xy)){dragXY=true;owner->begin(kXYX);owner->begin(kXYY);auto v=mockup::xyValue(xy,p.x,p.y);owner->change(kXYX,v.first);owner->change(kXYY,v.second);[self setNeedsDisplay:YES];return;}
   for(const auto& c:controls)if((p.y>=mockup::bodyTop||c.id==kInputDeclick||c.id==kDeclickSensitivity)&&NSPointInRect(p,c.rect)){
+    auto readout=mockup::valueRect({c.rect.origin.x,c.rect.origin.y,c.rect.size.width,c.rect.size.height},mockup::Kind(c.kind),c.id,c.label);
+    if(readout.contains(p.x,p.y)){[self editValue:c.id];return;}
     if(c.kind==aztec::PanMode)owner->edit(c.id,std::clamp(int((p.x-c.rect.origin.x)/(c.rect.size.width/3.)),0,2)/2.);
     else if(c.kind==aztec::Pad||c.kind==aztec::Toggle)owner->edit(c.id,owner->value(c.id)>=.5?0.:1.);
     else if(event.clickCount>=2)owner->edit(c.id,owner->info(c.id).defaultNormalizedValue);
@@ -623,6 +631,21 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
     }else{dragID=int(c.id);dragKind=c.kind;dragRect=c.rect;origin=p;starting=owner->value(c.id);owner->begin(c.id);}
     [self setNeedsDisplay:YES];return;
   }
+}
+- (void)editValue:(aztec::ParamID)id {
+ if(!owner)return;NSAlert* alert=[[NSAlert alloc] init];auto info=owner->info(id);
+ alert.messageText=[NSString stringWithUTF8String:aztec::entryText(info.title).c_str()];
+ alert.informativeText=@"Type a value in the displayed units, or the exact option name.";
+ NSTextField* input=[[NSTextField alloc] initWithFrame:NSMakeRect(0,0,300,28)];input.stringValue=owner->display(id,owner->value(id));alert.accessoryView=input;
+ [alert addButtonWithTitle:@"Apply"];[alert addButtonWithTitle:@"Cancel"];
+ for(;;){[alert.window makeFirstResponder:input];[input selectText:nil];if([alert runModal]!=NSAlertFirstButtonReturn)return;double value=0;
+  if(owner->parse(id,std::string(input.stringValue.UTF8String),value)){owner->edit(id,value);[self setNeedsDisplay:YES];return;}
+  alert.informativeText=@"Invalid value. Enter a value within the control's range, using its displayed units or option name.";
+ }
+}
+- (void)rightMouseDown:(NSEvent*)event {
+ if(!owner)return;[self layoutControls];auto p=[self logical:event];
+ for(const auto& c:controls)if((p.y>=aztec::mockup::bodyTop||c.id==aztec::kInputDeclick||c.id==aztec::kDeclickSensitivity)&&NSPointInRect(p,c.rect)){[self editValue:c.id];return;}
 }
 - (void)mouseDragged:(NSEvent*)event {
   if(!owner)return;NSPoint p=[self logical:event];

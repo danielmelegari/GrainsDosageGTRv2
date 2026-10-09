@@ -30,7 +30,7 @@ if(state.page==0){
 }else if(state.page==1){
  BODY(lfoID(selectedLfo,lEnabled),400,223,92,34,Toggle,"ON");
  BODY(lfoID(selectedLfo,lWave),78,262,285,29,Select,"");BODY(lfoID(selectedLfo,lSync),391,270,105,30,Toggle,"SYNC");BODY(kRandomSteps0+selectedLfo,514,270,222,30,Select,"POINTS");BODY(lfoID(selectedLfo,lGrid),752,270,249,30,Select,"LENGTH");
- BODY(lfoID(selectedLfo,lReset),78,563,285,29,Toggle,"RETRIGGER");BODY(kLfoSpeed0+selectedLfo,78,613,127,29,Select,"SPEED");BODY(kModWaveRnd0+selectedLfo,217,613,146,29,Select,"MOD W.");
+ BODY(lfoID(selectedLfo,lReset),78,563,285,29,Toggle,"RETRIGGER");BODY(kLfoSpeed0+selectedLfo,78,613,127,29,Select,"SPEED");BODY(kModWaveRate0+selectedLfo,217,613,146,29,Select,"MOD W.");
  BODY(lfoID(selectedLfo,lHz),391,322,279,61,Slider,"RATE");BODY(lfoID(selectedLfo,lDepth),718,322,283,61,Slider,"DEPTH");BODY(lfoID(selectedLfo,lPhase),391,391,279,61,Slider,"PHASE");BODY(lfoID(selectedLfo,lGlide),718,391,283,61,Slider,"GLIDE");
  for(int i=0;i<6;++i){int col=i%2,row=i/2;BODY(slotTarget(selectedLfo,i),391+col*327,472+row*64,239,27,Select,"DEST");BODY(slotPolarity(selectedLfo,i),641+col*327,472+row*64,34,27,Select,"");BODY(slotAmount(selectedLfo,i),391+col*327,504+row*64,283,21,Slider,"");}
  BODY(kMasterFilter,422,715,85,30,Toggle,"ON");BODY(kFilterCutoff,79,758,129,127,Knob,"CUTOFF");BODY(kFilterResonance,227,758,129,127,Knob,"RESONANCE");BODY(kFilterDrive,375,758,129,127,Knob,"DRIVE");BODY(kFilterType,79,916,129,29,Select,"TYPE");BODY(kFilterSlope,227,916,129,29,Select,"SLOPE");BODY(kFilterModel,375,916,129,29,Select,"ALG");

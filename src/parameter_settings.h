@@ -75,7 +75,7 @@ inline qg::Settings settings(const std::array<double, kCount>& saved, double tem
     l.depth=value(p,base+lDepth); l.phase=value(p,base+lPhase);
     l.gateReset=value(p,base+lReset)>=.5; l.glide=.01+value(p,base+lGlide)*.99;
     for(int t=0;t<8;++t) l.amount[t]=value(p,routeID(i,t))*2.-1.;
-    const double speeds[]={.25,.5,1.,2.};l.speed=speeds[int(std::round(value(p,kLfoSpeed0+i)*3.))];l.waveRandom=int(std::round(value(p,kModWaveRnd0+i)*4.));
+    const double speeds[]={.25,.5,1.,2.};l.speed=speeds[int(std::round(value(p,kLfoSpeed0+i)*3.))];l.waveRandom=modWaveSelection([&](ParamID id){return value(p,id);},i);
     for(int slot=0;slot<6;++slot){int target=int(std::round(value(p,slotTarget(i,slot))*qg::modTargetCount))-1;if(target>=0&&target<qg::modTargetCount){double amount=value(p,slotAmount(i,slot))*2.-1.;int polarity=int(std::round(value(p,slotPolarity(i,slot))*2.));if(polarity==1)l.positive[target]+=std::abs(amount);else if(polarity==2)l.negative[target]+=std::abs(amount);else l.amount[target]+=amount;}}
   }
   return s;

@@ -197,7 +197,9 @@ constexpr const char* factoryNames[]={
  "V2 127 Morphing Circuit",
  "V2 128 Violet Universe",
 };
+template<class Char> inline int presetBank(const std::basic_string<Char>& name){if(name.size()>6&&name[2]==Char(' ')){if(name[0]==Char('C')&&name[1]==Char('F'))return 1;if(name[0]==Char('F')&&name[1]==Char('E'))return 2;}return 0;}
 template<class Char> inline int presetCategory(const std::basic_string<Char>& name){
+ if(presetBank(name)>0){int n=0;for(int i=3;i<6;++i){if(name[i]<Char('0')||name[i]>Char('9'))return factoryCategoryCount+1;n=n*10+int(name[i]-Char('0'));}if(n>=1&&n<=128)return (n-1)/16;}
  auto equal=[&](const char* text){size_t n=std::char_traits<char>::length(text);if(name.size()!=n)return false;for(size_t i=0;i<n;++i)if(name[i]!=Char(text[i]))return false;return true;};
  for(int i=0;i<factoryPresetCount;++i)if(equal(factoryNames[i]))return i/16;
  for(int i=0;i<legacyFactoryPresetCount;++i)if(equal(legacyFactoryNames[i]))return factoryCategoryCount;

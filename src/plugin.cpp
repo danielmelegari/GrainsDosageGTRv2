@@ -33,14 +33,14 @@ std::array<double,kCount> defaults(){return initialParameters();}
 static constexpr int kParamEnd = int(kUiFilterSeqStep) + 1;
 bool loadState(IBStream* stream, std::array<double,kCount>& p) {
   IBStreamer in(stream,kLittleEndian); int32 magic=0;
-  if(!in.readInt32(magic) || (magic!=0x51473130 && magic!=0x51473131 && magic!=0x51473132 && magic!=0x51473133 && magic!=0x51473134 && magic!=0x51473135 && magic!=0x51473136 && magic!=0x51473137 && magic!=0x51473138 && magic!=0x51473139 && magic!=0x5147313A && magic!=0x5147313B && magic!=0x5147313C && magic!=0x5147313D && magic!=0x5147313E && magic!=0x5147313F && magic!=0x51473140 && magic!=0x51473141 && magic!=0x51473142 && magic!=0x51473143 && magic!=0x51473144 && magic!=0x51473145 && magic!=0x51473146 && magic!=0x51473147 && magic!=0x51473148)) return false;
+  if(!in.readInt32(magic) || (magic!=0x51473130 && magic!=0x51473131 && magic!=0x51473132 && magic!=0x51473133 && magic!=0x51473134 && magic!=0x51473135 && magic!=0x51473136 && magic!=0x51473137 && magic!=0x51473138 && magic!=0x51473139 && magic!=0x5147313A && magic!=0x5147313B && magic!=0x5147313C && magic!=0x5147313D && magic!=0x5147313E && magic!=0x5147313F && magic!=0x51473140 && magic!=0x51473141 && magic!=0x51473142 && magic!=0x51473143 && magic!=0x51473144 && magic!=0x51473145 && magic!=0x51473146 && magic!=0x51473147 && magic!=0x51473148 && magic!=0x51473149)) return false;
   auto result=defaults();
   // Layouts: legacy versions store `count` plain doubles. Current saves
   // (0x51473145, written by getState) use the same prefix plus three extra
   // fields injected after kParamEnd: buffer size, freeze flag, then the array
   // continues at kGrainBuffer+2 through kCount-1.
   const bool current=magic>=0x51473145;
-  const int storedEnd=magic==0x51473148?int(kCount):magic==0x51473147?int(kMixLock0):magic==0x51473146?int(kReverbRateV2):kLegacySkinCount;
+  const int storedEnd=magic==0x51473149?int(kCount):magic==0x51473148?int(kModWaveRate0):magic==0x51473147?int(kMixLock0):magic==0x51473146?int(kReverbRateV2):kLegacySkinCount;
   const int count = current ? int(kParamEnd) : magic==0x51473144 ? kLegacySkinCount : magic==0x51473143 ? int(kResliceRndOn) : magic==0x51473130 ? int(kGrainMix) : (magic==0x51473131 ? int(kLfo0) : (magic==0x51473132 ? int(kLegacyCount) : (magic==0x51473133 ? int(kModuleOrder) : (magic==0x51473134 ? int(kExtraRoutes0) : (magic==0x51473135 ? int(kGlitchMove) : (magic==0x51473136 ? int(kMasterFilter) : (magic==0x51473137 ? int(kNormalize) : (magic==0x51473138 ? int(kReverbLength) : (magic==0x51473139 ? int(kUiWave0) : (magic==0x5147313A ? int(kLfoSlots0) : (magic==0x5147313B ? int(kModWaveRnd0) : (magic==0x5147313C ? int(kReverbSource) : (magic==0x5147313D ? int(kLimiterCeiling) : (magic==0x5147313E ? int(kGaterEnabled) : (magic==0x5147313F ? int(kInputDeclick) : (magic==0x51473140 ? int(kFilterModel) : (magic==0x51473141 ? int(kGaterMinLength) : int(kGlitchTriggerRate))))))))))))))))));
   for(int i=0;i<count;++i) {
     double v=0.; if(!in.readDouble(v) || !std::isfinite(v)) return false;
@@ -155,7 +155,7 @@ public:
   }
   tresult PLUGIN_API getState(IBStream* stream) override {
     IBStreamer out(stream,kLittleEndian);
-    if(!out.writeInt32(0x51473148)) return kResultFalse;
+    if(!out.writeInt32(0x51473149)) return kResultFalse;
     for(int i=0;i<kParamEnd;++i) if(!out.writeDouble(p_[i])) return kResultFalse;
     // v0.14 additions: buffer size, freeze state, then the remaining tail ids
     // (RANDOM/PRESET slots) written like any other array entry.
@@ -448,6 +448,8 @@ public:
     toggle(STR16("Reverb Kill Dry"),kReverbKill,0.);
     for(int l=0;l<12;++l){auto* phase=new RangeParameter(STR16("Mod Display"),kUiLfoPhase0+l,nullptr,0,1,l<4?0.:2147483648./4294967295.);phase->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(phase);}
     for(int l=0;l<4;++l){char ascii[48];String128 name{};std::snprintf(ascii,sizeof(ascii),"Mod %d Wave RND",l+1);UString(name,128).fromAscii(ascii);auto* rnd=new StringListParameter(name,kModWaveRnd0+l);for(auto label:{STR16("Off"),STR16("1/1"),STR16("1/2"),STR16("1/4"),STR16("1/8")})rnd->appendString(label);parameters.addParameter(rnd);}
+    for(int l=0;l<4;++l){char ascii[48];String128 name{};std::snprintf(ascii,sizeof(ascii),"Mod %d Wave Quantize",l+1);UString(name,128).fromAscii(ascii);auto* rnd=new StringListParameter(name,kModWaveRate0+l);for(auto label:{STR16("Saved rate"),STR16("Off"),STR16("1/1"),STR16("1/2"),STR16("1/4"),STR16("1/8"),STR16("2/1"),STR16("4/1")})rnd->appendString(label);parameters.addParameter(rnd);}
+
     for(int l=0;l<4;++l){auto* monitor=new RangeParameter(STR16("Mod Active Wave"),kUiModWave0+l,nullptr,0,1,0);monitor->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(monitor);}
     auto* source=new StringListParameter(STR16("Reverb Trigger Source"),kReverbSource);source->appendString(STR16("Step Sequencer"));source->appendString(STR16("Random Impulse"));parameters.addParameter(source);
     auto* randomRate=new StringListParameter(STR16("Reverb Random Rate"),kReverbRandomRate);for(auto label:{STR16("1/4"),STR16("1/8"),STR16("1/16")})randomRate->appendString(label);randomRate->getInfo().defaultNormalizedValue=1.;randomRate->setNormalized(1.);parameters.addParameter(randomRate);
