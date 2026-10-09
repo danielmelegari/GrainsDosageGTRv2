@@ -11,8 +11,8 @@ set(_wrapper "${public_sdk_SOURCE_DIR}/source/vst/auwrapper")
 add_library(GrainsDosageAU MODULE
   "${_wrapper}/aucocoaview.mm" "${_wrapper}/auwrapper.mm" "${_wrapper}/NSDataIBStream.mm")
 add_dependencies(GrainsDosageAU GrainsDosage GrainsAppleAudioUnitSDK)
-target_compile_features(GrainsDosageAU PRIVATE cxx_std_20)
-set_target_properties(GrainsDosageAU PROPERTIES OBJCXX_STANDARD 20 OBJCXX_STANDARD_REQUIRED ON)
+target_compile_features(GrainsDosageAU PRIVATE cxx_std_17)
+set_target_properties(GrainsDosageAU PROPERTIES OBJCXX_STANDARD 17 OBJCXX_STANDARD_REQUIRED ON)
 target_compile_definitions(GrainsDosageAU PRIVATE SMTG_AUWRAPPER_USES_AUSDK
   SMTG_AUCocoaUIBase_CLASS_NAME=GrainsDosageAUCocoaUI CA_USE_AUDIO_PLUGIN_ONLY=0)
 target_include_directories(GrainsDosageAU PRIVATE "${SMTG_AUDIOUNIT_SDK_PATH}/include")

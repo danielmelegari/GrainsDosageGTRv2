@@ -21,7 +21,7 @@ jobs:
           git -C "$RUNNER_TEMP/vst3sdk" checkout 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
           git -C "$RUNNER_TEMP/vst3sdk" submodule update --init --recursive --depth 1
           git clone https://github.com/apple/AudioUnitSDK.git "$RUNNER_TEMP/AudioUnitSDK"
-          git -C "$RUNNER_TEMP/AudioUnitSDK" checkout bd98b31feff57a15989fcfab4cd86dc63382b1ac
+          git -C "$RUNNER_TEMP/AudioUnitSDK" checkout 53a9a2008aae7fb1b0a9f093dd523b9b12f6c0d9
       - name: Configure universal AUv2
         run: >-
           cmake -S . -B build-au -G Xcode
