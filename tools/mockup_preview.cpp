@@ -14,7 +14,7 @@ int main(int argc,char** argv){
  const char* alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
  unsigned buffer=0;int bits=0;for(unsigned char c:bytes){buffer=(buffer<<8)|c;bits+=8;while(bits>=6){bits-=6;base64+=alphabet[(buffer>>bits)&63];}}
  if(bits)base64+=alphabet[(buffer<<(6-bits))&63];while(base64.size()%4)base64+='=';
- auto state=factoryPreset(0);state[kUiTab]=tabToValue(tab);state[kXYX]=state[kXYY]=.5;
+ auto state=factoryPreset(0);state[kUiTab]=tabToValue(tab);state[kXYX]=argc>3?std::atof(argv[3]):.5;state[kXYY]=argc>4?std::atof(argv[4]):.5;
  state[kUiGrainActive]=1;state[kUiGrainStart]=.25;state[kUiGrainEnd]=.4;state[kUiGrainHead]=.31;state[kUiLfoPhase0]=.3;state[kGaterEnabled]=1;state[kUiGaterStep]=5./15;state[kUiGaterPhase]=.45;for(int i=0;i<16;++i)state[kUiGaterLength0+i]=.2+(i%4)*.2;state[kReverbRateV2]=5./6.;state[kReverbSource]=1;state[kFilterSeqOn]=1;state[kUiFilterSeqStep]=7./31;state[kPitch]=state[kTranspose]=.5;state[kStretchSpeed]=.2;state[kGrainMix]=.5;
  // Representative incoming audio for this offline preview; the editor reads live monitor parameters.
  for(int i=0;i<128;++i)state[kUiWave0+i]=.12+.65*std::abs(std::sin(i*1.74)*std::cos(i*.183));
@@ -27,7 +27,7 @@ int main(int argc,char** argv){
  std::cout<<"</defs>";
  p.image=[](int art,mockup::Rect r,mockup::Rect source){std::cout<<"<svg x='"<<r.x<<"' y='"<<r.y<<"' width='"<<r.w<<"' height='"<<r.h<<"' viewBox='"<<source.x<<" "<<source.y<<" "<<source.w<<" "<<source.h<<"' preserveAspectRatio='none'><use xlink:href='#art"<<art<<"'/></svg>";};
  p.box=[](mockup::Rect r,skin::Rgb fill,skin::Rgb edge,double radius){std::cout<<"<rect x='"<<r.x<<"' y='"<<r.y<<"' width='"<<r.w<<"' height='"<<r.h<<"' rx='"<<radius<<"' fill='"<<colour(fill)<<"' stroke='"<<colour(edge)<<"'/>";};
- p.text=[](const std::string& s,mockup::Rect r,double size,skin::Rgb c,bool center){std::cout<<"<text x='"<<(center?r.x+r.w/2:r.x)<<"' y='"<<r.y+r.h/2+size*.35<<"' font-family='DejaVu Sans' font-weight='900' font-size='"<<size<<"' text-anchor='"<<(center?"middle":"start")<<"' fill='"<<colour(c)<<"'>"<<escape(s)<<"</text>";};
+ p.text=[](const std::string& s,mockup::Rect r,double size,skin::Rgb c,bool center){std::cout<<"<text x='"<<(center?r.x+r.w/2:r.x)<<"' y='"<<r.y+r.h/2+size*.35<<"' font-family='DejaVu Sans' font-weight='500' font-size='"<<size<<"' text-anchor='"<<(center?"middle":"start")<<"' fill='"<<colour(c)<<"'>"<<escape(s)<<"</text>";};
  p.line=[](double x,double y,double xx,double yy,skin::Rgb c,double w){std::cout<<"<path d='M "<<x<<" "<<y<<" L "<<xx<<" "<<yy<<"' stroke='"<<colour(c)<<"' stroke-width='"<<w<<"'/>";};
  p.polygon=[](const std::vector<std::pair<double,double>>& pts,skin::Rgb c){std::cout<<"<polygon fill='"<<colour(c)<<"' points='";for(auto pt:pts)std::cout<<pt.first<<","<<pt.second<<" ";std::cout<<"'/>";};
  p.knob=[&](mockup::Rect r,double v){std::cout<<"<image x='"<<r.x<<"' y='"<<r.y<<"' width='"<<r.w<<"' height='"<<r.h<<"' transform='rotate("<<270*v-135<<" "<<r.x+r.w/2<<" "<<r.y+r.h/2<<")' xlink:href='data:image/png;base64,"<<base64<<"'/>";};

@@ -423,16 +423,15 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   painter.box=[](mockup::Rect r,skin::Rgb fill,skin::Rgb edge,double radius){box(NSMakeRect(r.x,r.y,r.w,r.h),C(fill),C(edge),radius);};
   painter.text=[&](const std::string& text,mockup::Rect r,double size,skin::Rgb color,bool center){
     NSString* str=[NSString stringWithUTF8String:text.c_str()];
-    NSFont* fitFont=[NSFont fontWithName:@"HelveticaNeue-Bold" size:size];if(!fitFont)fitFont=[NSFont boldSystemFontOfSize:size];
+    NSFont* fitFont=[NSFont fontWithName:@"HelveticaNeue-Medium" size:size];if(!fitFont)fitFont=[NSFont boldSystemFontOfSize:size];
     double measured=[str sizeWithAttributes:@{NSFontAttributeName:fitFont}].width;
     if(measured>r.w&&measured>0)size*=r.w/measured;
     NSString* key=[NSString stringWithFormat:@"%@|%.3f|%d,%d,%d|%d",str,size,color.r,color.g,color.b,center];
     NSAttributedString* cachedText=textCache[key];
     if(!cachedText){
       NSMutableParagraphStyle* style=[[NSMutableParagraphStyle alloc] init];style.alignment=center?NSTextAlignmentCenter:NSTextAlignmentLeft;style.lineBreakMode=NSLineBreakByTruncatingTail;
-      NSFont* font=[NSFont fontWithName:@"HelveticaNeue-Bold" size:size];if(!font)font=[NSFont systemFontOfSize:size weight:NSFontWeightHeavy];
-      NSShadow* shadow=[[NSShadow alloc] init];shadow.shadowColor=rgb(.04,.03,.08,.8);shadow.shadowOffset=NSMakeSize(0,-1);shadow.shadowBlurRadius=1;
-      cachedText=[[NSAttributedString alloc] initWithString:str attributes:@{NSFontAttributeName:font,NSForegroundColorAttributeName:C(color),NSParagraphStyleAttributeName:style,NSShadowAttributeName:shadow}];
+      NSFont* font=[NSFont fontWithName:@"HelveticaNeue-Medium" size:size];if(!font)font=[NSFont systemFontOfSize:size weight:NSFontWeightMedium];
+      cachedText=[[NSAttributedString alloc] initWithString:str attributes:@{NSFontAttributeName:font,NSForegroundColorAttributeName:C(color),NSParagraphStyleAttributeName:style}];
       if(textCache.count>512)[textCache removeAllObjects];textCache[key]=cachedText;
     }
     [cachedText drawInRect:NSMakeRect(r.x,r.y+(r.h-size*1.2)/2,r.w,size*1.4)];
@@ -606,7 +605,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
     [self setNeedsDisplay:YES];return;
   }
   auto xy=rackState.position(mockup::xy);
-  if(rackState.page==2&&p.y>=mockup::bodyTop&&hit(xy)){dragXY=true;owner->begin(kXYX);owner->begin(kXYY);owner->change(kXYX,(p.x-xy.x-12)/(xy.w-24));owner->change(kXYY,1-(p.y-xy.y-12)/(xy.h-24));[self setNeedsDisplay:YES];return;}
+  if(rackState.page==2&&p.y>=mockup::bodyTop&&hit(xy)){dragXY=true;owner->begin(kXYX);owner->begin(kXYY);auto v=mockup::xyValue(xy,p.x,p.y);owner->change(kXYX,v.first);owner->change(kXYY,v.second);[self setNeedsDisplay:YES];return;}
   for(const auto& c:controls)if((p.y>=mockup::bodyTop||c.id==kInputDeclick||c.id==kDeclickSensitivity)&&NSPointInRect(p,c.rect)){
     if(c.kind==aztec::PanMode)owner->edit(c.id,std::clamp(int((p.x-c.rect.origin.x)/(c.rect.size.width/3.)),0,2)/2.);
     else if(c.kind==aztec::Pad||c.kind==aztec::Toggle)owner->edit(c.id,owner->value(c.id)>=.5?0.:1.);
@@ -629,7 +628,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   if(!owner)return;NSPoint p=[self logical:event];
   if(dragScroll){auto bar=aztec::mockup::scrollbar(),thumb=aztec::mockup::scrollThumb(rackState);[self setPageScroll:scrollOrigin+(p.y-origin.y)*aztec::mockup::maxScroll(rackState)/std::max(1.,bar.h-thumb.h)];return;}
   if(dragSlot>=0){routePointer=p;if(std::hypot(p.x-origin.x,p.y-origin.y)>8)routeMoved=true;if(routeMoved)dropSlot=aztec::mockup::routeInsertion(p.x,p.y,[&](aztec::ParamID id){return owner->value(id);},rackState);[self setNeedsDisplay:YES];return;}
-  if(dragXY){auto xy=rackState.position(aztec::mockup::xy);owner->change(aztec::kXYX,(p.x-xy.x-12)/(xy.w-24));owner->change(aztec::kXYY,1.-(p.y-xy.y-12)/(xy.h-24));[self setNeedsDisplay:YES];return;}
+  if(dragXY){auto xy=rackState.position(aztec::mockup::xy);auto v=aztec::mockup::xyValue(xy,p.x,p.y);owner->change(aztec::kXYX,v.first);owner->change(aztec::kXYY,v.second);[self setNeedsDisplay:YES];return;}
   if(dragID<0)return;double delta=(dragKind==aztec::Slider||dragKind==aztec::Pan)?(p.x-origin.x)/dragRect.size.width:(origin.y-p.y)/(dragKind==aztec::VSlider?std::max(1.,dragRect.size.height-42):180.);
   if(event.modifierFlags&NSEventModifierFlagShift)delta*=.1;
   starting=std::clamp(starting+delta,0.,1.);origin=p;
