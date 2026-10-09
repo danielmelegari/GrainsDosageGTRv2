@@ -602,7 +602,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   if(mockup::maxScroll(rackState)>0&&hit(mockup::scrollbar())){dragScroll=true;origin=p;scrollOrigin=rackState.offset();return;}
   int route=mockup::hitRoute(p.x,p.y,value,rackState);if(route>=0){dragSlot=route;dropSlot=-1;routeMoved=false;origin=routePointer=p;routingAtDrag=mockup::routeChain(value);[self chooseTab:routingAtDrag[route]];[self setNeedsDisplay:YES];return;}
   int lfoHit=mockup::hitLfo(p.x,p.y,rackState);if(lfoHit>=0){selectedLfo=lfoHit;[self setNeedsDisplay:YES];return;}
-  if(rackState.page==0&&p.y>=mockup::bodyTop)for(int t=0;t<5;++t)if(hit(mockup::randomRect(t,value,rackState))){
+  if(rackState.page==0&&p.y>=mockup::bodyTop)for(int t:{0,2,3,4})if(hit(mockup::randomRect(t,value,rackState))){
     if(t<3)randomizeModule(t,selectedRepeat,randomSeed,value,[&](ParamID id,double v){owner->edit(id,v);});else if(t==3)randomizeReslice(randomSeed,value,[&](ParamID id,double v){owner->edit(id,v);});else for(int i=0;i<16;++i){randomSeed=randomSeed*1664525u+1013904223u;owner->edit(kGaterState0+i,(randomSeed>>31)?1.:0.);}
     [self setNeedsDisplay:YES];return;
   }
@@ -623,6 +623,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
     else if(c.kind==aztec::Select){
       NSMenu* menu=[[NSMenu alloc] initWithTitle:@"Select"];NSMenu* destination=menu;int n=owner->info(c.id).stepCount;
       for(int i=0;i<=n;++i){
+        if(!aztec::availableMenuOption(c.id,i))continue;
         if(c.id==aztec::lfoID(selectedLfo,aztec::lWave)){
           if(i<128&&i%16==0){NSString* title=[NSString stringWithUTF8String:aztec::waveFamilies[i/16]];NSMenuItem* group=[[NSMenuItem alloc] initWithTitle:title action:nullptr keyEquivalent:@""];destination=[[NSMenu alloc] initWithTitle:title];group.submenu=destination;[menu addItem:group];}
           else if(i==128){[menu addItem:[NSMenuItem separatorItem]];destination=menu;}

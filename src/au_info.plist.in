@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>English</string>
 	<key>CFBundleExecutable</key>
-	<string>GrainsDosage</string>
+	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.danielmelegari.aztecgrains.au</string>
 	<key>CFBundleInfoDictionaryVersion</key>
@@ -13,7 +13,7 @@
 	<key>CFBundleName</key>
 	<string>GrainsDosage</string>
 	<key>CFBundlePackageType</key>
-	<string>AUwr</string>
+	<string>BNDL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>0.13.0</string>
 	<key>CFBundleVersion</key>
@@ -28,17 +28,13 @@
 			<key>name</key>
 			<string>Daniel Melegari: GrainsDosage</string>
 			<key>description</key>
-			<string>GrainsDosage (AudioUnit wrapper for the VST3 plug-in)</string>
-			<key>factory</key>
-			<string>com.danielmelegari.aztecgrains.au</string>
-			<key>singular</key>
-			<string>com.danielmelegari.aztecgrains.au.instance</string>
+			<string>GrainsDosage</string>
 			<key>type</key>
 			<string>aufx</string>
 			<key>subtype</key>
 			<string>Gdsg</string>
 			<key>version</key>
-			<integer>851968</integer>
+			<integer>3328</integer>
 			<key>category</key>
 			<string>Effect</string>
 			<key>tags</key>
@@ -47,6 +43,19 @@
 				<string>Time-Stretch</string>
 				<string>Loop</string>
 			</array>
+			<key>factoryFunction</key>
+			<string>AUWrapperFactory</string>
+			<key>manufacturer</key>
+			<string>Dmeg</string>
+		</dict>
+	</array>
+	<key>AudioUnit SupportedNumChannels</key>
+	<array>
+		<dict>
+			<key>Inputs</key>
+			<string>2</string>
+			<key>Outputs</key>
+			<string>2</string>
 		</dict>
 	</array>
 </dict>

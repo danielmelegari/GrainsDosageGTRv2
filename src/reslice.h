@@ -6,7 +6,7 @@
 #include <cmath>
 #include <cstdint>
 namespace qg {
-struct ResliceSettings {bool enabled=false,random=false;double randomBeats=4.;double beats=4.,mix=1.;std::array<bool,16> on{};std::array<int,16> slice{{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}};};
+struct ResliceSettings {bool enabled=false,random=false;double randomBeats=4.;double beats=4.,mix=1.;std::array<bool,16> on{{true,true,true,true,true,true,true,true,true,true,true,true,true,true,true,true}};std::array<int,16> slice{{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}};};
 class Reslice {
  std::array<std::vector<float>,2> buffer_;ResliceSettings s_;double sr_=48000.,lastBeat_=0.,tempo_=120.,lastLength_=4.,anchor_=0.,length_=0.,mix_=0.;int64_t write_=0,lastTick_=INT64_MIN,lastCycle_=INT64_MIN;int step_=0,fade_=0,fadeSize_=144;bool wasPlaying_=true,active_=false;double from_[2]{},last_[2]{};
  QuantizedTrigger randomClock_;std::array<int,16> pattern_{};uint32_t seed_=0x6149acb3;bool randomReady_=false;
@@ -37,3 +37,4 @@ public:
  int step()const{return step_;}bool active()const{return active_;}
 };
 }
+

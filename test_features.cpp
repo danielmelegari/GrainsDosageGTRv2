@@ -27,7 +27,7 @@ int main() {
   s.repeatRates[9]=.0625; s.repeatPitches[9]=12.;
   auto perStep=render(s); assert(difference(gated,perStep,27000)>10.);
   s.repeatMix=0.; s.glitchMix=1.; s.glitchSequence=true; s.glitchPattern=0xAAAA; s.pattern=0;
-  auto glitch=render(s); assert(energy(glitch,24100,26900)<1e-9 && energy(glitch,27100,29900)>.001);
+  auto glitch=render(s);s.glitchMix=0.;assert(glitch==render(s)); // Retired stage cannot process audio.
   s={}; s.sampleRate=sr; s.pattern=0xFFFF; s.densityFlow=true; s.density=32.; s.chaos=0.;
   s.pitch=-48.; auto low=render(s); s.pitch=48.; auto high=render(s);
   assert(energy(low,48000,72000)>.00001 && energy(high,48000,72000)>.00001 && difference(low,high,48000)>100.);
@@ -66,7 +66,7 @@ int main() {
   route.order=0; auto grainFirst=render(route);
   route.order=2; auto glitchFirst=render(route);
   route.order=5; auto repeatFirst=render(route);
-  assert(difference(grainFirst,glitchFirst,30000)>100.);
+  assert(difference(grainFirst,glitchFirst,30000)==0.);
   assert(difference(glitchFirst,repeatFirst,30000)>100.);
   for(int order=0;order<6;++order) {
     route.order=order;auto audio=render(route,36000);
@@ -74,3 +74,4 @@ int main() {
   }
   std::cout<<"PASS: live Hold division, independent grids, step division/pitch, +/-48 grain pitch, distributed density, 64-point SH/SG, stretch pitch preservation and final transpose; six serial module orders\n";
 }
+

@@ -22,16 +22,24 @@ The preset menu installs three banks and upgrades untouched factory files from t
   inspired by the atmosphere of Parvati Records. Uses longer grains, musically
   related pitch intervals, restrained chaos, slow LFOs and spacious reverbs.
 
-Each bank contains eight categories of sixteen presets and covers all 120
-five-module routings. Presets process incoming audio and follow the host tempo.
+Each bank contains eight categories of sixteen presets and covers all 24
+four-module routings. Presets process incoming audio and follow the host tempo.
 Downloads are separate ZIP packages with a category/routing catalogue.
 
 The approved skin, audio buffer optimizations and GUI refresh rate are retained.
 Knob label/face/readout spacing has increased; each module number occupies its
 own badge and the drag handle sits separately on the right of the title.
 
-All 384 presets set Granulizer, Preslicer, Beat Repeater, Reslice and Reverb Mix
+All 384 presets set Granulizer, Beat Repeater, Reslice and Reverb Mix
 strictly to 100% when enabled and 0% when disabled. Gater has no separate Mix
-parameter. Only these five Mix values change; routing, enabled states and all
-other settings retain their previous values. This is a preset revision, not a
-runtime constraint: manual Mix edits and saved Cubase sessions still work.
+parameter. Preslicer is retired: its old parameter IDs remain reserved so old
+sessions still load, but it has no GUI card or audio contribution. The banks are
+revoiced for four modules, including replacing Preslicer patches with Reslice
+patterns. All Reslice steps start ON, with the module itself allowed to be OFF.
+Pan starts centred in Manual mode. The previous two factory revisions upgrade
+automatically; user-edited files remain intact.
+
+Beat Repeater Random changes all sixteen step divisions. Granulizer Random
+centres Pan, selects Manual pan mode and randomizes its sound controls while
+respecting Mix locks. Reslice Step RND changes every Source Slice on the selected
+RND Rate grid (2, 4 or 8 quarter-note beats), without turning steps off.

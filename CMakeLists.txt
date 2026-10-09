@@ -117,13 +117,7 @@ if(APPLE)
   # GrainsDosage.vst3 via Resources/plugin.vst3 (same code path as the SDK's own
   # AUv2 samples). Requires the Xcode generator and an Apple AudioUnitSDK checkout.
   if(SMTG_ENABLE_AUV2_PLUGIN AND SMTG_ENABLE_AUV2_BUILDS)
-    configure_file(src/au_info.plist.in "${CMAKE_CURRENT_BINARY_DIR}/au_info.plist" COPYONLY)
-    smtg_target_add_auv2(GrainsDosageAU
-      BUNDLE_NAME            "GrainsDosage"
-      BUNDLE_IDENTIFIER      com.danielmelegari.aztecgrains.au
-      INFO_PLIST_TEMPLATE    "${CMAKE_CURRENT_BINARY_DIR}/au_info.plist"
-      VST3_PLUGIN_TARGET     GrainsDosage
-    )
+    include(cmake/GrainsAU.cmake)
   elseif(SMTG_ENABLE_AUV2_PLUGIN)
     message(FATAL_ERROR
       "[GrainsDosage] -DSMTG_ENABLE_AUV2_PLUGIN=ON was requested but the SDK did not "

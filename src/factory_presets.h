@@ -4,7 +4,7 @@
 #include <string>
 #include "user_presets.h"
 namespace aztec {
-inline std::array<double,kCount> initialParameters() {
+inline std::array<double,kCount> initialParametersBeforeRemoval() {
   std::array<double,kCount> p{};for(int i=kUiWaveLow0;i<int(kReverbRateV2);++i)p[i]=.5;p[kResliceLength]=2./3.;p[kFilterSeqDepth]=.5;p[kFilterSeqGlide]=.2;p[kFilterSeqRate]=2./5.;p[kCombOctave]=2./6.;p[kResliceMix]=1.;for(int i=0;i<16;++i)p[kResliceIndex0+i]=i/15.;p[kInputDeclick]=1.;p[kDeclickSensitivity]=.5;p[kReverbRandomRate]=1.;p[kGaterGrid]=2./3.;p[kGaterChance]=.5;p[kGaterMinLength]=0.;p[kGaterTie]=0.;for(int i=0;i<16;++i){p[kGaterState0+i]=1.;p[kGaterLength0+i]=(.75-.05)/.95;p[kGaterSustain0+i]=.1;}
   // Reslice starts with all steps enabled but the module itself stays off (kResliceEnabled default 0).
   for(int i=0;i<16;++i)p[kResliceStep0+i]=1.;
@@ -30,12 +30,13 @@ inline std::array<double,kCount> initialParameters() {
   }
   return p;
 }
+inline std::array<double,kCount> initialParameters(){auto p=initialParametersBeforeRemoval();p[kGlitchEnabled]=p[kGlitchMix]=0.;return p;}
 }
 namespace aztec {
 constexpr const char* legacyFactoryNames[]={"01 Clean Grains","02 Forest Drift","03 Psy Scatter","04 Octave Dust","05 Reverse Glitch","06 Micro Stutter","07 Triplet Chops","08 Half Time Mist","09 Space Bloom","10 Acid Motion","11 Voice FX","12 SbimSbam","13 OctaveDust3","14 OctaveDust2","15 Up and Down","16 Daniel Init","17 RND Verb Slow Mel","18 RND Verb RPT","19 RND Verb","20 Loop Slicer","21 Third Cuts","22 Latch Traffic","23 Northern Sweep","24 Ladder Bass","25 Acid Cuts","26 Comb Orbit","27 Talking Grains","28 Plate Steps","29 Cosmic Impulse","30 Bloom Voyage"};
 constexpr int legacyFactoryPresetCount=30;
 inline std::array<double,kCount> legacyFactoryPreset(int index){
- auto p=initialParameters();p[kNormalize]=1.;p[kGrainMix]=.75;p[kMix]=1.;
+ auto p=initialParametersBeforeRemoval();p[kNormalize]=1.;p[kGrainMix]=.75;p[kMix]=1.;
  auto pattern=[&](int base,unsigned bits){for(int i=0;i<16;++i)p[base+i]=(bits&(1u<<i))?1.:0.;};
  auto lfo=[&](int wave,int target,double amount,double rate){p[lfoID(0,lEnabled)]=1.;p[lfoID(0,lWave)]=wave/129.;p[slotTarget(0,0)]=(target+1)/double(qg::modTargetCount);p[slotAmount(0,0)]=.5+amount*.5;p[lfoID(0,lGrid)]=rate/20.;};
  if(index>=10&&index<=18){importedPreset(index-10,p);migrateModSlots(p);return p;}
@@ -207,7 +208,7 @@ template<class Char> inline int presetCategory(const std::basic_string<Char>& na
 }
 inline std::array<double,kCount> factoryPreset(int index){
  index=std::clamp(index,0,factoryPresetCount-1);const int family=index/16,v=index%16;
- auto p=initialParameters();
+ auto p=initialParametersBeforeRemoval();
  // No master dry injection, no automatic freeze, no hidden legacy routes.
  p[kMix]=1.;p[kNormalize]=0.;p[kMasterLimiter]=1.;p[kLimiterCeiling]=1.;
  p[kGrainEnabled]=1.;p[kGlitchEnabled]=p[kRepeatEnabled]=0.;p[kRepeatMix]=0.;

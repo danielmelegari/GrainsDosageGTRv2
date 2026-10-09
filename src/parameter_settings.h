@@ -21,7 +21,7 @@ inline qg::Settings settings(const std::array<double, kCount>& saved, double tem
   s.release = .004;
   s.feedback = 0.; s.pattern = 0;
   s.normalize=value(p,kNormalize)>=.5;
-  s.moduleOn={{value(p,kGrainEnabled)>=.5,value(p,kGlitchEnabled)>=.5,value(p,kRepeatEnabled)>=.5}};
+  s.moduleOn={{value(p,kGrainEnabled)>=.5,false,value(p,kRepeatEnabled)>=.5}};
   s.grainPan=value(p,kGrainPan)*2.-1.;s.panMode=int(std::round(value(p,kPanMode)*2.));
   s.filterSequence.enabled=value(p,kFilterSeqOn)>=.5;s.filterSequence.mode=int(std::round(value(p,kFilterSeqMode)));s.filterSequence.pattern=int(std::round(value(p,kFilterSeqPattern)*63.));
   const double filterRates[]={1.,.5,.25,.125,2.,4.};s.filterSequence.rate=filterRates[int(std::round(value(p,kFilterSeqRate)*5.))];s.filterSequence.depth=value(p,kFilterSeqDepth);s.filterSequence.glide=value(p,kFilterSeqGlide);

@@ -38,6 +38,9 @@ inline std::array<int,5> fiveModuleOrder(int index){
  std::array<int,5> pool{{0,1,2,3,4}},out{};const int factorial[]={24,6,2,1,1};
  index=std::clamp(index,0,119);for(int i=0;i<5;++i){int n=index/factorial[i];index%=factorial[i];out[i]=pool[n];for(int j=n;j<4-i;++j)pool[j]=pool[j+1];}return out;
 }
+// Preserve saved routing IDs while removing the retired Preslicer stage.
+inline std::array<int,4> fourModuleOrder(int index){auto old=fiveModuleOrder(index);std::array<int,4> out{};int n=0;for(int stage:old)if(stage!=1)out[n++]=stage;return out;}
+inline double fourModuleRouting(std::array<int,4> order){for(int i=0;i<120;++i)if(fourModuleOrder(i)==order)return (i+1)/120.;return 0.;}
 // Tab values are stored normalized over (tabCount-1) so the full 0..1 range
 // maps exactly onto the five cards.
 inline double tabToValue(int tab){return double(std::clamp(tab,0,tabCount-1))/double(tabCount-1);}
@@ -145,4 +148,13 @@ template<class Getter> bool mixIsLocked(ParamID id,Getter get){int lock=mixLockF
 
 namespace aztec {
 template<class Getter> inline int modWaveSelection(Getter get,int lfo){int v=int(std::round(get(kModWaveRate0+lfo)*7.));return v?std::clamp(v-1,0,6):int(std::round(get(kModWaveRnd0+lfo)*4.));}
+}
+
+namespace aztec {
+inline bool retiredPreslicerParam(int id){return id==kGlitchMix||id==kGlitchDivision||id==kGlitchChance||id==kGlitchReverse||id==kGlitchSeq||(id>=kGlitchStep0&&id<kRepeatStep0)||id==kGlitchEnabled||id==kGlitchMove||id==kGlitchVariation||id==kGlitchRefresh||id==kGlitchTriggerRate;}
+inline bool availableMenuOption(ParamID id,int option){
+ if(id==kXTarget||id==kYTarget)return !retiredPreslicerParam(option-1);
+ for(int l=0;l<4;++l)for(int s=0;s<6;++s)if(id==slotTarget(l,s)){int t=option-1;return !((t>=12&&t<=15)||t==27||t==29);}
+ return true;
+}
 }

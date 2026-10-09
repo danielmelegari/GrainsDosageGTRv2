@@ -20,7 +20,7 @@ inline std::string bankPresetName(int bank,int index){
 // Previous release retained solely to recognize untouched installed factory files.
 inline std::array<double,kCount> bankPresetBeforeMixRevision(int bank,int index){
  if(bank==0)return factoryPreset(index);const int family=index/16,v=index%16;
- auto p=initialParameters();p[kMix]=1;p[kMasterLimiter]=1;p[kLimiterCeiling]=.85;p[kGrainBuffer]=bank==1?.5:1.;
+ auto p=initialParametersBeforeRemoval();p[kMix]=1;p[kMasterLimiter]=1;p[kLimiterCeiling]=.85;p[kGrainBuffer]=bank==1?.5:1.;
  p[kRoutingOrder]=(1+(index*37+(bank==1?17:53))%120)/120.;p[kGrainEnabled]=1;p[kDensityFlow]=1;p[kGrainPan]=.5;p[kPanMode]=v%3==0?.5:0.;
  auto mask=[&](int id,unsigned bits){for(int i=0;i<16;++i)p[id+i]=(bits>>i)&1;};
  auto route=[&](int l,int target,double amount,int wave,int grid){p[lfoID(l,lEnabled)]=1;p[lfoID(l,lSync)]=1;p[lfoID(l,lWave)]=wave/129.;p[lfoID(l,lGrid)]=grid/20.;p[lfoID(l,lDepth)]=1;p[lfoID(l,lGlide)]=bank==1?.08:.85;p[slotTarget(l,0)]=(target+1.)/qg::modTargetCount;p[slotAmount(l,0)]=.5+amount*.5;};
@@ -53,20 +53,30 @@ inline std::array<double,kCount> bankPresetBeforeMixRevision(int bank,int index)
 }
 constexpr ParamID bankMixEnabled[]={kGrainEnabled,kGlitchEnabled,kRepeatEnabled,kResliceEnabled,kReverbOn};
 constexpr ParamID bankMixParameters[]={kGrainMix,kGlitchMix,kRepeatMix,kResliceMix,kReverbMix};
-inline std::array<double,kCount> bankPreset(int bank,int index){
+inline std::array<double,kCount> bankPresetFullMixRevision(int bank,int index){
  auto p=bankPresetBeforeMixRevision(bank,index);
  for(int i=0;i<5;++i)p[bankMixParameters[i]]=p[bankMixEnabled[i]]>=.5?1.:0.;
+ return p;
+}
+inline std::array<double,kCount> bankPreset(int bank,int index){
+ auto p=bankPresetFullMixRevision(bank,index);bool retired=p[kGlitchEnabled]>.5;
+ p[kGlitchEnabled]=p[kGlitchMix]=0.;p[kGrainPan]=.5;p[kPanMode]=0.;
+ for(int i=0;i<16;++i)p[kResliceStep0+i]=1.;
+ // Replace Preslicer-focused patches with equivalent rhythmic Reslice/repeater work.
+ if(retired){p[kResliceEnabled]=p[kResliceMix]=1.;p[kResliceLength]=bank==2?0.:2./3.;for(int i=0;i<16;++i)p[kResliceIndex0+i]=((i*(bank==2?1:5)+index)%16)/15.;p[kResliceRndOn]=bank==1?1.:0.;}
+ std::array<int,4> order{{0,2,3,4}};for(int n=0;n<index%24;++n)std::next_permutation(order.begin(),order.end());p[kRoutingOrder]=fourModuleRouting(order);
+ for(int l=0;l<4;++l)for(int slot=0;slot<6;++slot){int target=int(std::round(p[slotTarget(l,slot)]*qg::modTargetCount))-1;if((target>=12&&target<=15)||target==27||target==29){p[slotTarget(l,slot)]=1./qg::modTargetCount;}}
+ for(auto id:{kXTarget,kYTarget})if(retiredPreslicerParam(int(std::round(p[id]*kXYX))-1))p[id]=double(kSize+1)/kXYX;
  return p;
 }
 // Only upgrade untouched factory files. User edits and session states are preserved.
 inline bool needsBankMixUpgrade(const std::string& text,int bank,int index){
  std::array<double,kCount> saved{};if(!decodePreset(text,saved))return false;
- const auto previous=bankPresetBeforeMixRevision(bank,index),current=bankPreset(bank,index);bool changed=false;
+ const auto previous=bankPresetBeforeMixRevision(bank,index),fullMix=bankPresetFullMixRevision(bank,index),current=bankPreset(bank,index);bool matchesOld=true,matchesFull=true,changed=false;
  for(int id=0;id<kCount;++id)if(presetParameter(id)){
-  if(saved[id]!=previous[id])return false;
-  changed|=saved[id]!=current[id];
+  matchesOld&=saved[id]==previous[id];matchesFull&=saved[id]==fullMix[id];changed|=saved[id]!=current[id];
  }
- return changed;
+ return changed&&(matchesOld||matchesFull);
 }
 
 }

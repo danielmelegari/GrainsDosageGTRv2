@@ -1,0 +1,61 @@
+name: Build macOS Audio Unit
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, work/mockup-purple-skin]
+    paths: ['src/**', 'cmake/**', 'assets/**', 'CMakeLists.txt', '.github/workflows/build-au.yml']
+  pull_request:
+    paths: ['src/**', 'cmake/**', 'assets/**', 'CMakeLists.txt', '.github/workflows/build-au.yml']
+permissions:
+  contents: read
+jobs:
+  au:
+    runs-on: macos-15-intel
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned SDKs
+        shell: bash
+        run: |
+          git clone --no-checkout https://github.com/steinbergmedia/vst3sdk.git "$RUNNER_TEMP/vst3sdk"
+          git -C "$RUNNER_TEMP/vst3sdk" checkout 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
+          git -C "$RUNNER_TEMP/vst3sdk" submodule update --init --recursive --depth 1
+          git clone https://github.com/apple/AudioUnitSDK.git "$RUNNER_TEMP/AudioUnitSDK"
+          git -C "$RUNNER_TEMP/AudioUnitSDK" checkout bd98b31feff57a15989fcfab4cd86dc63382b1ac
+      - name: Configure universal AUv2
+        run: >-
+          cmake -S . -B build-au -G Xcode
+          -DVST3_SDK_ROOT="$RUNNER_TEMP/vst3sdk"
+          -DSMTG_AUDIOUNIT_SDK_PATH="$RUNNER_TEMP/AudioUnitSDK"
+          -DSMTG_ENABLE_AUV2_PLUGIN=ON -DSMTG_CREATE_PLUGIN_LINK=OFF
+          -DSMTG_BUILD_UNIVERSAL_BINARY=ON
+          '-DCMAKE_OSX_ARCHITECTURES=x86_64;arm64' -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+      - name: Build Audio Unit
+        run: cmake --build build-au --config Release --target GrainsDosageAU --parallel 4
+      - name: Verify and sign self-contained component
+        run: |
+          AU=build-au/AU/Release/GrainsDosage.component
+          plutil -lint "$AU/Contents/Info.plist"
+          test ! -L "$AU/Contents/Resources/plugin.vst3"
+          lipo "$AU/Contents/MacOS/GrainsDosage" -verify_arch x86_64 arm64
+          lipo "$AU/Contents/Resources/plugin.vst3/Contents/MacOS/GrainsDosage" -verify_arch x86_64 arm64
+          codesign --force --sign - --timestamp=none "$AU/Contents/Resources/plugin.vst3"
+          codesign --force --sign - --timestamp=none "$AU"
+          codesign --verify --deep --strict "$AU"
+          mkdir -p "$HOME/Library/Audio/Plug-Ins/Components"
+          ditto "$AU" "$HOME/Library/Audio/Plug-Ins/Components/GrainsDosage.component"
+          killall -9 AudioComponentRegistrar || true
+      - name: Validate Audio Unit
+        run: |
+          set -o pipefail
+          auval -v aufx Gdsg Dmeg | tee auval.txt
+      - name: Package component
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent build-au/AU/Release/GrainsDosage.component GrainsDosage-macOS-Universal.component.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GrainsDosage-macOS-AU
+          path: |
+            GrainsDosage-macOS-Universal.component.zip
+            auval.txt
+          if-no-files-found: error

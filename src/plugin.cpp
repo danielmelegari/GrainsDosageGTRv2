@@ -429,7 +429,7 @@ public:
     toggle(STR16("Normalize Wet"),kNormalize,0.);
     auto* slope=new StringListParameter(STR16("Filter Slope"),kFilterSlope);slope->appendString(STR16("12 dB"));slope->appendString(STR16("24 dB"));parameters.addParameter(slope);
     range(STR16("Filter Drive"),kFilterDrive,STR16("dB"),0,24,0);
-    toggle(STR16("Grain Enabled"),kGrainEnabled,1.);toggle(STR16("Glitch Enabled"),kGlitchEnabled,1.);toggle(STR16("Repeater Enabled"),kRepeatEnabled,1.);
+    toggle(STR16("Grain Enabled"),kGrainEnabled,1.);toggle(STR16("Glitch Enabled"),kGlitchEnabled,0.);toggle(STR16("Repeater Enabled"),kRepeatEnabled,1.);
     range(STR16("Grain Pan"),kGrainPan,STR16("L/R"),-100,100,0);
     auto* pan=new StringListParameter(STR16("Grain Pan Mode"),kPanMode);for(auto name:{STR16("Manual"),STR16("Alternate L/R"),STR16("Random L/R")})pan->appendString(name);parameters.addParameter(pan);
     toggle(STR16("Reverb On"),kReverbOn,0.);

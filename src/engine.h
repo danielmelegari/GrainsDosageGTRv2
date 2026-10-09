@@ -396,6 +396,7 @@ public:
     levelSmoothing_=std::exp(-1./(.003*settings_.sampleRate));
   }
   void set(Settings s) {
+    s.moduleOn[1]=false;s.glitchMix=0.; // Retired Preslicer is inert even in legacy sessions.
     const bool wasParallel=settings_.routing<0&&settings_.order>=6;
     const bool isParallel=s.routing<0&&s.order>=6;
     if(wasParallel!=isParallel){repeatWrite_=0;repeating_=false;repeatGate_=0.;repeatPhase_=0.;}
@@ -742,7 +743,7 @@ public:
     auto legacy=aztecOrder(order);
     std::array<int,5> chain=settings_.routing>=0?aztec::fiveModuleOrder(settings_.routing):std::array<int,5>{{legacy[0],legacy[1],legacy[2],-1,-1}};
     for(int stage:chain) {
-      if(stage<0)continue;
+      if(stage<0||stage==1)continue; // Preslicer retired; old routing IDs remain readable.
       if(stage>=3){float l=float(signal[0]),r=float(signal[1]);if(stage==3)reslice_.process(l,r,beat,settings_.tempo,settings_.playing);else gater_.process(l,r,beat,settings_.tempo,settings_.playing);signal[0]=l;signal[1]=r;continue;}
       double before[2]={signal[0],signal[1]};
       double target=settings_.moduleOn[stage]?1.:0.;moduleBlend_[stage]=target+levelSmoothing_*(moduleBlend_[stage]-target);
