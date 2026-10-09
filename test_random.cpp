@@ -7,7 +7,7 @@ int main(){
   for(int stage=0;stage<3;++stage){std::array<double,aztec::kCount> p;p.fill(.12345);uint32_t seed=1234;
     for(int run=0;run<100;++run){aztec::randomizeModule(stage,7,seed,[&](aztec::ParamID id,double v){assert(std::isfinite(v)&&v>=0&&v<=1);p[id]=v;});}
     assert(p[aztec::kMix]==.12345&&p[aztec::kModuleOrder]==.12345&&p[aztec::kRepeatOn]==.12345);
-    if(stage==0){assert(p[aztec::kGrainPan]==.5&&p[aztec::kPanMode]==0);}
+    if(stage==0){assert(p[aztec::kGrainPan]==.5&&p[aztec::kPanMode]==0);assert(p[aztec::kTranspose]==.12345&&p[aztec::kStretchSpeed]==.12345);}
     if(stage==2){for(int i=0;i<16;++i){double rate=p[aztec::kRepeatRate0+i];assert(rate!=.12345&&std::abs(rate*15-std::round(rate*15))<1e-9);}}
     if(stage==0)assert(p[aztec::kSize]!=.12345&&p[aztec::kGlitchMix]==.12345&&p[aztec::kRepeatMix]==.12345);
     if(stage==1)assert(p[aztec::kGlitchMix]!=.12345&&p[aztec::kSize]==.12345&&p[aztec::kRepeatMix]==.12345);
