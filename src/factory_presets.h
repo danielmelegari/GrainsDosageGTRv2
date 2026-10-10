@@ -30,7 +30,7 @@ inline std::array<double,kCount> initialParametersBeforeRemoval() {
   }
   return p;
 }
-inline std::array<double,kCount> initialParameters(){auto p=initialParametersBeforeRemoval();p[kGlitchEnabled]=p[kGlitchMix]=0.;p[kReslicePhrase]=2./3.;p[kResliceRepeat]=.45;p[kResliceVariation]=.5;p[kResliceFill]=.5;p[kResliceReverse]=.1;return p;}
+inline std::array<double,kCount> initialParameters(){auto p=initialParametersBeforeRemoval();p[kGlitchEnabled]=p[kGlitchMix]=0.;p[kReslicePhrase]=2./3.;p[kResliceRepeat]=.45;p[kResliceVariation]=.5;p[kResliceFill]=.5;p[kResliceReverse]=.1;p[kCutMinAmp]=p[kCutMaxAmp]=.5;p[kCutMinPan]=p[kCutMaxPan]=.5;p[kCutMinPitch]=p[kCutMaxPitch]=.5;p[kCutDuty]=p[kCutFillDuty]=1.;p[kCutMinBits]=p[kCutMaxBits]=1.;p[kCutMinFreq]=p[kCutMaxFreq]=1.;p[kCutCombFeedback]=.5;p[kCutMaxRepeats]=.25;p[kCutMaxPhrase]=3./7.;p[kCutStutter]=.8;p[kCutArea]=.5;p[kCutStraight]=.3;p[kCutRegular]=p[kCutRitard]=.5;p[kCutSpeed]=.9;p[kCutPusher]=.5;return p;}
 }
 namespace aztec {
 constexpr const char* legacyFactoryNames[]={"01 Clean Grains","02 Forest Drift","03 Psy Scatter","04 Octave Dust","05 Reverse Glitch","06 Micro Stutter","07 Triplet Chops","08 Half Time Mist","09 Space Bloom","10 Acid Motion","11 Voice FX","12 SbimSbam","13 OctaveDust3","14 OctaveDust2","15 Up and Down","16 Daniel Init","17 RND Verb Slow Mel","18 RND Verb RPT","19 RND Verb","20 Loop Slicer","21 Third Cuts","22 Latch Traffic","23 Northern Sweep","24 Ladder Bass","25 Acid Cuts","26 Comb Orbit","27 Talking Grains","28 Plate Steps","29 Cosmic Impulse","30 Bloom Voyage"};
