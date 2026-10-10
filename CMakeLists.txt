@@ -1,5 +1,13 @@
 cmake_minimum_required(VERSION 3.25)
 project(GrainsDosage VERSION 0.13.0 LANGUAGES CXX)
+set(GRAINS_EDITION "development" CACHE STRING "development, trial, or licensed")
+set_property(CACHE GRAINS_EDITION PROPERTY STRINGS development trial licensed)
+if(NOT GRAINS_EDITION MATCHES "^(development|trial|licensed)$")
+  message(FATAL_ERROR "Invalid GRAINS_EDITION")
+endif()
+if(NOT GRAINS_EDITION STREQUAL "development" AND NOT APPLE)
+  message(FATAL_ERROR "Commercial licensing currently targets macOS AU/VST3")
+endif()
 
 if(MSVC)
   # The SDK selects its CRT using SMTG_USE_STATIC_CRT. Keep it aligned with
@@ -106,10 +114,19 @@ if(APPLE)
   target_sources(GrainsDosage PRIVATE ${GRAINS_SPRITES})
   set_source_files_properties(assets/GrainsDosage-skin.png PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
   target_sources(GrainsDosage PRIVATE src/editor_mac.mm assets/GrainsDosage-skin.png)
+  file(GLOB GRAINS_MODULE_JPGS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/module-skins/*.jpg")
+  set_source_files_properties(${GRAINS_MODULE_JPGS} PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+  target_sources(GrainsDosage PRIVATE ${GRAINS_MODULE_JPGS})
   set_source_files_properties(src/editor_mac.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
   find_library(AZTEC_COCOA_FRAMEWORK Cocoa REQUIRED)
   find_library(AZTEC_COREFOUNDATION_FRAMEWORK CoreFoundation REQUIRED)
   target_link_libraries(GrainsDosage PRIVATE ${AZTEC_COCOA_FRAMEWORK} ${AZTEC_COREFOUNDATION_FRAMEWORK})
+  if(NOT GRAINS_EDITION STREQUAL "development")
+    target_sources(GrainsDosage PRIVATE src/license_mac.mm)
+    set_source_files_properties(src/license_mac.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
+    target_compile_definitions(GrainsDosage PRIVATE GRAINS_COMMERCIAL=1 GRAINS_TRIAL=$<STREQUAL:${GRAINS_EDITION},trial>)
+    target_link_libraries(GrainsDosage PRIVATE "-framework Security")
+  endif()
 
   # Optional AudioUnit (AU v2) bundle for Logic Pro / GarageBand. Enabled with
   # -DSMTG_ENABLE_AUV2_PLUGIN=ON: builds a separate GrainsDosage.component whose

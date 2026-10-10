@@ -1,4 +1,5 @@
 #include "engine.h"
+#include "license.h"
 #include "parameter_settings.h"
 #include "declick.h"
 #include "master_fx.h"
@@ -93,6 +94,7 @@ bool loadState(IBStream* stream, std::array<double,kCount>& p) {
   p=result; return true;
 }
 class Processor final : public AudioEffect {
+  double licenseGain_=aztec::license::allowed.load(std::memory_order_relaxed)?1.:0.;
   qg::Engine engine_;
   qg::InputDeclick declick_;
   qg::MasterFx master_;
@@ -135,6 +137,7 @@ public:
   static FUnknown* create(void*) { return static_cast<IAudioProcessor*>(new Processor); }
   tresult PLUGIN_API initialize(FUnknown* c) override {
     if(AudioEffect::initialize(c) != kResultOk) return kResultFalse;
+    aztec::license::initialize();
     addAudioInput(STR16("Stereo In"), SpeakerArr::kStereo);
     addAudioOutput(STR16("Stereo Out"), SpeakerArr::kStereo);
     return kResultOk;
@@ -234,7 +237,9 @@ public:
     p_[kFreeze]=engine_.isFrozen()?1.:0.; // mirror the sustained state for save/load + readback
     const double beatIncrement = tempo_ / (60. * rate_);
     double peak=0.,squareL=0.,squareR=0.;
+    const double licenseTarget=aztec::license::allowed.load(std::memory_order_acquire)?1.:0.;
     for(int32 n=0;n<data.numSamples;++n) {
+      licenseGain_+=std::clamp(licenseTarget-licenseGain_,-1./(.02*rate_),1./(.02*rate_));
       if(n>0 && applyChanges(n)) { s=settings(p_,tempo_,rate_,barBeats);s.playing=!data.processContext||(data.processContext->state & ProcessContext::kPlaying); engine_.set(s);setMaster(); }
       const double beat = fallbackBeat_ + n * beatIncrement;
       if(data.symbolicSampleSize == kSample32) {
@@ -244,6 +249,7 @@ public:
         double dl=l,dr=r;declick_.process(dl,dr,value(p_,kInputDeclick)>=.5,value(p_,kDeclickSensitivity),s.bypass);l=float(dl);r=float(dr);
         float a,b; engine_.process(l,r,beat,a,b);
         if(s.bypass) { a=l; b=r; }else master_.process(a,b);
+        a=float(l+licenseGain_*(a-l));b=float(r+licenseGain_*(b-r));
         peak=std::max({peak,std::abs(double(a)),std::abs(double(b))});
         squareL+=double(a)*a;squareR+=double(b)*b;
         out.channelBuffers32[0][n] = a;
@@ -257,6 +263,7 @@ public:
         declick_.process(l,r,value(p_,kInputDeclick)>=.5,value(p_,kDeclickSensitivity),s.bypass);
         float a,b; engine_.process(float(l),float(r),beat,a,b);
         if(!s.bypass)master_.process(a,b);
+        a=float(l+licenseGain_*(a-l));b=float(r+licenseGain_*(b-r));
         peak=std::max({peak,std::abs(s.bypass?l:double(a)),std::abs(s.bypass?r:double(b))});
         squareL+=(s.bypass?l:double(a))*(s.bypass?l:double(a));squareR+=(s.bypass?r:double(b))*(s.bypass?r:double(b));
         out.channelBuffers64[0][n] = s.bypass ? l : a;

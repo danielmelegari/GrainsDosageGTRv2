@@ -1,5 +1,6 @@
 #import <Cocoa/Cocoa.h>
 #include "editor.h"
+#include "license.h"
 #include "value_entry.h"
 // Header order matters: every non-aztec dependency (qg DSP helpers in
 // filter_sequencer.h, the skin palette in skin_spec/skin_theme, the per-module
@@ -133,6 +134,8 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   NSMutableArray<NSImage*>* moduleLayers;
   NSImage* rackBackplate;
   NSImage* rackAtlas;
+  NSString* licenseLabel;
+  NSMutableDictionary<NSNumber*,NSImage*>* editableModuleSkins;
   NSImage* staticScene;
   aztec::mockup::RackState rackState;
   int scenePage;double sceneScroll;
@@ -299,6 +302,20 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
     NSString* atlas=[[NSBundle bundleForClass:[GrainsSurface class]] pathForResource:@"approved-controls" ofType:@"png"];
     if(!exists(atlas))atlas=@"assets/approved-rack/controls.png";
     rackAtlas=[[NSImage alloc] initWithContentsOfFile:atlas];
+    editableModuleSkins=[NSMutableDictionary dictionary];
+    NSString* moduleFolder=[NSHomeDirectory() stringByAppendingPathComponent:@"Library/Application Support/GrainsDosage/Skins/Modules"];
+    [[NSFileManager defaultManager] createDirectoryAtPath:moduleFolder withIntermediateDirectories:YES attributes:nil error:nil];
+    for(int stage:{0,2,3,4}){
+      const char* names[]={"granulizer","retired","beatrepeater","reslice","gater"};
+      NSString* name=[NSString stringWithUTF8String:names[stage]];
+      NSString* file=[moduleFolder stringByAppendingPathComponent:[name stringByAppendingString:@".jpg"]];
+      NSString* bundled=[[NSBundle bundleForClass:[GrainsSurface class]] pathForResource:name ofType:@"jpg"];
+      if(!bundled)bundled=[@"assets/module-skins" stringByAppendingPathComponent:[name stringByAppendingString:@".jpg"]];
+      if(![[NSFileManager defaultManager] fileExistsAtPath:file])[[NSFileManager defaultManager] copyItemAtPath:bundled toPath:file error:nil];
+      NSImage* image=[[NSImage alloc] initWithContentsOfFile:file];
+      if(!image)image=[[NSImage alloc] initWithContentsOfFile:bundled];
+      if(image)editableModuleSkins[@(stage)]=image;
+    }
     self.toolTip=@"Drag knobs vertically; Shift gives fine control. Double-click resets. Scroll each page. Drag module headers vertically to change audio order. Option-scroll edits a knob.";
     timer=[NSTimer timerWithTimeInterval:1./30. target:self selector:@selector(tick:) userInfo:nil repeats:YES];
     timer.tolerance=.003;
@@ -320,6 +337,8 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
 - (void)tick:(NSTimer*)tick {
   (void)tick;if(!owner||self.hiddenOrHasHiddenAncestor||!self.window||!(self.window.occlusionState&NSWindowOcclusionStateVisible))return;
   bool changed=false;
+  NSString* currentLicense=[NSString stringWithUTF8String:aztec::license::status().c_str()];
+  if(![licenseLabel isEqual:currentLicense]){licenseLabel=currentLicense;changed=true;}
   for(int id=0;id<aztec::kCount;++id){double v=owner->value(id);if(v!=cached[id]){cached[id]=v;if(!aztec::isMonitor(id)||aztec::mockup::monitorVisible(id,[&](aztec::ParamID p){return owner->value(p);},rackState,selectedLfo))changed=true;}}
   if(dragSlot>=0&&routeMoved){double delta=routePointer.y<aztec::mockup::bodyTop+45?-18:routePointer.y>aztec::mockup::height-45?18:0;if(delta){aztec::mockup::scrollBy(rackState,delta);dropSlot=aztec::mockup::routeInsertion(routePointer.x,routePointer.y,[&](aztec::ParamID id){return owner->value(id);},rackState);staticScene=nil;}}
   if(changed)animationFrames=12;
@@ -408,6 +427,10 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   [transform translateXBy:viewport.x yBy:viewport.y];[transform scaleXBy:viewport.scale yBy:viewport.scale];[transform concat];
   using namespace aztec;
   mockup::Painter painter;
+  painter.moduleBackground=[&](int stage,mockup::Rect r){
+    NSImage* image=editableModuleSkins[@(stage)];if(!image)return;
+    [image drawInRect:NSMakeRect(r.x,r.y,r.w,r.h) fromRect:NSZeroRect operation:NSCompositingOperationSourceOver fraction:1. respectFlipped:YES hints:nil];
+  };
   painter.image=[&](int asset,mockup::Rect r,mockup::Rect source){
     NSString* key=[NSString stringWithFormat:@"%d:%.3f,%.3f,%.3f,%.3f",asset,source.x,source.y,source.w,source.h];
     CGImageRef slice=(__bridge CGImageRef)rasterSlices[key];
@@ -486,6 +509,11 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   }
   [staticScene drawInRect:NSMakeRect(0,0,canvasW,canvasH) fromRect:NSZeroRect operation:NSCompositingOperationCopy fraction:1. respectFlipped:YES hints:nil];
   render(mockup::RenderPass::Dynamic);
+  const auto licenseText=aztec::license::status();
+  if(!licenseText.empty()){
+    mockup::Rect licenseButton{450,88,350,25};mockup::pill(painter,licenseButton);
+    painter.text(licenseText+"  ·  ACTIVATE",licenseButton,11,{230,233,237},true);
+  }
   }
   [NSGraphicsContext restoreGraphicsState];
 }
@@ -586,6 +614,14 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   if(!owner)return;[self.window makeFirstResponder:self];NSPoint p=[self logical:event];[self layoutControls];
   using namespace aztec;
   auto hit=[&](mockup::Rect r){return r.contains(p.x,p.y);};
+  if(!license::status().empty()&&hit({450,88,350,25})){
+    NSAlert* alert=[[NSAlert alloc] init];alert.messageText=@"GrainsDosage — Offline activation";
+    alert.informativeText=@"Paste your serial number. A valid license permanently unlocks this Mac account's AU and VST3. No internet connection is needed.";
+    NSTextField* field=[[NSTextField alloc] initWithFrame:NSMakeRect(0,0,520,70)];field.placeholderString=@"GDS1.…";alert.accessoryView=field;
+    [alert addButtonWithTitle:@"Activate"];[alert addButtonWithTitle:@"Cancel"];
+    if([alert runModal]==NSAlertFirstButtonReturn){std::string error;if(!license::activate(field.stringValue.UTF8String,error)){NSAlert* problem=[[NSAlert alloc] init];problem.messageText=@"Activation failed";problem.informativeText=[NSString stringWithUTF8String:error.c_str()];[problem runModal];}}
+    [self setNeedsDisplay:YES];return;
+  }
   if(hit(mockup::previous)){[self stepPreset:-1];return;}
   if(hit(mockup::next)){[self stepPreset:1];return;}
   if(hit(mockup::preset)){[self presetMenu:event];return;}
@@ -694,6 +730,7 @@ tresult Editor::isPlatformTypeSupported(FIDString type){return type&&std::strcmp
 tresult Editor::attached(void* parent,FIDString type){
   if(!parent||isPlatformTypeSupported(type)!=kResultTrue||surface_)return kResultFalse;
   auto result=CPluginView::attached(parent,type);if(result!=kResultOk)return result;
+  aztec::license::firstOpen();
   static bool skinRestored=false;if(!skinRestored){skinRestored=true;aztec::theme::loadSkinFile(aztec::theme::defaultPath());}
   surface_=[[GrainsSurface alloc] initWithFrame:NSMakeRect(0,0,rect.getWidth(),rect.getHeight())];surface_->owner=this;
   [(__bridge NSView*)parent addSubview:surface_];[surface_ setNeedsDisplay:YES];return kResultOk;

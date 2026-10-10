@@ -50,7 +50,7 @@ inline Rect lfoRect(int i){return {688.+i*77,223,64,34};}
 inline int hitLfo(double x,double y,const RackState& s){if(s.page!=1||y<bodyTop)return -1;for(int i=0;i<4;++i)if(s.position(lfoRect(i)).contains(x,y))return i;return -1;}
 inline bool visible(Rect r){return r.y+r.h>bodyTop&&r.y<height;}
 using skin::Rgb;
-struct Painter {std::function<void(int,Rect,Rect)> image;std::function<void(Rect,Rgb,Rgb,double)> box;std::function<void(const std::string&,Rect,double,Rgb,bool)> text;std::function<void(double,double,double,double,Rgb,double)> line;std::function<void(Rect,double)> knob;std::function<void(const std::vector<std::pair<double,double>>&,Rgb)> polygon;std::function<void(const std::vector<std::pair<double,double>>&,Rgb,double)> polyline;std::function<void(Rect)> clip;std::function<void()> unclip;};
+struct Painter {std::function<void(int,Rect)> moduleBackground;std::function<void(int,Rect,Rect)> image;std::function<void(Rect,Rgb,Rgb,double)> box;std::function<void(const std::string&,Rect,double,Rgb,bool)> text;std::function<void(double,double,double,double,Rgb,double)> line;std::function<void(Rect,double)> knob;std::function<void(const std::vector<std::pair<double,double>>&,Rgb)> polygon;std::function<void(const std::vector<std::pair<double,double>>&,Rgb,double)> polyline;std::function<void(Rect)> clip;std::function<void()> unclip;};
 enum Kind {Knob,Slider,Toggle,Select,Pad,Pan,PanMode,VSlider};
 struct Control {ParamID id;Rect r;Kind kind;std::string label;};
 inline std::vector<Control> controls(const Value& value,int currentTab,int selectedLfo,int selectedRepeat,int selectedGate,int selectedReslice,const RackState& state=RackState{}){
@@ -160,6 +160,13 @@ inline void renderControl(Painter& p,const Control& c,const Value& value,const D
 // Stretch only the blank purple panel interior; metal corners and screws retain their proportions.
 inline void rackPanel(Painter& p,Rect r){if(!visible(r))return;const Rect src{52,122,798,389};constexpr double cap=27;auto img=[&](Rect d,Rect s){if(p.image)p.image(Backplate,d,s);};img({r.x+cap,r.y+cap,r.w-2*cap,r.h-2*cap},{src.x+cap,src.y+cap,src.w-2*cap,src.h-2*cap});for(int side=0;side<2;++side){double x=side?r.x+r.w-cap:r.x,sx=side?src.x+src.w-cap:src.x;img({x,r.y,cap,cap},{sx,src.y,cap,cap});img({x,r.y+r.h-cap,cap,cap},{sx,src.y+src.h-cap,cap,cap});img({x,r.y+cap,cap,r.h-2*cap},{sx,src.y+cap,cap,src.h-2*cap});}img({r.x+cap,r.y,r.w-2*cap,cap},{src.x+cap,src.y,src.w-2*cap,cap});img({r.x+cap,r.y+r.h-cap,r.w-2*cap,cap},{src.x+cap,src.y+src.h-cap,src.w-2*cap,cap});}
 inline bool structural(ParamID id){return id==kPanMode||id==kReverbSource||id==kReverbModel||id==kFilterModel||id==kFilterSeqMode||id==kRoutingOrder||id==kModuleOrder;}
+inline void modulePanel(Painter& p,Rect r,int stage){
+ rackPanel(p,r);if(!visible(r))return;
+ constexpr Rgb colors[]={{19,40,42},{30,27,36},{46,33,22},{36,26,48},{22,32,48}};
+ Rect interior{r.x+27,r.y+27,r.w-54,r.h-54};
+ p.box(interior,colors[stage],colors[stage],0);
+ if(p.moduleBackground)p.moduleBackground(stage,interior);
+}
 inline bool monitorVisible(ParamID id,const Value& v,const RackState& s,int lfo){
  if(s.page==2)return false;
  if(s.page==1){if(id>=kUiLfoPhase0&&id<kModWaveRnd0)return int(id-kUiLfoPhase0)%4==lfo&&visible(s.position(scope));if(id>=kUiModWave0&&id<kReverbSource)return int(id-kUiModWave0)==lfo&&visible(s.position(scope));if(id==kUiFilterSeqStep)return visible(s.position({573,836,428,104}));if(id==kUiReverb||id==kUiReverbGate)return visible(s.position({300,1118,700,138}));if(id==kUiOutputL||id==kUiOutputR)return visible(s.position({92,1376,354,96}));return false;}
@@ -167,7 +174,7 @@ inline bool monitorVisible(ParamID id,const Value& v,const RackState& s,int lfo)
 }
 inline void restoreControlBackground(Painter& p,const Control& c,const Value& v,const RackState& s){
  if(c.id==kInputDeclick||c.id==kDeclickSensitivity){if(p.image)p.image(Backplate,c.r,c.r);return;}
- if(s.page==0){if(c.id==kTranspose||c.id==kStretchSpeed||c.id==kStretchOn){rackPanel(p,s.position({54,210,974,188}));return;}for(int stage=0;stage<5;++stage){auto r=moduleRect(stage,v,s);if(c.r.y>=r.y&&c.r.y<r.y+r.h){rackPanel(p,r);return;}}}
+ if(s.page==0){if(c.id==kTranspose||c.id==kStretchSpeed||c.id==kStretchOn){rackPanel(p,s.position({54,210,974,188}));return;}for(int stage=0;stage<5;++stage){auto r=moduleRect(stage,v,s);if(c.r.y>=r.y&&c.r.y<r.y+r.h){modulePanel(p,r,stage);return;}}}
  if(s.page==1)for(auto r:{Rect{54,210,974,475},Rect{54,699,480,294},Rect{548,699,480,294},Rect{54,1007,974,305},Rect{54,1326,974,210}}){r=s.position(r);if(r.contains(c.r.x,c.r.y)){rackPanel(p,r);return;}}
  if(s.page==2)rackPanel(p,s.position({54,210,974,832}));
 }
@@ -183,7 +190,7 @@ inline void render(Painter& p,const Value& value,const Display& display,const st
  if(state.page==0){
   Rect master=pos({54,210,974,188});if(fixed){rackPanel(p,master);title(master,"MASTER OPTIONS");p.text("SIGNAL CHAIN ↓  •  FIRST MODULE AT THE TOP",pos({78,404,520,20}),11,muted,false);p.text("DRAG A MODULE UP OR DOWN TO REORDER",pos({619,404,385,20}),11,muted,true);}
   auto chain=routeChain(value);for(int stage:chain){auto r=moduleRect(stage,value,state);double dy=(motion&&motion->ready&&(drag>=0||motion->routing))?motion->y[stage]-state.offset()-r.y:0;r.y+=dy;if(!visible(r))continue;
-   if(fixed){rackPanel(p,r);p.box({r.x+36,r.y+13,32,30},{25,28,35},{91,96,106},5);p.text(std::to_string(1+int(std::find(chain.begin(),chain.end(),stage)-chain.begin())),{r.x+36,r.y+13,32,30},14,accent,true);p.text(moduleNames[stage],{r.x+86,r.y+16,480,26},20,white,false);for(int j=0;j<3;++j)for(int k=0;k<2;++k)p.box({r.x+635+k*6,r.y+20+j*6,2,2},muted,muted,1);auto rr=randomRect(stage,value,state);rr.y+=dy;button(rr,stage==3?"NEW PHRASE":"RANDOM");}
+   if(fixed){modulePanel(p,r,stage);p.box({r.x+36,r.y+13,32,30},{25,28,35},{91,96,106},5);p.text(std::to_string(1+int(std::find(chain.begin(),chain.end(),stage)-chain.begin())),{r.x+36,r.y+13,32,30},14,accent,true);p.text(moduleNames[stage],{r.x+86,r.y+16,480,26},20,white,false);for(int j=0;j<3;++j)for(int k=0;k<2;++k)p.box({r.x+635+k*6,r.y+20+j*6,2,2},muted,muted,1);auto rr=randomRect(stage,value,state);rr.y+=dy;button(rr,stage==3?"NEW PHRASE":"RANDOM");}
 
    if(live&&stage==0){auto w=waveRect(value,state);w.y+=dy;p.box(w,screen,{76,75,82},10);WaveVisual direct;if(!visual){for(int i=0;i<waveformBins;++i){direct.lo[i]=value(kUiWaveLow0+i)*2-1;direct.hi[i]=value(kUiWaveHigh0+i)*2-1;}direct.active=value(kUiGrainActive);visual=&direct;}double scale=w.h/2-6,mid=w.y+w.h/2;auto env=[&](int first,int last){std::vector<std::pair<double,double>> pts;for(int i=first;i<=last;++i)pts.push_back({w.x+4+i*(w.w-8)/(waveformBins-1),mid-visual->hi[i]*scale});for(int i=last;i>=first;--i)pts.push_back({w.x+4+i*(w.w-8)/(waveformBins-1),mid-visual->lo[i]*scale});return pts;};auto base=skin::mix(screen,muted,.35);p.polygon(env(0,waveformBins-1),base);p.line(w.x+4,mid,w.x+w.w-4,mid,{63,80,76},1);if(visual->active>.01){double start=std::min(value(kUiGrainStart),value(kUiGrainEnd)),end=std::max(value(kUiGrainStart),value(kUiGrainEnd));int first=std::clamp(int(start*(waveformBins-1)),0,waveformBins-1),last=std::clamp(int(std::ceil(end*(waveformBins-1))),first,waveformBins-1);auto lit=skin::mix(base,accent,.45*visual->active);p.polygon(env(first,last),lit);double x=w.x+4+value(kUiGrainHead)*(w.w-8);p.line(x,w.y+6,x,w.y+w.h-6,lit,1.5);}}
    if(live&&stage==3){auto display=Rect{r.x+26,r.y+233,923,29};p.box(display,ink,muted,5);for(int i=0;i<16;++i){double x=display.x+5+i*(display.w-10)/16;bool playing=value(kResliceEnabled)>.5&&value(kUiResliceActive)>.5&&i==int(std::round(value(kUiResliceStep)*15));double h=4+17*value(kUiResliceSource0+i);p.box({x,display.y+24-h,(display.w-10)/16-5,h},playing?white:skin::mix(ink,accent,.6),ink,2);}p.text(value(kUiResliceActive)>.5?"GENERATIVE CUTS · HOST SYNC":"READY · FEED AUDIO AND PLAY",{r.x+27,r.y+280,520,24},11,muted,false);}
