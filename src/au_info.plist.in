@@ -15,13 +15,13 @@
 	<key>CFBundlePackageType</key>
 	<string>BNDL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.13.0</string>
+	<string>0.13.1</string>
 	<key>CFBundleVersion</key>
-	<string>0.13.0</string>
+	<string>0.13.1</string>
 	<key>CSResourcesFileMapped</key>
 	<true/>
 	<key>AUVersion</key>
-	<string>0.13.0</string>
+	<string>0.13.1</string>
 	<key>AudioComponents</key>
 	<array>
 		<dict>
@@ -34,7 +34,7 @@
 			<key>subtype</key>
 			<string>Gdsg</string>
 			<key>version</key>
-			<integer>3328</integer>
+			<integer>3329</integer>
 			<key>category</key>
 			<string>Effect</string>
 			<key>tags</key>

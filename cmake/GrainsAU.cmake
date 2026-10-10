@@ -4,7 +4,8 @@ add_custom_command(OUTPUT "${_au_library}"
   COMMAND xcodebuild -project "${SMTG_AUDIOUNIT_SDK_PATH}/AudioUnitSDK.xcodeproj"
     -target AudioUnitSDK -configuration Release build
     "SYMROOT=${CMAKE_BINARY_DIR}/AudioUnitSDK" "ARCHS=x86_64 arm64"
-    ONLY_ACTIVE_ARCH=NO MACOSX_DEPLOYMENT_TARGET=11.0 CODE_SIGNING_ALLOWED=NO
+    ONLY_ACTIVE_ARCH=NO "MACOSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET}" CODE_SIGNING_ALLOWED=NO
+    "WARNING_CFLAGS=$(inherited) -Werror=unguarded-availability -Werror=unguarded-availability-new"
   VERBATIM)
 add_custom_target(GrainsAppleAudioUnitSDK DEPENDS "${_au_library}")
 set(_wrapper "${public_sdk_SOURCE_DIR}/source/vst/auwrapper")

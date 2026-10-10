@@ -3,9 +3,9 @@ on:
   workflow_dispatch:
   push:
     branches: [main, work/mockup-purple-skin]
-    paths: ['src/**', 'cmake/**', 'assets/**', 'tools/diagnose-au.sh', 'docs/audio-unit.md', 'CMakeLists.txt', '.github/workflows/build-au.yml']
+    paths: ['src/**', 'cmake/**', 'assets/**', 'tools/diagnose-au.sh', 'tools/check-au-deployment.py', 'docs/audio-unit.md', 'CMakeLists.txt', '.github/workflows/build-au.yml']
   pull_request:
-    paths: ['src/**', 'cmake/**', 'assets/**', 'tools/diagnose-au.sh', 'docs/audio-unit.md', 'CMakeLists.txt', '.github/workflows/build-au.yml']
+    paths: ['src/**', 'cmake/**', 'assets/**', 'tools/diagnose-au.sh', 'tools/check-au-deployment.py', 'docs/audio-unit.md', 'CMakeLists.txt', '.github/workflows/build-au.yml']
 permissions:
   contents: read
 jobs:
@@ -29,13 +29,16 @@ jobs:
           -DSMTG_AUDIOUNIT_SDK_PATH="$RUNNER_TEMP/AudioUnitSDK"
           -DSMTG_ENABLE_AUV2_PLUGIN=ON -DSMTG_CREATE_PLUGIN_LINK=OFF
           -DSMTG_BUILD_UNIVERSAL_BINARY=ON
-          '-DCMAKE_OSX_ARCHITECTURES=x86_64;arm64' -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+          '-DCMAKE_OSX_ARCHITECTURES=x86_64;arm64' -DCMAKE_OSX_DEPLOYMENT_TARGET=10.14
+          '-DCMAKE_CXX_FLAGS=-Werror=unguarded-availability -Werror=unguarded-availability-new'
+          '-DCMAKE_OBJCXX_FLAGS=-Werror=unguarded-availability -Werror=unguarded-availability-new'
       - name: Build Audio Unit
         run: cmake --build build-au --config Release --target GrainsDosageAU --parallel 4
       - name: Verify and sign self-contained component
         run: |
           AU=build-au/AU/Release/GrainsDosage.component
           plutil -lint "$AU/Contents/Info.plist"
+          python3 tools/check-au-deployment.py "$AU"
           test ! -L "$AU/Contents/Resources/plugin.vst3"
           lipo "$AU/Contents/MacOS/GrainsDosage" -verify_arch x86_64 arm64
           lipo "$AU/Contents/Resources/plugin.vst3/Contents/MacOS/GrainsDosage" -verify_arch x86_64 arm64
@@ -89,6 +92,7 @@ jobs:
           codesign --verify --deep --strict "$AU"
           lipo "$AU/Contents/MacOS/GrainsDosage" -verify_arch x86_64 arm64
           lipo "$AU/Contents/Resources/plugin.vst3/Contents/MacOS/GrainsDosage" -verify_arch x86_64 arm64
+          python3 tools/check-au-deployment.py "$AU"
           killall -9 AudioComponentRegistrar || true
       - name: Discover and validate in the native architecture
         shell: bash

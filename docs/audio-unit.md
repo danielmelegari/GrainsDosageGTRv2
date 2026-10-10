@@ -1,7 +1,8 @@
 # macOS Audio Unit workflow
 
 `.github/workflows/build-au.yml` builds `GrainsDosage.component` (AUv2) for Intel
-and Apple Silicon on macOS 11 or later. It runs on source changes to main and the
+with an Intel deployment target of macOS 10.14 (Mojave) and Apple Silicon target
+of macOS 11. It runs on source changes to main and the
 skin work branch, relevant pull requests, and manual workflow dispatch once the
 workflow is present on the default branch.
 
@@ -14,6 +15,13 @@ pass native `auval` on both Intel and Apple Silicon. The final
 `GrainsDosage-macOS-AU` artifact is published only after both checks succeed.
 Separate `GrainsDosage-AU-validation-*` artifacts contain each platform's logs.
 These checks do not replace testing inside Ableton Live itself.
+
+AU 0.13.1 corrects the previous 0.13.0 build's macOS 11 minimum on Intel, which
+excluded Mojave. The wrapper, embedded VST3 and Apple SDK are all rebuilt with
+the older Intel target. CI inspects both Mach-O slices and both Info.plists to
+prevent an accidental minimum-OS increase, and rejects unguarded newer APIs
+while compiling. Hosted validation runs on current macOS; Mojave/Live 11 still
+requires verification on the user's Mac.
 
 To install, close the host, unzip and copy `GrainsDosage.component` to
 `~/Library/Audio/Plug-Ins/Components/`, then reopen Logic or another AU host.
