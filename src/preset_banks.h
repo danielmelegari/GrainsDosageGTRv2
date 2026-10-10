@@ -75,6 +75,7 @@ inline std::array<double,kCount> bankPreset(int bank,int index){
  p[kResliceRepeat]=bank==2?.15+.015*v:.3+.035*v;p[kResliceVariation]=bank==2?.12+.015*v:.35+.035*v;
  p[kResliceFill]=bank==2?.08+.01*v:.3+.04*v;p[kResliceReverse]=bank==2?.015*(v%5):.04*(v%10);
  p[kResliceSeed]=(1+index+bank*128)/65534.;
+ resliceDefaults(p);p[kResliceMinPhrase]=(std::pow(2.,std::round(p[kReslicePhrase]*3))-1)/7.;
  p[kResliceRndOn]=0.; // Retired sequencer mode; the cutters evolve continuously.
  return p;
 }

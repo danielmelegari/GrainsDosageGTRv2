@@ -52,6 +52,13 @@ int main() {
    for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);for(int i=kFreeze+1;i<kResliceAlgorithm;++i)out.writeDouble(expected[i]);
    old.seek(0,IBStream::kIBSeekSet,nullptr);auto restored=defaults();assert(loadState(&old,restored)&&restored==expected);assert(restored[kResliceRepeat]==.45&&restored[kResliceAlgorithm]==0.);
   }
+  // Previous procedural state preserves its fixed phrase and defaults new FX off.
+  for(double phrase:{0.,1./3.,2./3.,1.}){auto expected=defaults();expected[kReslicePhrase]=phrase;
+   MemoryStream old;IBStreamer out(&old,kLittleEndian);out.writeInt32(0x5147314A);
+   for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);for(int i=kFreeze+1;i<kResliceSubdivision;++i)out.writeDouble(expected[i]);
+   expected[kResliceMinPhrase]=(std::pow(2.,std::round(phrase*3.))-1.)/7.;old.seek(0,IBStream::kIBSeekSet,nullptr);auto restored=defaults();assert(loadState(&old,restored)&&restored==expected);
+   auto s=settings(restored,120,48000);assert(s.reslice.minPhraseBeats==s.reslice.phraseBeats&&!s.reslice.crusher&&!s.reslice.comb);
+  }
   // Previous split-format state must not consume newly appended fields.
   {
     auto expected=defaults(); expected[kSize]=.73; expected[kModuleOrder]=1.;
@@ -199,7 +206,7 @@ int main() {
     MemoryStream rt3; assert(p2.getState(&rt3)==kResultOk);
     rt.seek(0,IBStream::kIBSeekSet,nullptr); rt3.seek(0,IBStream::kIBSeekSet,nullptr);
     int32 m1=0,m2=0;IBStreamer r1(&rt,kLittleEndian),r2(&rt3,kLittleEndian);
-    r1.readInt32(m1);r2.readInt32(m2);assert(m1==m2&&m1==0x5147314A);
+    r1.readInt32(m1);r2.readInt32(m2);assert(m1==m2&&m1==0x5147314B);
     // getState layout: kParamEnd values, buffer size, freeze flag, then the tail
     // (kBypassReserved lives in this region) up to kCount.
     const int fields=kParamEnd+2+(int(kCount)-int(kFreeze)-1);

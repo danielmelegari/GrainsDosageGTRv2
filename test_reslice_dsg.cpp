@@ -17,8 +17,8 @@ int main(){
  }
  assert(allocations==0);for(int a=0;a<3;++a)for(int b=a+1;b<3;++b){double difference=0;for(size_t i=4000;i<audio[a].size();++i)difference+=std::abs(audio[a][i]-audio[b][i]);assert(difference>100.);}
  // Tempo changes, seeks, pre-roll and algorithm automation stay bounded without allocation.
- for(double sr:{8000.,48000.,192000.}){qg::Reslice e;e.prepare(sr);qg::ResliceSettings s;s.enabled=true;s.reverse=1;s.variation=1;s.repeat=1;s.fill=1;e.set(s);auto memory=e.allocatedBytes();double beat=-1;guard=true;
-  for(int i=0;i<24000;++i){double tempo=i<12000?137:190;beat+=tempo/(60*sr);if(i==10000)beat=-.5;if(i%4000==0){s.algorithm=(i/4000)%3;s.seed=1+i;s.beats=i%8000?2:16;e.set(s);}float l=.2f,r=-.2f;e.process(l,r,beat,tempo,i<20000);assert(std::isfinite(l)&&std::abs(l)<=.201&&std::abs(l+r)<1e-6);}guard=false;assert(e.allocatedBytes()==memory&&!e.active());
+ for(double sr:{8000.,48000.,192000.}){qg::Reslice e;e.prepare(sr);qg::ResliceSettings s;s.enabled=true;s.crusher=true;s.minBits=4;s.maxBits=32;s.minFreq=100;s.maxFreq=48000;s.comb=true;s.combFeedback=.95;s.minDelay=1;s.maxDelay=100;s.reverse=1;s.variation=1;s.repeat=1;s.fill=1;e.set(s);auto memory=e.allocatedBytes();double beat=-1;guard=true;
+  for(int i=0;i<24000;++i){double tempo=i<12000?137:190;beat+=tempo/(60*sr);if(i==10000)beat=-.5;if(i%4000==0){s.algorithm=(i/4000)%3;s.combType=(i/4000)%2;s.seed=1+i;s.beats=i%8000?2:16;e.set(s);}float l=.2f,r=-.2f;e.process(l,r,beat,tempo,i<20000);assert(std::isfinite(l)&&std::abs(l)<=.26&&std::abs(l+r)<1e-6);}guard=false;assert(e.allocatedBytes()==memory&&!e.active());
  }
  assert(allocations==0);
  // Respect non-4/4 bar boundaries using the host's quarter-note metre.
