@@ -34,14 +34,14 @@ std::array<double,kCount> defaults(){return initialParameters();}
 static constexpr int kParamEnd = int(kUiFilterSeqStep) + 1;
 bool loadState(IBStream* stream, std::array<double,kCount>& p) {
   IBStreamer in(stream,kLittleEndian); int32 magic=0;
-  if(!in.readInt32(magic) || (magic!=0x51473130 && magic!=0x51473131 && magic!=0x51473132 && magic!=0x51473133 && magic!=0x51473134 && magic!=0x51473135 && magic!=0x51473136 && magic!=0x51473137 && magic!=0x51473138 && magic!=0x51473139 && magic!=0x5147313A && magic!=0x5147313B && magic!=0x5147313C && magic!=0x5147313D && magic!=0x5147313E && magic!=0x5147313F && magic!=0x51473140 && magic!=0x51473141 && magic!=0x51473142 && magic!=0x51473143 && magic!=0x51473144 && magic!=0x51473145 && magic!=0x51473146 && magic!=0x51473147 && magic!=0x51473148 && magic!=0x51473149 && magic!=0x5147314A)) return false;
+  if(!in.readInt32(magic) || (magic!=0x51473130 && magic!=0x51473131 && magic!=0x51473132 && magic!=0x51473133 && magic!=0x51473134 && magic!=0x51473135 && magic!=0x51473136 && magic!=0x51473137 && magic!=0x51473138 && magic!=0x51473139 && magic!=0x5147313A && magic!=0x5147313B && magic!=0x5147313C && magic!=0x5147313D && magic!=0x5147313E && magic!=0x5147313F && magic!=0x51473140 && magic!=0x51473141 && magic!=0x51473142 && magic!=0x51473143 && magic!=0x51473144 && magic!=0x51473145 && magic!=0x51473146 && magic!=0x51473147 && magic!=0x51473148 && magic!=0x51473149 && magic!=0x5147314A && magic!=0x5147314B)) return false;
   auto result=defaults();
   // Layouts: legacy versions store `count` plain doubles. Current saves
   // (0x51473145, written by getState) use the same prefix plus three extra
   // fields injected after kParamEnd: buffer size, freeze flag, then the array
   // continues at kGrainBuffer+2 through kCount-1.
   const bool current=magic>=0x51473145;
-  const int storedEnd=magic==0x5147314A?int(kCount):magic==0x51473149?int(kResliceAlgorithm):magic==0x51473148?int(kModWaveRate0):magic==0x51473147?int(kMixLock0):magic==0x51473146?int(kReverbRateV2):kLegacySkinCount;
+  const int storedEnd=magic==0x5147314B?int(kCount):magic==0x5147314A?int(kCutMinPhrase):magic==0x51473149?int(kResliceAlgorithm):magic==0x51473148?int(kModWaveRate0):magic==0x51473147?int(kMixLock0):magic==0x51473146?int(kReverbRateV2):kLegacySkinCount;
   const int count = current ? int(kParamEnd) : magic==0x51473144 ? kLegacySkinCount : magic==0x51473143 ? int(kResliceRndOn) : magic==0x51473130 ? int(kGrainMix) : (magic==0x51473131 ? int(kLfo0) : (magic==0x51473132 ? int(kLegacyCount) : (magic==0x51473133 ? int(kModuleOrder) : (magic==0x51473134 ? int(kExtraRoutes0) : (magic==0x51473135 ? int(kGlitchMove) : (magic==0x51473136 ? int(kMasterFilter) : (magic==0x51473137 ? int(kNormalize) : (magic==0x51473138 ? int(kReverbLength) : (magic==0x51473139 ? int(kUiWave0) : (magic==0x5147313A ? int(kLfoSlots0) : (magic==0x5147313B ? int(kModWaveRnd0) : (magic==0x5147313C ? int(kReverbSource) : (magic==0x5147313D ? int(kLimiterCeiling) : (magic==0x5147313E ? int(kGaterEnabled) : (magic==0x5147313F ? int(kInputDeclick) : (magic==0x51473140 ? int(kFilterModel) : (magic==0x51473141 ? int(kGaterMinLength) : int(kGlitchTriggerRate))))))))))))))))));
   for(int i=0;i<count;++i) {
     double v=0.; if(!in.readDouble(v) || !std::isfinite(v)) return false;
@@ -158,7 +158,7 @@ public:
   }
   tresult PLUGIN_API getState(IBStream* stream) override {
     IBStreamer out(stream,kLittleEndian);
-    if(!out.writeInt32(0x5147314A)) return kResultFalse;
+    if(!out.writeInt32(0x5147314B)) return kResultFalse;
     for(int i=0;i<kParamEnd;++i) if(!out.writeDouble(p_[i])) return kResultFalse;
     // v0.14 additions: buffer size, freeze state, then the remaining tail ids
     // (RANDOM/PRESET slots) written like any other array entry.
@@ -478,6 +478,39 @@ public:
     range(STR16("Reslice Fill"),kResliceFill,STR16("%"),0,100,50);
     range(STR16("Reslice Reverse"),kResliceReverse,STR16("%"),0,100,10);
     range(STR16("Reslice Seed"),kResliceSeed,nullptr,1,65535,1,65534);
+
+    // Extended Reslice controls: appended IDs preserve automation identities.
+    range(STR16("Cut Min Phrase"),kCutMinPhrase,STR16("bars"),1,8,1,7);
+    range(STR16("Cut Max Phrase"),kCutMaxPhrase,STR16("bars"),1,8,4,7);
+    range(STR16("Cut Min Repeats"),kCutMinRepeats,nullptr,0,16,0,16);
+    range(STR16("Cut Max Repeats"),kCutMaxRepeats,nullptr,0,16,4,16);
+    range(STR16("Cut Stutter"),kCutStutter,STR16("%"),0,100,80);
+    range(STR16("Cut Area"),kCutArea,STR16("%"),0,100,50);
+    range(STR16("Cut Duty"),kCutDuty,STR16("%"),0,100,100);
+    range(STR16("Cut Fill Duty"),kCutFillDuty,STR16("%"),0,100,100);
+    range(STR16("Cut Fade"),kCutFade,STR16("ms"),0,40,3);
+    range(STR16("Cut Min Amplitude"),kCutMinAmp,nullptr,0,2,1);
+    range(STR16("Cut Max Amplitude"),kCutMaxAmp,nullptr,0,2,1);
+    range(STR16("Cut Min Pan"),kCutMinPan,nullptr,-1,1,0);
+    range(STR16("Cut Max Pan"),kCutMaxPan,nullptr,-1,1,0);
+    range(STR16("Cut Min Pitch"),kCutMinPitch,STR16("st"),-48,48,0);
+    range(STR16("Cut Max Pitch"),kCutMaxPitch,STR16("st"),-48,48,0);
+    range(STR16("Warp Straight"),kCutStraight,nullptr,0,1,.3);
+    range(STR16("Warp Regular"),kCutRegular,nullptr,0,1,.5);
+    range(STR16("Warp Ritard"),kCutRitard,nullptr,0,1,.5);
+    range(STR16("Warp Speed"),kCutSpeed,nullptr,0,1,.9);
+    toggle(STR16("Cut Bitcrusher"),kCutCrusherOn,0.);
+    range(STR16("Crusher Min Bits"),kCutMinBits,STR16("bits"),2,32,32);
+    range(STR16("Crusher Max Bits"),kCutMaxBits,STR16("bits"),2,32,32);
+    range(STR16("Crusher Min Frequency"),kCutMinFreq,STR16("Hz"),200,44000,44000);
+    range(STR16("Crusher Max Frequency"),kCutMaxFreq,STR16("Hz"),200,44000,44000);
+    toggle(STR16("Cut Comb"),kCutCombOn,0.);
+    auto* combType=new StringListParameter(STR16("Cut Comb Type"),kCutCombType);combType->appendString(STR16("FeedForward"));combType->appendString(STR16("FeedBack"));parameters.addParameter(combType);
+    range(STR16("Cut Comb Feedback"),kCutCombFeedback,nullptr,-.95,.95,0);
+    range(STR16("Cut Comb Min Delay"),kCutMinDelay,STR16("ms"),.2,100,10);
+    range(STR16("Cut Comb Max Delay"),kCutMaxDelay,STR16("ms"),.2,100,10);
+    range(STR16("Cut SQ Pusher"),kCutPusher,STR16("%"),0,100,50);
+
     toggle(STR16("Reslice On"),kResliceEnabled,0.);
     auto* length=new StringListParameter(STR16("Reslice Window"),kResliceLength);for(auto label:{STR16("4/1"),STR16("2/1"),STR16("1/1"),STR16("1/2")})length->appendString(label);length->getInfo().defaultNormalizedValue=2./3.;length->setNormalized(2./3.);parameters.addParameter(length);
     range(STR16("Reslice Mix"),kResliceMix,STR16("%"),0,100,100);

@@ -31,9 +31,9 @@ inline Rect pageRect(int i){return {60.+i*323,133,315,52};}
 inline int hitPage(double x,double y){for(int i=0;i<3;++i)if(pageRect(i).contains(x,y))return i;return -1;}
 inline std::array<int,4> routeChain(const Value& value){int n=int(std::round(value(kRoutingOrder)*120))-1;if(n>=0)return fourModuleOrder(n);std::array<int,4> c{{0,2,3,4}};int old=int(std::round(value(kModuleOrder)*6));if(old<6){int i=0;for(int stage:moduleOrders[std::clamp(old,0,5)])if(stage!=1)c[i++]=stage;}return c;}
 inline double moveRoute(std::array<int,4> c,int from,int insertion){from=std::clamp(from,0,3);insertion=std::clamp(insertion,0,4);int to=insertion-(insertion>from?1:0),stage=c[from];if(to>from)for(int i=from;i<to;++i)c[i]=c[i+1];else for(int i=from;i>to;--i)c[i]=c[i-1];c[to]=stage;return fourModuleRouting(c);}
-inline double moduleHeight(int stage){constexpr double h[]={340,270,350,330,330};return h[stage];}
+inline double moduleHeight(int stage){constexpr double h[]={340,270,350,930,330};return h[stage];}
 inline Rect moduleRect(int stage,const Value& value,const RackState& state){double y=430;for(int s:routeChain(value)){if(s==stage)return state.position({54,y,974,moduleHeight(s)});y+=moduleHeight(s)+14;}return {};}
-inline double contentBottom(int page){return page==0?430+340+350+330+330+56:page==1?1544:1042;}
+inline double contentBottom(int page){return page==0?430+340+350+930+330+56:page==1?1544:1042;}
 inline double maxScroll(const RackState& s){return std::max(0.,contentBottom(s.page)-height+18);}
 inline void scrollBy(RackState& s,double delta){s.scroll[s.page]=std::clamp(s.offset()+delta,0.,maxScroll(s));}
 inline Rect scrollbar(){return {1037,bodyTop+8,12,height-bodyTop-20};}
