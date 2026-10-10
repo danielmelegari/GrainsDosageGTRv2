@@ -13,7 +13,7 @@ struct ResliceSettings {
  std::array<int,16> slice{{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}};
  int algorithm=0;double barBeats=4.,phraseBeats=16.,repeat=.45,variation=.5,fill=.5,reverse=.1;uint32_t seed=1;
  // Extended phrase/cut and output shaping: neutral defaults preserve the existing Reslice sound.
- int minPhrase=1,maxPhrase=4,minRepeats=0,maxRepeats=4,combType=0;
+ int minPhrase=1,maxPhrase=8,minRepeats=0,maxRepeats=4,combType=0;
  double stutter=.8,area=.5,fadeMs=3.,duty=1.,fillDuty=1.,minAmp=1.,maxAmp=1.,minPan=0.,maxPan=0.;
  double minPitch=0.,maxPitch=0.,warpStraight=.3,warpRegular=.5,warpRitard=.5,warpSpeed=.9,pusherActivity=.5;
  bool crusherOn=false,combOn=false;
@@ -31,7 +31,7 @@ class Reslice {
  double read(int ch,double position)const{int64_t a=int64_t(std::floor(position));if(a<0||a<write_-int64_t(buffer_[ch].size())||a+1>=write_)return 0.;size_t i=size_t(a)%buffer_[ch].size(),j=(i+1)%buffer_[ch].size();return buffer_[ch][i]+(buffer_[ch][j]-buffer_[ch][i])*(position-a);}
  void crossfade(){for(int ch=0;ch<2;++ch)from_[ch]=lastWet_[ch];fade_=fadeSize_;}
  void choose(double beat,double samplesPerBeat){
-  const double bar=std::clamp(s_.barBeats,.25,32.),phrase=std::clamp(s_.phraseBeats,bar,bar*8);double phrasePhase=beat-std::floor(beat/phrase)*phrase;
+  const double bar=std::clamp(s_.barBeats,.25,32.),phrase=std::clamp(s_.phraseBeats,bar*std::clamp(s_.minPhrase,1,8),bar*std::clamp(std::max(s_.minPhrase,s_.maxPhrase),1,8));double phrasePhase=beat-std::floor(beat/phrase)*phrase;
   double barPhase=beat-std::floor(beat/bar)*bar;bool fill=phrase-phrasePhase<=1.+1e-7&&random()<std::clamp(s_.fill,0.,1.);
   double variation=std::clamp(s_.variation,0.,1.),duration=.5;int mode=std::clamp(s_.algorithm,0,2);
   if(mode==0){ // CutDSG: strong bar anchors, straight cuts, phrase-ending rolls.
@@ -45,14 +45,14 @@ class Reslice {
   }
   // Phrase-aware stutter and warp controls, kept at their legacy behavior with defaults.
   if(fill&&random()<std::clamp(s_.stutter,0.,1.))duration=std::min(duration,.125);
-  if(mode==1){double warp=std::clamp(s_.warpSpeed,0.,1.);if(random()<s_.warpStraight)duration=std::min(duration,.25);if(random()<s_.warpRitard*.2)duration*=1.+(1.-warp);}
+  if(mode==1){double warp=std::clamp(s_.warpSpeed,0.,1.);if(random()<s_.warpRegular*.15)duration=std::min(duration,.5);if(random()<s_.warpStraight)duration=std::min(duration,.25);if(random()<s_.warpRitard*.2)duration*=1.+(1.-warp);}
   if(mode==2&&random()<s_.pusherActivity*.2)duration=std::min(duration,.25);
   // Every bar and phrase begins on the host grid, even after tempo/rate changes.
   duration=std::max(1e-7,std::min(std::max(1./48.,duration),bar-barPhase));nextCut_=beat+duration;
   double history=std::min({double(write_-2),std::clamp(s_.beats,2.,16.)*samplesPerBeat,double(buffer_[0].size())-4});
   double requestedSpan=std::max(32.,duration*samplesPerBeat);speed_=1.;
   if(mode==1&&random()<variation){constexpr double ratios[]={.5,.75,1.,1.5,2.};speed_=ratios[int(random()*5)];}
-  bool repeat=events_>0&&repeatRun_<std::max(0,s_.maxRepeats)&&random()<std::clamp(s_.repeat,0.,1.);if(repeat)++repeatRun_;else repeatRun_=0;bool anchor=barPhase<1e-7;
+  bool repeat=events_>0&&repeatRun_<std::max(0,s_.maxRepeats)&&(repeatRun_>0&&repeatRun_<s_.minRepeats || random()<std::clamp(s_.repeat,0.,1.));if(repeat)++repeatRun_;else repeatRun_=0;bool anchor=barPhase<1e-7;
   if(!repeat||anchor||span_<32||start_<double(write_-2)-history){
    span_=std::min(requestedSpan,history);double depth=std::max(0.,history-span_);
    double back=(mode==0&&anchor)?std::max(0.,std::min(depth,bar*samplesPerBeat-span_)):random()*depth*variation*std::clamp(s_.area*2.,0.,2.);
