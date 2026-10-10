@@ -19,6 +19,9 @@ void runGuiScenarios(Controller* c,Click click,Drag drag,Scroll scroll,Page actu
  for(int stage:{0,2,3,4}){focus(stage);toggle(mockup::stageEnabled[stage]);}
  focus(0);toggle(kFreeze);toggle(kMixLock0);auto r=control(kSize);c->setParamNormalized(kSize,.25);drag(0,r.x+r.w/2,r.y+r.h/2);drag(1,r.x+r.w/2,r.y+r.h/2-45);drag(2,r.x+r.w/2,r.y+r.h/2-45);check(std::abs(val(kSize)-.5)<.015,"Round knob drag");rectClick(r,2);check(std::abs(val(kSize)-.25)<1e-6,"Double click default");
  c->setParamNormalized(kGrainMix,.271);c->setParamNormalized(kMixLock0,0);rectClick(control(kMixLock0));rectClick(mockup::randomRect(0,val,rack));check(val(kGrainMix)==.271,"Mix lock survives Random");rectClick(control(kMixLock0));rectClick(mockup::randomRect(0,val,rack));check(val(kGrainMix)!=.271,"Unlocked mix randomises");
+ focus(3);double savedMode=val(kResliceAlgorithm);const ParamID modeSliders[]={kResliceStutter,kResliceStraight,kResliceActivity};
+ for(int mode=0;mode<3;++mode){c->setParamNormalized(kResliceAlgorithm,mode*.5);auto id=modeSliders[mode];double saved=val(id);c->setParamNormalized(id,.25);auto slider=control(id);drag(0,slider.x+20,slider.y+29);drag(1,slider.x+20+slider.w*.25,slider.y+29);drag(2,slider.x+20+slider.w*.25,slider.y+29);check(std::abs(val(id)-.5)<.015,"Selected algorithm horizontal fader");c->setParamNormalized(id,saved);check(control(kResliceFade).w>0&&control(kResliceMix).w>0,"Shared controls and fixed bottom knobs");}
+ c->setParamNormalized(kResliceAlgorithm,savedMode);
  focus(3);auto rmode=control(kResliceAlgorithm);check(rmode.w>0,"Generative mode selector");setScroll(rack.offset()+250.);toggle(kResliceCrushOn);toggle(kResliceCombOn);double before=val(kResliceSeed);rectClick(mockup::randomRect(3,val,rack));check(val(kResliceSeed)!=before,"New procedural phrase seed");
 
  focus(4);r=mockup::stepRect(0,4,val,rack);before=val(kGaterState0);rectClick(r);check(val(kGaterState0)==(before>.25?0.:1.),"Gater sequencer after scroll");

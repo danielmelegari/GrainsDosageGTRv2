@@ -10,6 +10,7 @@ static void different(const std::vector<float>& a,const std::vector<float>& b){d
 int main(){
  ResliceSettings s;s.enabled=true;s.variation=.9;s.fill=1;auto original=render(s);
  for(int n=0;n<12;++n){auto v=s;switch(n){case 0:v.subdivision=32;break;case 1:v.fadeMs=40;break;case 2:v.minAmp=v.maxAmp=.2;break;case 3:v.minPan=v.maxPan=.8;break;case 4:v.minPitch=v.maxPitch=1200;break;case 5:v.duty=.1;break;case 6:v.fillDuty=0;break;case 7:v.minRepeats=v.maxRepeats=8;break;case 8:v.stutter=1;break;case 9:v.area=0;break;case 10:v.crusher=true;v.minBits=v.maxBits=2;break;case 11:v.comb=true;v.combType=1;v.combFeedback=.9;break;}different(original,render(v));}
+ for(int mode:{1,2}){auto a=s;a.algorithm=mode;auto b=a;b.minRepeats=8;b.maxRepeats=16;b.stutter=1;b.area=0;assert(render(a)==render(b));}
  s.algorithm=1;original=render(s);for(int n=0;n<4;++n){auto v=s;switch(n){case 0:v.straight=1;break;case 1:v.regular=1;break;case 2:v.ritard=1;break;case 3:v.warpSpeed=0;break;}different(original,render(v));}
  s.algorithm=2;original=render(s);s.activity=0;different(original,render(s));
  s.crusher=true;s.minFreq=s.maxFreq=100;different(original,render(s));

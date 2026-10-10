@@ -22,8 +22,14 @@ Controls apply to the original DSG procedures, not the original LiveCut algorith
 | Comb | On/off, feedforward/feedback type, feedback, min/max delay |
 
 Existing BUFFER, REPEAT CHANCE, VARIATION, FILL CHANCE, REVERSE, MIX and its lock
-remain. NEW PHRASE reseeds without randomizing the controls. The compact 850-unit panel uses horizontal sliders except the final Variation /
+remain. NEW PHRASE reseeds without randomizing the controls. The compact 770-unit panel uses horizontal sliders except the final Variation /
 Fill Chance / Reverse / Mix knob row, and scrolls inside the Modules page; the header and page selectors stay fixed.
+Only the selected algorithm's section is drawn and accepts input: CutDSG shows
+Min/Max Repeats, Stutter and Area; WarpDSG shows Straight, Regular, Ritard and
+Speed; PushDSG shows Activity. Shared timing, amplitude/pan/pitch, repeat chance,
+crusher and comb controls remain available in all modes. The four bottom knobs
+stay fixed. Switching modes preserves stored values and redraws the section even
+when automated by the host. A CutDSG repeat budget is cleared on mode changes.
 Numeric controls retain keyboard entry and host automation.
 
 MIN PHRASE is 1–8 bars; MAX PHRASE selects 1, 2, 4 or 8 bars. A new integer-bar

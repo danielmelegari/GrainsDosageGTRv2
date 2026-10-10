@@ -62,7 +62,7 @@ class Reslice {
   if(mode==1){if(random()<variation){constexpr double ratios[]={.5,.75,1.,1.5,2.};speed_=ratios[integer(0,4)];}speed_*=std::exp2((std::clamp(s_.warpSpeed,0.,1.)-.5)*4.);}
   speed_*=std::exp2(between(std::clamp(s_.minPitch,-2400.,2400.),std::clamp(s_.maxPitch,-2400.,2400.))/1200.);
   const bool forced=repeatsLeft_>0;bool repeat=events_>0&&(forced||random()<std::clamp(s_.repeat,0.,1.));
-  if(forced)--repeatsLeft_;else repeatsLeft_=integer(std::clamp(s_.minRepeats,0,16),std::clamp(s_.maxRepeats,0,16));
+  if(forced)--repeatsLeft_;else repeatsLeft_=mode==0?integer(std::clamp(s_.minRepeats,0,16),std::clamp(s_.maxRepeats,0,16)):0;
   bool anchor=barPhase<1e-7;
   if(!repeat||anchor||span_<32||start_<double(write_-2)-history){
    span_=std::min(requestedSpan,history);double depth=std::max(0.,history-span_);if(mode==0)depth*=std::clamp(s_.area,0.,1.);
@@ -82,6 +82,7 @@ public:
   mixFade_=std::max(8,int(sr_*.003));fadeSize_=int(sr_*std::clamp(s_.fadeMs,0.,50.)*.001);mixStep_=1./mixFade_;invFade_=fadeSize_?1./fadeSize_:0.;lastWet_[0]=lastWet_[1]=from_[0]=from_[1]=0;mix_=0;tempo_=0;reset();}
  void reset(){write_=0;pending_=true;active_=false;span_=cursor_=0;events_=0;rng_=s_.seed?s_.seed:1;pattern_.fill(0);fade_=0;phraseStart_=phraseEnd_=0;combValid_=combWrite_=0;repeatsLeft_=0;}
  void set(const ResliceSettings& s){
+  if(s.algorithm!=s_.algorithm)repeatsLeft_=0;
   if(s.algorithm!=s_.algorithm||s.seed!=s_.seed||s.phraseBeats!=s_.phraseBeats||s.minPhraseBeats!=s_.minPhraseBeats||s.barBeats!=s_.barBeats){pending_=true;rng_=s.seed?s.seed:1;phraseStart_=phraseEnd_=0;}
   if(s.enabled&&!s_.enabled)pending_=true;
   if(s.crusher!=s_.crusher||s.comb!=s_.comb){pending_=true;combValid_=0;}
