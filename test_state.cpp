@@ -1,5 +1,6 @@
 // Exercise the actual plugin state reader and controller parameter definitions.
 #include "src/plugin.cpp"
+#include "src/value_entry.h"
 #include "public.sdk/source/common/memorystream.h"
 #include <cassert>
 #include <iostream>
@@ -12,7 +13,7 @@ int main() {
   for(int version=0;version<21;++version) {
     MemoryStream stream; IBStreamer writer(&stream,kLittleEndian);
     writer.writeInt32(0x51473130+version);
-    const int count=version==0 ? 26 : (version==1 ? 35 : (version==2 ? 95 : (version==3 ? int(kModuleOrder) : (version==4 ? int(kExtraRoutes0) : (version==5 ? int(kGlitchMove) : (version==6 ? int(kMasterFilter) : (version==7 ? int(kNormalize) : (version==8 ? int(kReverbLength) : (version==9 ? int(kUiWave0) : (version==10 ? int(kLfoSlots0) : (version==11 ? int(kModWaveRnd0) : (version==12 ? int(kReverbSource) : (version==13 ? int(kLimiterCeiling) : (version==14 ? int(kGaterEnabled) : (version==15 ? int(kInputDeclick) : (version==16 ? int(kFilterModel) : (version==17 ? int(kGaterMinLength) : (version==18 ? int(kGlitchTriggerRate) : (version==19 ? int(kResliceRndOn) : int(kCount))))))))))))))))))));
+    const int count=version==0 ? 26 : (version==1 ? 35 : (version==2 ? 95 : (version==3 ? int(kModuleOrder) : (version==4 ? int(kExtraRoutes0) : (version==5 ? int(kGlitchMove) : (version==6 ? int(kMasterFilter) : (version==7 ? int(kNormalize) : (version==8 ? int(kReverbLength) : (version==9 ? int(kUiWave0) : (version==10 ? int(kLfoSlots0) : (version==11 ? int(kModWaveRnd0) : (version==12 ? int(kReverbSource) : (version==13 ? int(kLimiterCeiling) : (version==14 ? int(kGaterEnabled) : (version==15 ? int(kInputDeclick) : (version==16 ? int(kFilterModel) : (version==17 ? int(kGaterMinLength) : (version==18 ? int(kGlitchTriggerRate) : (version==19 ? int(kResliceRndOn) : kLegacySkinCount)))))))))))))))))));
     auto expected=defaults();if(version<16)expected[kInputDeclick]=0.;if(version<7)expected[kMasterLimiter]=0.;
     for(int i=0;i<count;++i) { expected[i]=double((i*7)%101)/100.; writer.writeDouble(expected[i]); }
     if(version<20&&count>kResliceLength)expected[kResliceLength]=expected[kResliceLength]<1./6.?2./3.:1.;
@@ -41,6 +42,51 @@ int main() {
       for(int t=0;t<6;++t) assert(actual[lfoID(i,lRoute0+t)]==.5);
     }
   }
+  // The preceding release's tail ends before the new MOD W rate selectors.
+  {auto expected=defaults();expected[kModWaveRnd0]=.75;MemoryStream old;IBStreamer out(&old,kLittleEndian);out.writeInt32(0x51473148);
+   for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);for(int i=kFreeze+1;i<kModWaveRate0;++i)out.writeDouble(expected[i]);
+   old.seek(0,IBStream::kIBSeekSet,nullptr);auto restored=defaults();assert(loadState(&old,restored)&&restored==expected);assert(settings(restored,120,48000).lfos[0].waveRandom==3);
+  }
+  // Pre-generative release: appended cutter controls keep their new defaults.
+  {auto expected=defaults();expected[kResliceEnabled]=1.;MemoryStream old;IBStreamer out(&old,kLittleEndian);out.writeInt32(0x51473149);
+   for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);for(int i=kFreeze+1;i<kResliceAlgorithm;++i)out.writeDouble(expected[i]);
+   old.seek(0,IBStream::kIBSeekSet,nullptr);auto restored=defaults();assert(loadState(&old,restored)&&restored==expected);assert(restored[kResliceRepeat]==.45&&restored[kResliceAlgorithm]==0.);
+  }
+  // Previous split-format state must not consume newly appended fields.
+  {
+    auto expected=defaults(); expected[kSize]=.73; expected[kModuleOrder]=1.;
+    expected[kFreeze]=1.; expected[kGrainBuffer]=.4;
+    MemoryStream legacy; IBStreamer out(&legacy,kLittleEndian);out.writeInt32(0x51473145);
+    for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);
+    out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);
+    for(int i=kFreeze+1;i<kLegacySkinCount;++i)out.writeDouble(expected[i]);
+    legacy.seek(0,IBStream::kIBSeekSet,nullptr);auto actual=defaults();
+    assert(loadState(&legacy,actual)&&actual==expected);
+    assert(settings(actual,120.,48000.).routing==-1);
+  }
+  {
+    auto p=defaults();p[slotTarget(0,0)]=1./qg::modTargetCount;p[slotAmount(0,0)]=.75;
+    p[kRoutingOrder]=1.;assert(settings(p,120.,48000.).routing==119);
+    for(int mode=0;mode<3;++mode){p[slotPolarity(0,0)]=mode*.5;auto l=settings(p,120.,48000.).lfos[0];
+      assert(l.amount[0]==(mode==0?.5:0.));assert(l.positive[0]==(mode==1?.5:0.));assert(l.negative[0]==(mode==2?.5:0.));}
+  }
+  // v0x46 saves ended before the appended rate and Gater phase parameters.
+  {
+    auto expected=defaults();expected[kReverbGrid]=1./3.;expected[kReverbRandomRate]=.5;
+    MemoryStream legacy;IBStreamer out(&legacy,kLittleEndian);out.writeInt32(0x51473146);
+    for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);
+    out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);
+    for(int i=kFreeze+1;i<kReverbRateV2;++i)out.writeDouble(expected[i]);
+    legacy.seek(0,IBStream::kIBSeekSet,nullptr);auto actual=defaults();assert(loadState(&legacy,actual)&&actual==expected);
+    auto s=settings(actual,120.,48000.);assert(s.reverbGrid==.5&&s.reverbRandomGrid==.5);
+    actual[kReverbRateV2]=5./6.;s=settings(actual,120.,48000.);assert(s.reverbGrid==1.5&&s.reverbRandomGrid==1.5);
+    actual[kReverbRateV2]=1.;s=settings(actual,120.,48000.);assert(s.reverbGrid==.75&&s.reverbRandomGrid==.75);
+  }
+  // The pre-lock v47 state loads without reading the appended lock/meter IDs.
+  {auto expected=defaults();expected[kReverbRateV2]=1.;MemoryStream old;IBStreamer out(&old,kLittleEndian);out.writeInt32(0x51473147);
+   for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);
+   for(int i=kFreeze+1;i<kMixLock0;++i)out.writeDouble(expected[i]);old.seek(0,IBStream::kIBSeekSet,nullptr);auto actual=defaults();assert(loadState(&old,actual)&&actual==expected);
+  }
   MemoryStream bad; IBStreamer writer(&bad,kLittleEndian);
   writer.writeInt32(0x51473132); writer.writeDouble(std::numeric_limits<double>::quiet_NaN());
   bad.seek(0,IBStream::kIBSeekSet,nullptr); auto state=defaults(); const auto before=state;
@@ -62,6 +108,16 @@ int main() {
   // are state-only slots and were never registered either; derive the expected
   // count dynamically by subtracting every id that has no parameter object, so
   // this assertion cannot rot when new tail ids are appended to the enum.
+  {double v=0;assert(parseParameterEntry(&controller,kSize,"125 ms",v)&&std::abs(v-(125.-15)/235)<1e-9);
+   assert(parseParameterEntry(&controller,kGrainMix,"37,5 %",v)&&v==.375);
+   assert(parseParameterEntry(&controller,kPitch,"-12 st",v)&&v==.375);
+   assert(parseParameterEntry(&controller,kFilterCutoff,"1000 Hz",v)&&std::abs(v-std::log(50.)/std::log(1000.))<1e-9);
+   assert(parseParameterEntry(&controller,kRepeatDivision,"1/16",v)&&v==4./15.);
+   assert(parseParameterEntry(&controller,kModWaveRate0,"2/1",v)&&v==6./7.);
+   assert(parseParameterEntry(&controller,kModWaveRate0,"4/1",v)&&v==1.);
+   for(auto text:{"", "nan", "inf", "30 rubbish", "-1", "101%"})assert(!parseParameterEntry(&controller,kGrainMix,text,v));
+   assert(!parseParameterEntry(&controller,kFilterCutoff,"30000 Hz",v));assert(!parseParameterEntry(&controller,kRepeatDivision,"garbage",v));
+  }
   int registeredIds=0; for(int i=0;i<int(kCount);++i) if(controller.getParameterObject(ParamID(i))) ++registeredIds;
   assert(controller.getParameterCount()==registeredIds);
   assert(controller.getParameterObject(ParamID(kBypassReserved))==nullptr);
@@ -102,6 +158,8 @@ int main() {
   assert(processor->process(data)==kResultOk);assert(std::abs(outL[127])<=qg::MasterFx::ceiling+1e-6);
   for(double selected:{0.,.5,1.}){changes.clearQueue();put(kLimiterCeiling,selected);assert(processor->process(data)==kResultOk);double db=selected==0?0:selected==.5?-6:-10;for(int i=0;i<128;++i){assert(std::abs(double(outL[i]))<=std::pow(10.,db/20.));assert(std::abs(double(outR[i]))<=std::pow(10.,db/20.));}}
   changes.clearQueue();put(kMasterLimiter,0.);assert(processor->process(data)==kResultOk);assert(outL[127]==2.f&&outR[127]==.5f);
+  // RMS monitor channels reflect distinct actual host outputs.
+  {double rms[2]={-1.,-1.};for(int i=0;i<meters.getParameterCount();++i){auto* q=meters.getParameterData(i);int id=int(q->getParameterId());if(id==kUiOutputL||id==kUiOutputR){int32 offset=0;double v=0;assert(q->getPoint(q->getPointCount()-1,offset,v)==kResultOk);rms[id-kUiOutputL]=v;}}assert(rms[0]==1.&&std::abs(rms[1]-.5)<1e-6);}
   changes.clearQueue();put(kMasterFilter,1.);put(kMix,1.);put(kGrainMix,0.);put(kFilterType,1.);put(kFilterCutoff,std::log(50.)/std::log(1000.));
   for(int i=0;i<80;++i)assert(processor->process(data)==kResultOk);
   assert(std::abs(outL[127])<1e-4); // HP rejects a DC source through real VST queues.
@@ -123,6 +181,11 @@ int main() {
     assert(std::abs(out64L[96])<1e-10); // wet path active (mix=0 => silent), not dry passthrough
     assert(out64R[96]==0.);
   }
+  // The host's Randomize All trigger uses the same lock policy as the GUI.
+  {changes.clearQueue();for(int i=0;i<6;++i)put(lockableMixes[i],.271);assert(processor->process(data)==kResultOk);
+   changes.clearQueue();for(int i=0;i<6;++i)put(kMixLock0+i,1.);put(kRandomAll,1.);assert(processor->process(data)==kResultOk);
+   MemoryStream stored;assert(processor->getState(&stored)==kResultOk);stored.seek(0,IBStream::kIBSeekSet,nullptr);auto locked=defaults();assert(loadState(&stored,locked));for(int i=0;i<6;++i){assert(locked[lockableMixes[i]]==.271);assert(locked[kMixLock0+i]==1.);}
+  }
   // Roundtrip: dirty the legacy kBypassReserved slot through a real VST queue, then
   // save/reload and verify getState->setState->getState is byte-for-byte stable even
   // though the slot is not a registered parameter (bypass button removed).
@@ -136,7 +199,7 @@ int main() {
     MemoryStream rt3; assert(p2.getState(&rt3)==kResultOk);
     rt.seek(0,IBStream::kIBSeekSet,nullptr); rt3.seek(0,IBStream::kIBSeekSet,nullptr);
     int32 m1=0,m2=0;IBStreamer r1(&rt,kLittleEndian),r2(&rt3,kLittleEndian);
-    r1.readInt32(m1);r2.readInt32(m2);assert(m1==m2&&m1==0x51473145);
+    r1.readInt32(m1);r2.readInt32(m2);assert(m1==m2&&m1==0x5147314A);
     // getState layout: kParamEnd values, buffer size, freeze flag, then the tail
     // (kBypassReserved lives in this region) up to kCount.
     const int fields=kParamEnd+2+(int(kCount)-int(kFreeze)-1);
@@ -145,3 +208,4 @@ int main() {
   processor->setActive(false);processor->terminate();processor->release();
   std::cout<<"PASS: v0.1–v0.12.0 state migration and legacy parallel mode, disabled legacy routes, malformed state rejection, controller defaults, appended Speed/Transpose routes, XY routing and processor state roundtrip, master host automation\n";
 }
+

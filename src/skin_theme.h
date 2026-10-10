@@ -36,7 +36,8 @@ inline const std::vector<Entry>& themes() {
     {"nebula","Nebula Rose",skin::nebula},
     {"arctic","Arctic Platinum",skin::arctic},
     {"aurora","Aurora Lime",skin::aurora},
-    {"midnight","Midnight Mono",skin::midnight}};
+    {"midnight","Midnight Mono",skin::midnight},
+    {"purple","Purple Mockup",skin::purple}};
   return list;
 }
 inline int findTheme(const std::string& name) {
@@ -171,3 +172,4 @@ inline std::string defaultPath() {
 
 } // namespace theme
 } // namespace aztec
+
