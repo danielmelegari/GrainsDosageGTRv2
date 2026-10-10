@@ -72,6 +72,6 @@ int main() {
     route.order=order;auto audio=render(route,36000);
     assert(energy(audio,26000,35000)>.00001);
   }
-  std::cout<<"PASS: live Hold division, independent grids, step division/pitch, +/-48 grain pitch, distributed density, 64-point SH/SG, stretch pitch preservation and final transpose; six serial module orders\n";
+  std::cout<<"PASS: live Hold division, independent grids, step division/pitch, +/-48 grain pitch, distributed density, 64-point SH/SG, stretch pitch preservation and transpose; six serial module orders\n";
 }
 

@@ -394,10 +394,10 @@ public:
     for(int i=0;i<16;++i) { String128 n{}; stepTitle("Repeat Division",i,n); effectGrid(n,kRepeatRate0+i,1./15.); }
     for(int i=0;i<16;++i) { String128 n{}; stepTitle("Repeat Pitch",i,n); range(n,kRepeatPitch0+i,STR16("st"),-48,48,0,96); }
     toggle(STR16("Free Stretch"),kStretchOn,0.);
-    range(STR16("Stretch Speed"),kStretchSpeed,STR16("%"),25,400,100);
+    range(STR16("Input Stretch Speed"),kStretchSpeed,STR16("%"),25,400,100);
     for(int i=0;i<4;++i) { String128 n{}; stepTitle("Mod Random Points",i,n); range(n,kRandomSteps0+i,STR16("points"),1,64,16,63); }
     toggle(STR16("Density Flow"),kDensityFlow,1.);
-    range(STR16("Final Transpose"),kTranspose,STR16("st"),-48,48,0,96);
+    range(STR16("Input Transpose"),kTranspose,STR16("st"),-48,48,0,96);
     range(STR16("XY X"),kXYX,STR16("%"),0,100,50);
     range(STR16("XY Y"),kXYY,STR16("%"),0,100,50);
     toggle(STR16("XY Enable"),kXYEnable,0.);

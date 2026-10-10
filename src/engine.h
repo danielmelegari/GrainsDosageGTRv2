@@ -535,6 +535,7 @@ public:
   bool repeatRunning()const{return settings_.moduleOn[2]&&((settings_.routing<0&&settings_.order>=6)?repeating_:serialRepeat_.active());}
   // beat is the host PPQ beat position for this sample, or a running fallback beat.
   void processParallel(float inL, float inR, double beat, float& outL, float& outR) {
+    const float dryL=inL,dryR=inR;
     if(buffer_[0].empty()) { outL = inL; outR = inR; return; }
     const int64_t step = int64_t(std::floor(beat / std::max(.015625, settings_.division) + 1e-8));
     const bool activeStep = (settings_.pattern & (1u << ((step % steps + steps) % steps))) != 0;
@@ -542,6 +543,9 @@ public:
                                           step!=lastStep_ && activeStep,step);
     lastModPacked_.store(aztec::packModMagnitudes(values),std::memory_order_relaxed);
     applyExtended(values);
+    // Input Options feed every downstream capture and processor.
+    stretch_.process(inL,inR,settings_.stretchOn,.25+values[6]*3.75);
+    transpose_.process(inL,inR,-48.+values[7]*96.);
     grainSize_=.015+values[0]*.235; grainDensity_=1.+values[1]*31.;
     grainPitch_=-48.+values[2]*96.; grainPosition_=.015+values[3]*1.985; grainChaos_=values[4];
     grainLevel_=mixModulated_ ? values[5]+levelSmoothing_*(grainLevel_-values[5]) : settings_.grainMix;
@@ -655,10 +659,10 @@ public:
     const double gain = 1./std::max(1., grainWeight + glitchWeight + repeatWeight);
     previous_[0] = sumL * gain; previous_[1] = sumR * gain;
     if(!settings_.moduleOn[0]&&!settings_.moduleOn[1]&&!settings_.moduleOn[2]){previous_[0]=inL;previous_[1]=inR;}
-    float wl=float(previous_[0]),wr=float(previous_[1]);stretch_.process(wl,wr,settings_.stretchOn,.25+values[6]*3.75);transpose_.process(wl,wr,-48.+values[7]*96.);reslice_.process(wl,wr,beat,settings_.tempo,settings_.playing);gater_.process(wl,wr,beat,settings_.tempo,settings_.playing);filter_.set(settings_.filterOn,settings_.filterType,filterSequencer_.process(settings_.filterSequence,values[8],beat,settings_.sampleRate,settings_.playing,settings_.filterModel==7||settings_.filterModel==8),values[9],false,settings_.filterSlope,values[10]*24.,0.,settings_.filterModel,settings_.filterModel==7||settings_.filterModel==8);filter_.process(wl,wr);reverb_.process(wl,wr,beat);previous_[0]=wl;previous_[1]=wr;
-    match_.process(inL,inR,previous_[0],previous_[1],settings_.normalize);
+    float wl=float(previous_[0]),wr=float(previous_[1]);reslice_.process(wl,wr,beat,settings_.tempo,settings_.playing);gater_.process(wl,wr,beat,settings_.tempo,settings_.playing);filter_.set(settings_.filterOn,settings_.filterType,filterSequencer_.process(settings_.filterSequence,values[8],beat,settings_.sampleRate,settings_.playing,settings_.filterModel==7||settings_.filterModel==8),values[9],false,settings_.filterSlope,values[10]*24.,0.,settings_.filterModel,settings_.filterModel==7||settings_.filterModel==8);filter_.process(wl,wr);reverb_.process(wl,wr,beat);previous_[0]=wl;previous_[1]=wr;
+    match_.process(dryL,dryR,previous_[0],previous_[1],settings_.normalize);
     double finalMix=settings_.mix+(1.-settings_.mix)*reverb_.killAmount();
-    outL = float(inL*(1.-finalMix)+previous_[0]*finalMix);outR=float(inR*(1.-finalMix)+previous_[1]*finalMix);
+    outL = float(dryL*(1.-finalMix)+previous_[0]*finalMix);outR=float(dryR*(1.-finalMix)+previous_[1]*finalMix);
     if(!settings_.freeze) ++write_;
   }
   void process(float inL,float inR,double beat,float& outL,float& outR) {
@@ -687,6 +691,7 @@ public:
       return;
     }
     if(buffer_[0].empty()) { outL=inL; outR=inR; return; }
+    const float dryL=inL,dryR=inR;
     const int64_t step=int64_t(std::floor(beat/std::max(.015625,settings_.division)+1e-8));
     const int gateIndex=int((step%steps+steps)%steps);
     const bool activeStep=(settings_.pattern&(1u<<gateIndex))!=0;
@@ -698,6 +703,9 @@ public:
     ModValues values;values=modulation_.process(settings_.lfos,modBase_,beat,settings_.sampleRate,gateTrigger&&activeStep,step);
     lastModPacked_.store(aztec::packModMagnitudes(values),std::memory_order_relaxed);
     applyExtended(values);
+    // Input Options feed every downstream capture and processor.
+    stretch_.process(inL,inR,settings_.stretchOn,.25+values[6]*3.75);
+    transpose_.process(inL,inR,-48.+values[7]*96.);
     grainSize_=.015+values[0]*.235; grainDensity_=1.+values[1]*31.;
     grainPitch_=-48.+values[2]*96.; grainPosition_=.015+values[3]*1.985; grainChaos_=values[4];
     grainLevel_=mixModulated_ ? values[5]+levelSmoothing_*(grainLevel_-values[5]) : settings_.grainMix;
@@ -782,10 +790,10 @@ public:
     if(!settings_.freeze) ++write_;
     // Feedback follows the selected chain without an extra dry injection.
     previous_[0]=signal[0]-inL;previous_[1]=signal[1]-inR;
-    float wl=float(signal[0]),wr=float(signal[1]);stretch_.process(wl,wr,settings_.stretchOn,.25+values[6]*3.75);transpose_.process(wl,wr,-48.+values[7]*96.);if(settings_.routing<0){reslice_.process(wl,wr,beat,settings_.tempo,settings_.playing);gater_.process(wl,wr,beat,settings_.tempo,settings_.playing);}filter_.set(settings_.filterOn,settings_.filterType,filterSequencer_.process(settings_.filterSequence,values[8],beat,settings_.sampleRate,settings_.playing,settings_.filterModel==7||settings_.filterModel==8),values[9],false,settings_.filterSlope,values[10]*24.,0.,settings_.filterModel,settings_.filterModel==7||settings_.filterModel==8);filter_.process(wl,wr);reverb_.process(wl,wr,beat);signal[0]=wl;signal[1]=wr;
-    match_.process(inL,inR,signal[0],signal[1],settings_.normalize);
+    float wl=float(signal[0]),wr=float(signal[1]);if(settings_.routing<0){reslice_.process(wl,wr,beat,settings_.tempo,settings_.playing);gater_.process(wl,wr,beat,settings_.tempo,settings_.playing);}filter_.set(settings_.filterOn,settings_.filterType,filterSequencer_.process(settings_.filterSequence,values[8],beat,settings_.sampleRate,settings_.playing,settings_.filterModel==7||settings_.filterModel==8),values[9],false,settings_.filterSlope,values[10]*24.,0.,settings_.filterModel,settings_.filterModel==7||settings_.filterModel==8);filter_.process(wl,wr);reverb_.process(wl,wr,beat);signal[0]=wl;signal[1]=wr;
+    match_.process(dryL,dryR,signal[0],signal[1],settings_.normalize);
     double finalMix=settings_.mix+(1.-settings_.mix)*reverb_.killAmount();
-    outL=float(inL*(1.-finalMix)+signal[0]*finalMix);outR=float(inR*(1.-finalMix)+signal[1]*finalMix);
+    outL=float(dryL*(1.-finalMix)+signal[0]*finalMix);outR=float(dryR*(1.-finalMix)+signal[1]*finalMix);
     if(orderFade_>0 && settings_.mix>0.) {
       double t=1.-orderFade_/128.;outL=float(lastOutput_[0]*(1.-t)+outL*t);
       outR=float(lastOutput_[1]*(1.-t)+outR*t);--orderFade_;

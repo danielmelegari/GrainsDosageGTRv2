@@ -1,9 +1,9 @@
 # macOS Audio Unit workflow
 
-`.github/workflows/build-au.yml` builds `GrainsDosage.component` (AUv2) for Intel
+The `au` job in `.github/workflows/build-all.yml` builds `GrainsDosage.component` (AUv2) for Intel
 with an Intel deployment target of macOS 10.14 (Mojave) and Apple Silicon target
 of macOS 11. It runs on source changes to main and the
-skin work branch, relevant pull requests, and manual workflow dispatch once the
+skin work branch, and manual workflow dispatch once the
 workflow is present on the default branch.
 
 The component embeds a real copy of the same VST3 engine and native editor; it

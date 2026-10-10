@@ -22,17 +22,17 @@ if(state.page==0){
    BODY(kRepeatStep0+selectedRepeat,x+26,y+304,139,31,Toggle,"STEP ON");BODY(kRepeatRate0+selectedRepeat,x+187,y+304,233,31,Select,"DIVISION");BODY(kRepeatPitch0+selectedRepeat,x+456,y+299,240,37,Slider,"STEP PITCH");
   }else if(stage==3){
    BODY(kResliceAlgorithm,x+27,y+66,235,32,Select,"MODE");BODY(kResliceLength,x+274,y+66,201,32,Select,"BUFFER");BODY(kReslicePhrase,x+488,y+66,224,32,Select,"MAX PHRASE");BODY(kResliceMinPhrase,x+731,y+66,207,32,Select,"MIN PHRASE");
-   auto row=[&](double top,std::initializer_list<ParamID> ids,std::initializer_list<const char*> labels){int i=0;auto label=labels.begin();double spacing=920./ids.size();for(auto id:ids){BODY(id,x+27+i*spacing,y+top,spacing-12,104,Knob,*label);++i;++label;}};
-   row(140,{kResliceSubdivision,kResliceSeed,kResliceFade,kResliceDuty,kResliceFillDuty},{"SUBDIV","SEED","FADE","DUTY","FILL DUTY"});
-   row(276,{kResliceMinAmp,kResliceMaxAmp,kResliceMinPan,kResliceMaxPan,kResliceMinPitch,kResliceMaxPitch},{"MIN AMP","MAX AMP","MIN PAN","MAX PAN","MIN PITCH","MAX PITCH"});
-   row(414,{kResliceMinRepeats,kResliceMaxRepeats,kResliceStutter,kResliceArea,kResliceRepeat},{"MIN REPEATS","MAX REPEATS","STUTTER","AREA","REPEAT CHANCE"});
-   row(552,{kResliceStraight,kResliceRegular,kResliceRitard,kResliceWarpSpeed,kResliceActivity},{"STRAIGHT","REGULAR","RITARD","SPEED","ACTIVITY"});
-   BODY(kResliceCrushOn,x+30,y+734,140,32,Toggle,"CRUSHER");
-   const ParamID crush[]={kResliceMinBits,kResliceMaxBits,kResliceMinFreq,kResliceMaxFreq};const char* crushLabels[]={"MIN BITS","MAX BITS","MIN FREQ","MAX FREQ"};for(int i=0;i<4;++i)BODY(crush[i],x+203+i*184,y+690,165,104,Knob,crushLabels[i]);
-   BODY(kResliceCombOn,x+30,y+834,140,32,Toggle,"COMB");BODY(kResliceCombType,x+30,y+885,245,32,Select,"TYPE");
-   const ParamID comb[]={kResliceCombFeedback,kResliceMinDelay,kResliceMaxDelay};const char* combLabels[]={"FEEDBACK","MIN DELAY","MAX DELAY"};for(int i=0;i<3;++i)BODY(comb[i],x+335+i*203,y+828,180,104,Knob,combLabels[i]);
-   row(966,{kResliceVariation,kResliceFill,kResliceReverse,kResliceMix},{"VARIATION","FILL CHANCE","REVERSE","MIX"});
-   BODY(kMixLock0+3,x+702,y+1119,91,25,Toggle,"LOCK");
+   auto row=[&](double top,std::initializer_list<ParamID> ids,std::initializer_list<const char*> labels,mockup::Kind kind=mockup::Slider){int i=0;auto label=labels.begin();double spacing=920./ids.size();for(auto id:ids){addBody(id,x+27+i*spacing,y+top,spacing-14,kind==mockup::Knob?104:56,kind,*label);++i;++label;}};
+   row(132,{kResliceSubdivision,kResliceSeed,kResliceFade,kResliceDuty,kResliceFillDuty},{"SUBDIV","SEED","FADE","DUTY","FILL DUTY"});
+   row(212,{kResliceMinAmp,kResliceMaxAmp,kResliceMinPan,kResliceMaxPan,kResliceMinPitch,kResliceMaxPitch},{"MIN AMP","MAX AMP","MIN PAN","MAX PAN","MIN PITCH","MAX PITCH"});
+   row(292,{kResliceMinRepeats,kResliceMaxRepeats,kResliceStutter,kResliceArea,kResliceRepeat},{"MIN REPEATS","MAX REPEATS","STUTTER","AREA","REPEAT CHANCE"});
+   row(372,{kResliceStraight,kResliceRegular,kResliceRitard,kResliceWarpSpeed,kResliceActivity},{"STRAIGHT","REGULAR","RITARD","SPEED","ACTIVITY"});
+   BODY(kResliceCrushOn,x+30,y+461,140,32,Toggle,"CRUSHER");
+   const ParamID crush[]={kResliceMinBits,kResliceMaxBits,kResliceMinFreq,kResliceMaxFreq};const char* crushLabels[]={"MIN BITS","MAX BITS","MIN FREQ","MAX FREQ"};for(int i=0;i<4;++i)BODY(crush[i],x+203+i*184,y+452,165,56,Slider,crushLabels[i]);
+   BODY(kResliceCombOn,x+30,y+532,140,32,Toggle,"COMB");BODY(kResliceCombType,x+30,y+570,245,32,Select,"TYPE");
+   const ParamID comb[]={kResliceCombFeedback,kResliceMinDelay,kResliceMaxDelay};const char* combLabels[]={"FEEDBACK","MIN DELAY","MAX DELAY"};for(int i=0;i<3;++i)BODY(comb[i],x+335+i*203,y+532,180,56,Slider,combLabels[i]);
+   row(634,{kResliceVariation,kResliceFill,kResliceReverse,kResliceMix},{"VARIATION","FILL CHANCE","REVERSE","MIX"},mockup::Knob);
+   BODY(kMixLock0+3,x+702,y+793,91,25,Toggle,"LOCK");
 
   }else{
    BODY(kGaterGrid,x+27,y+69,175,32,Select,"RATE");BODY(kGaterLengthRnd,x+227,y+69,183,32,Toggle,"LENGTH RND");BODY(kGaterStepRnd,x+436,y+69,180,32,Toggle,"STEP RND");BODY(kGaterLatch,x+643,y+69,150,32,Toggle,"LATCH");
