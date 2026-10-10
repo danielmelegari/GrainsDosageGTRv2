@@ -249,7 +249,7 @@ public:
         double dl=l,dr=r;declick_.process(dl,dr,value(p_,kInputDeclick)>=.5,value(p_,kDeclickSensitivity),s.bypass);l=float(dl);r=float(dr);
         float a,b; engine_.process(l,r,beat,a,b);
         if(s.bypass) { a=l; b=r; }else master_.process(a,b);
-        a=float(l+licenseGain_*(a-l));b=float(r+licenseGain_*(b-r));
+        if(licenseGain_<1.){a=float(l+licenseGain_*(double(a)-l));b=float(r+licenseGain_*(double(b)-r));}
         peak=std::max({peak,std::abs(double(a)),std::abs(double(b))});
         squareL+=double(a)*a;squareR+=double(b)*b;
         out.channelBuffers32[0][n] = a;
@@ -263,7 +263,7 @@ public:
         declick_.process(l,r,value(p_,kInputDeclick)>=.5,value(p_,kDeclickSensitivity),s.bypass);
         float a,b; engine_.process(float(l),float(r),beat,a,b);
         if(!s.bypass)master_.process(a,b);
-        a=float(l+licenseGain_*(a-l));b=float(r+licenseGain_*(b-r));
+        if(licenseGain_<1.){a=float(l+licenseGain_*(double(a)-l));b=float(r+licenseGain_*(double(b)-r));}
         peak=std::max({peak,std::abs(s.bypass?l:double(a)),std::abs(s.bypass?r:double(b))});
         squareL+=(s.bypass?l:double(a))*(s.bypass?l:double(a));squareR+=(s.bypass?r:double(b))*(s.bypass?r:double(b));
         out.channelBuffers64[0][n] = s.bypass ? l : a;
