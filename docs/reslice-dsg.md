@@ -74,4 +74,4 @@ Five passes, median process CPU, 48 kHz stereo, 256-sample blocks; one core = 10
 | WarpDSG + crusher/comb | N/A | 0.150% |
 | PushDSG + crusher/comb | N/A | 0.155% |
 
-GUI refresh frequency is unchanged; the expanded controls use the existing cached static scene. Native host profiling on the target Intel/Mojave machine remains necessary to assess total plugin/GUI cost.
+Reslice source-monitor changes do not wake the GUI when its source display is scrolled offscreen. GUI refresh frequency is unchanged; the expanded controls use the existing cached static scene. Native host profiling on the target Intel/Mojave machine remains necessary to assess total plugin/GUI cost.

@@ -170,7 +170,7 @@ inline void modulePanel(Painter& p,Rect r,int stage){
 inline bool monitorVisible(ParamID id,const Value& v,const RackState& s,int lfo){
  if(s.page==2)return false;
  if(s.page==1){if(id>=kUiLfoPhase0&&id<kModWaveRnd0)return int(id-kUiLfoPhase0)%4==lfo&&visible(s.position(scope));if(id>=kUiModWave0&&id<kReverbSource)return int(id-kUiModWave0)==lfo&&visible(s.position(scope));if(id==kUiFilterSeqStep)return visible(s.position({573,836,428,104}));if(id==kUiReverb||id==kUiReverbGate)return visible(s.position({300,1118,700,138}));if(id==kUiOutputL||id==kUiOutputR)return visible(s.position({92,1376,354,96}));return false;}
- if((id>=kUiWave0&&id<=kUiWaveSeconds)||(id>=kUiWaveLow0&&id<kReverbRateV2))return visible(waveRect(v,s));if(id==kUiGlitch)return visible(moduleRect(1,v,s));if(id==kUiStep||id==kUiRepeat)return visible(moduleRect(2,v,s));if((id>=kUiGaterStep&&id<kInputDeclick)||id==kUiGaterPhase)return visible(moduleRect(4,v,s));if(id==kUiResliceStep||id==kUiResliceActive||(id>=kUiResliceSource0&&id<kUiFilterSeqStep))return visible(moduleRect(3,v,s));return false;
+ if((id>=kUiWave0&&id<=kUiWaveSeconds)||(id>=kUiWaveLow0&&id<kReverbRateV2))return visible(waveRect(v,s));if(id==kUiGlitch)return visible(moduleRect(1,v,s));if(id==kUiStep||id==kUiRepeat)return visible(moduleRect(2,v,s));if((id>=kUiGaterStep&&id<kInputDeclick)||id==kUiGaterPhase)return visible(moduleRect(4,v,s));if(id==kUiResliceStep||id==kUiResliceActive||(id>=kUiResliceSource0&&id<kUiFilterSeqStep)){auto r=moduleRect(3,v,s);return visible({r.x+26,r.y+1073,923,72});}return false;
 }
 inline void restoreControlBackground(Painter& p,const Control& c,const Value& v,const RackState& s){
  if(c.id==kInputDeclick||c.id==kDeclickSensitivity){if(p.image)p.image(Backplate,c.r,c.r);return;}
