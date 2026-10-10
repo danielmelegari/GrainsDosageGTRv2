@@ -27,7 +27,7 @@ if(state.page==0){
    // Dedicated LiveCut-inspired Reslice controls; themed by the existing purple rack renderer.
    const ParamID advanced[]={kCutMinPhrase,kCutMaxPhrase,kCutMinRepeats,kCutMaxRepeats,kCutStutter,kCutArea,kCutDuty,kCutFillDuty,kCutFade,kCutMinAmp,kCutMaxAmp,kCutMinPan,kCutMaxPan,kCutMinPitch,kCutMaxPitch,kCutStraight,kCutRegular,kCutRitard,kCutSpeed,kCutCrusherOn,kCutMinBits,kCutMaxBits,kCutMinFreq,kCutMaxFreq,kCutCombOn,kCutCombType,kCutCombFeedback,kCutMinDelay,kCutMaxDelay,kCutPusher};
    const char* advancedNames[]={"MIN PHRASE","MAX PHRASE","MIN REP","MAX REP","STUTTER","AREA","DUTY","FILL DUTY","FADE","MIN AMP","MAX AMP","MIN PAN","MAX PAN","MIN PITCH","MAX PITCH","STRAIGHT","REGULAR","RITARD","WARP SPEED","CRUSHER ON","MIN BITS","MAX BITS","MIN FREQ","MAX FREQ","COMB ON","COMB TYPE","FEEDBACK","MIN DELAY","MAX DELAY","SQ PUSHER"};
-   for(int i=0;i<30;++i){int col=i%4,row=i/4;BODY(advanced[i],x+30+col*232,y+345+row*67,214,55,(advanced[i]==kCutCrusherOn||advanced[i]==kCutCombOn)?Toggle:(advanced[i]==kCutCombType?Select:Slider),advancedNames[i]);}
+   for(int i=0;i<30;++i){int col=i%4,row=i/4;if(advanced[i]==kCutCrusherOn||advanced[i]==kCutCombOn){BODY(advanced[i],x+30+col*232,y+345+row*67,214,55,Toggle,advancedNames[i]);}else if(advanced[i]==kCutCombType){BODY(advanced[i],x+30+col*232,y+345+row*67,214,55,Select,advancedNames[i]);}else{BODY(advanced[i],x+30+col*232,y+345+row*67,214,55,Slider,advancedNames[i]);}}
 
   }else{
    BODY(kGaterGrid,x+27,y+69,175,32,Select,"RATE");BODY(kGaterLengthRnd,x+227,y+69,183,32,Toggle,"LENGTH RND");BODY(kGaterStepRnd,x+436,y+69,180,32,Toggle,"STEP RND");BODY(kGaterLatch,x+643,y+69,150,32,Toggle,"LATCH");
