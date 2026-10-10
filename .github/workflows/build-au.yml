@@ -3,9 +3,9 @@ on:
   workflow_dispatch:
   push:
     branches: [main, work/mockup-purple-skin]
-    paths: ['src/**', 'cmake/**', 'assets/**', 'CMakeLists.txt', '.github/workflows/build-au.yml']
+    paths: ['src/**', 'cmake/**', 'assets/**', 'tools/diagnose-au.sh', 'docs/audio-unit.md', 'CMakeLists.txt', '.github/workflows/build-au.yml']
   pull_request:
-    paths: ['src/**', 'cmake/**', 'assets/**', 'CMakeLists.txt', '.github/workflows/build-au.yml']
+    paths: ['src/**', 'cmake/**', 'assets/**', 'tools/diagnose-au.sh', 'docs/audio-unit.md', 'CMakeLists.txt', '.github/workflows/build-au.yml']
 permissions:
   contents: read
 jobs:
@@ -54,8 +54,76 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent build-au/AU/Release/GrainsDosage.component GrainsDosage-macOS-Universal.component.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: GrainsDosage-macOS-AU
+          name: GrainsDosage-AU-candidate
           path: |
             GrainsDosage-macOS-Universal.component.zip
             auval.txt
+          if-no-files-found: error
+  validate-package:
+    needs: au
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15-intel
+            arch: x86_64
+          - runner: macos-15
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: GrainsDosage-AU-candidate
+          path: package
+      - name: Install the shipped ZIP on a clean host
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = '${{ matrix.arch }}'
+          mkdir -p "$HOME/Library/Audio/Plug-Ins/Components"
+          ditto -x -k package/GrainsDosage-macOS-Universal.component.zip "$HOME/Library/Audio/Plug-Ins/Components"
+          AU="$HOME/Library/Audio/Plug-Ins/Components/GrainsDosage.component"
+          test ! -L "$AU/Contents/Resources/plugin.vst3"
+          codesign --verify --deep --strict "$AU"
+          lipo "$AU/Contents/MacOS/GrainsDosage" -verify_arch x86_64 arm64
+          lipo "$AU/Contents/Resources/plugin.vst3/Contents/MacOS/GrainsDosage" -verify_arch x86_64 arm64
+          killall -9 AudioComponentRegistrar || true
+      - name: Discover and validate in the native architecture
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p validation
+          arch -${{ matrix.arch }} /usr/bin/auval -a | tee validation/registered.txt
+          grep -E 'aufx[[:space:]]+Gdsg[[:space:]]+Dmeg' validation/registered.txt
+          arch -${{ matrix.arch }} /usr/bin/auval -v aufx Gdsg Dmeg 2>&1 | tee validation/auval.txt
+          grep -F 'AU VALIDATION SUCCEEDED.' validation/auval.txt
+      - name: Collect installation diagnostics
+        if: always()
+        run: |
+          mkdir -p validation
+          bash tools/diagnose-au.sh > validation/diagnostics.txt 2>&1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: GrainsDosage-AU-validation-${{ matrix.arch }}
+          path: validation/
+  verified-package:
+    needs: [au, validate-package]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: GrainsDosage-AU-candidate
+          path: package
+      - name: Include installation and diagnosis instructions
+        run: |
+          cp docs/audio-unit.md package/READ-ME-FIRST.md
+          cp tools/diagnose-au.sh package/diagnose-au.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GrainsDosage-macOS-AU
+          path: package/
           if-no-files-found: error
