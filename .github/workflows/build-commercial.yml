@@ -1,17 +1,15 @@
-name: Build trial and licensed macOS editions
+name: Build commercial macOS edition (shared)
 on:
-  workflow_dispatch:
-  push:
-    branches: [work/mockup-purple-skin, main]
-    paths: ['src/**', 'assets/module-skins/**', 'cmake/**', 'CMakeLists.txt', 'tools/*license*', '.github/workflows/build-commercial.yml']
+  workflow_call:
+    inputs:
+      edition:
+        description: Trial or licensed edition
+        required: true
+        type: string
 permissions:
   contents: read
 jobs:
   commercial:
-    strategy:
-      fail-fast: false
-      matrix:
-        edition: [trial, licensed]
     runs-on: macos-15-intel
     timeout-minutes: 35
     steps:
@@ -33,7 +31,7 @@ jobs:
           -DSMTG_AUDIOUNIT_SDK_PATH="$RUNNER_TEMP/AudioUnitSDK"
           -DSMTG_ENABLE_AUV2_PLUGIN=ON -DSMTG_CREATE_PLUGIN_LINK=OFF
           -DSMTG_BUILD_UNIVERSAL_BINARY=ON
-          '-DCMAKE_OSX_ARCHITECTURES=x86_64;arm64' -DCMAKE_OSX_DEPLOYMENT_TARGET=10.14 -DGRAINS_EDITION=${{ matrix.edition }}
+          '-DCMAKE_OSX_ARCHITECTURES=x86_64;arm64' -DCMAKE_OSX_DEPLOYMENT_TARGET=10.14 -DGRAINS_EDITION=${{ inputs.edition }}
           '-DCMAKE_CXX_FLAGS=-Werror=unguarded-availability -Werror=unguarded-availability-new'
           '-DCMAKE_OBJCXX_FLAGS=-Werror=unguarded-availability -Werror=unguarded-availability-new'
       - name: Build Audio Unit
@@ -54,13 +52,13 @@ jobs:
       - name: Package edition
         run: |
           mkdir -p package
-          ditto -c -k --sequesterRsrc --keepParent build-au/AU/Release/GrainsDosage.component package/GrainsDosage-${{ matrix.edition }}.component.zip
+          ditto -c -k --sequesterRsrc --keepParent build-au/AU/Release/GrainsDosage.component package/GrainsDosage-${{ inputs.edition }}.component.zip
           codesign --force --sign - --timestamp=none build-au/VST3/Release/GrainsDosage.vst3
-          ditto -c -k --sequesterRsrc --keepParent build-au/VST3/Release/GrainsDosage.vst3 package/GrainsDosage-${{ matrix.edition }}.vst3.zip
+          ditto -c -k --sequesterRsrc --keepParent build-au/VST3/Release/GrainsDosage.vst3 package/GrainsDosage-${{ inputs.edition }}.vst3.zip
           cp docs/licensing.md package/READ-ME-FIRST.md
           cp auval.txt package/
       - uses: actions/upload-artifact@v4
         with:
-          name: GrainsDosage-${{ matrix.edition }}-macOS
+          name: GrainsDosage-${{ inputs.edition }}-macOS
           path: package/
           if-no-files-found: error
