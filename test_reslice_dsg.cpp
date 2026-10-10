@@ -25,5 +25,21 @@ int main(){
  for(double bar:{3.,3.5,5.})for(int mode=0;mode<3;++mode){qg::Reslice e;e.prepare(8000);qg::ResliceSettings s;s.enabled=true;s.algorithm=mode;s.barBeats=bar;s.phraseBeats=bar*2;e.set(s);for(int i=0;i<48000;++i){double beat=i/4000.;float l=.2f,r=.2f;e.process(l,r,beat,120);if(e.active())assert(e.nextCut()<=(std::floor((beat+1e-8)/bar)+1)*bar+1e-6);}}
  // No dependency on obsolete per-step on/off values.
  qg::Reslice e;e.prepare(8000);qg::ResliceSettings s;s.enabled=true;s.on.fill(false);e.set(s);for(int i=0;i<8000;++i){float l=.2f,r=.2f;e.process(l,r,i/4000.,120);}assert(e.active()&&e.events()>0);
+ // Extended controls must change sound, remain bounded and allocate nothing on the audio thread.
+ {
+  qg::Reslice plain,altered;plain.prepare(8000);altered.prepare(8000);
+  qg::ResliceSettings a,b;a.enabled=b.enabled=true;a.seed=b.seed=71;a.beats=b.beats=4;
+  b.duty=.66;b.fillDuty=.5;b.minPitch=b.maxPitch=7.;b.minPan=b.maxPan=.35;
+  b.minAmp=b.maxAmp=.75;b.crusherOn=true;b.minBits=b.maxBits=6.;
+  b.minFreq=b.maxFreq=2000.;b.combOn=true;b.minDelay=b.maxDelay=.003;b.combFeedback=.4;
+  b.warpStraight=.8;b.stutter=1.;b.maxRepeats=3;b.area=.9;
+  plain.set(a);altered.set(b);double difference=0.;guard=true;
+  for(int i=0;i<40000;++i){float v=.2f*std::sin(i*.061);float l=v,r=-v,x=v,y=-v;
+   double beat=i/4000.;plain.process(l,r,beat,120);altered.process(x,y,beat,120);
+   assert(std::isfinite(x)&&std::isfinite(y)&&std::abs(x)<5.&&std::abs(y)<5.);
+   if(i>8000)difference+=std::abs(l-x)+std::abs(r-y);
+  }
+  guard=false;assert(difference>20.);
+ }
  std::cout<<"PASS: three distinct generative cutters, stereo coherence, bypass, tempo/seek/mode changes and zero audio-thread allocations\n";
 }
