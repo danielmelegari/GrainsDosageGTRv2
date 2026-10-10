@@ -51,7 +51,7 @@ class Reslice {
   duration=std::max(1e-7,std::min(std::max(1./48.,duration),bar-barPhase));nextCut_=beat+duration;
   double history=std::min({double(write_-2),std::clamp(s_.beats,2.,16.)*samplesPerBeat,double(buffer_[0].size())-4});
   double requestedSpan=std::max(32.,duration*samplesPerBeat);speed_=1.;
-  if(mode==1&&random()<variation){constexpr double ratios[]={.5,.75,1.,1.5,2.};speed_=ratios[int(random()*5)];}
+  if(mode==1&&random()<variation){constexpr double ratios[]={.5,.75,1.,1.5,2.};speed_=ratios[int(random()*5)];}if(mode==1)speed_*=std::pow(2.,(std::clamp(s_.warpSpeed,0.,1.)-.9)*2.);
   bool repeat=events_>0&&repeatRun_<std::max(0,s_.maxRepeats)&&(repeatRun_>0&&repeatRun_<s_.minRepeats || random()<std::clamp(s_.repeat,0.,1.));if(repeat)++repeatRun_;else repeatRun_=0;bool anchor=barPhase<1e-7;
   if(!repeat||anchor||span_<32||start_<double(write_-2)-history){
    span_=std::min(requestedSpan,history);double depth=std::max(0.,history-span_);
