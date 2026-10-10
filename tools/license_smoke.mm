@@ -13,11 +13,16 @@ int main(int argc,char** argv){
  assert(evaluate(t,t+900,t)==State::ClockError);
  assert(evaluate(0,0,t)==State::StorageError);
  testCleanup();initialize();assert(!allowed.load()); // DAW scan cannot start a trial.
+#if GRAINS_TRIAL
  firstOpen();assert(allowed.load());assert(status().find("14 DAYS")!=std::string::npos);
  testRecord(t-trialSeconds,t);firstOpen();assert(!allowed.load());assert(status()=="TRIAL EXPIRED");
  firstOpen();assert(!allowed.load()); // reopening cannot restart an expired trial.
  testRecord(t-100,t+1000);firstOpen();assert(!allowed.load());assert(status()=="CHECK SYSTEM CLOCK");
- std::string error,bad=serial;bad.back()=bad.back()=='A'?'B':'A';
+#else
+ firstOpen();assert(!allowed.load());assert(status()=="ACTIVATE LICENSE");
+ testRecord(t,t);firstOpen();assert(!allowed.load()); // paid edition never grants a trial.
+#endif
+ std::string error,bad=serial;auto i=bad.size()-20;bad[i]=bad[i]=='A'?'B':'A';
  assert(!activate(bad,error));assert(!allowed.load());
  assert(!activate("GDS1.invalid.invalid",error));
  assert(activate(serial,error));assert(allowed.load());assert(status()=="LICENSED");

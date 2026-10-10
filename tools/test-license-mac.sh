@@ -12,6 +12,9 @@ p=pathlib.Path(sys.argv[1])
 (p/'license_test_key.h').write_text('namespace aztec::license { inline constexpr unsigned char publicKey[]={'+','.join(map(str,(p/'public.der').read_bytes()))+'}; }')
 (p/'serial').write_text('GDS1.'+base64.b64encode((p/'message').read_bytes()).decode()+'.'+base64.b64encode((p/'signature').read_bytes()).decode())
 PY
-clang++ -std=c++17 -fobjc-arc -mmacosx-version-min=10.14 -DGRAINS_COMMERCIAL=1 -DGRAINS_TRIAL=1 -DGRAINS_LICENSE_TEST=1 \
+for trial in 0 1; do
+clang++ -std=c++17 -fobjc-arc -mmacosx-version-min=10.14 -DGRAINS_COMMERCIAL=1 -DGRAINS_TRIAL="$trial" -DGRAINS_LICENSE_TEST=1 \
   -Isrc -I"$temp_dir" src/license_mac.mm tools/license_smoke.mm -framework Foundation -framework Security -o "$temp_dir/test"
 "$temp_dir/test" "$temp_dir/serial"
+
+done

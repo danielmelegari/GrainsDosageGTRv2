@@ -6,6 +6,7 @@
 #endif
 #import <Foundation/Foundation.h>
 #import <Security/Security.h>
+#include <algorithm>
 #include <chrono>
 #include <condition_variable>
 #include <mutex>
