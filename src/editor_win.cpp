@@ -298,9 +298,10 @@ class WinEditor final:public CPluginView{
   void draw(){
     layout();mockup::Painter painter;
     painter.image=[&](int asset,mockup::Rect r,mockup::Rect source){
-      auto* image=asset==mockup::Backplate?rackBackplate.get():rackAtlas.get();if(!image||image->GetLastStatus()!=Gdiplus::Ok)return;
+      auto* image=asset==mockup::Atlas?rackAtlas.get():rackBackplate.get();if(!image||image->GetLastStatus()!=Gdiplus::Ok)return;
       Gdiplus::Graphics g(dc);SIZE viewport{},logical{};GetViewportExtEx(dc,&viewport);GetWindowExtEx(dc,&logical);
       POINT offset{};GetViewportOrgEx(dc,&offset);g.TranslateTransform(float(offset.x),float(offset.y));g.ScaleTransform(float(viewport.cx)/logical.cx,float(viewport.cy)/logical.cy);g.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
+      if(asset==mockup::RoundScrew){Gdiplus::GraphicsPath circle;circle.AddEllipse(float(r.x),float(r.y),float(r.w),float(r.h));g.SetClip(&circle,Gdiplus::CombineModeIntersect);}
       g.DrawImage(image,Gdiplus::RectF(float(r.x),float(r.y),float(r.w),float(r.h)),float(source.x),float(source.y),float(source.w),float(source.h),Gdiplus::UnitPixel);
     };
     painter.box=[&](mockup::Rect r,skin::Rgb fill,skin::Rgb edge,double radius){

@@ -435,13 +435,14 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
     NSString* key=[NSString stringWithFormat:@"%d:%.3f,%.3f,%.3f,%.3f",asset,source.x,source.y,source.w,source.h];
     CGImageRef slice=(__bridge CGImageRef)rasterSlices[key];
     if(!slice){
-      NSImage* image=asset==mockup::Backplate?rackBackplate:rackAtlas;if(!image)return;
+      NSImage* image=asset==mockup::Atlas?rackAtlas:rackBackplate;if(!image)return;
       CGImageRef pixels=[image CGImageForProposedRect:nullptr context:nil hints:nil];
       CGImageRef cropped=CGImageCreateWithImageInRect(pixels,CGRectMake(source.x,source.y,source.w,source.h));if(!cropped)return;
       rasterSlices[key]=CFBridgingRelease(cropped);slice=(__bridge CGImageRef)rasterSlices[key];
     }
     CGContextRef context=[NSGraphicsContext currentContext].CGContext;CGContextSaveGState(context);
     CGContextTranslateCTM(context,r.x,r.y+r.h);CGContextScaleCTM(context,1,-1);
+    if(asset==mockup::RoundScrew){CGContextAddEllipseInRect(context,CGRectMake(0,0,r.w,r.h));CGContextClip(context);}
     CGContextSetInterpolationQuality(context,kCGInterpolationHigh);
     CGContextDrawImage(context,CGRectMake(0,0,r.w,r.h),slice);CGContextRestoreGState(context);
   };

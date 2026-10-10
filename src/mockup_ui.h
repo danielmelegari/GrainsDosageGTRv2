@@ -41,7 +41,7 @@ inline Rect scrollThumb(const RackState& s){auto r=scrollbar();double h=std::max
 inline Rect headerRect(int stage,const Value& value,const RackState& s){auto r=moduleRect(stage,value,s);return {r.x+17,r.y+10,655,41};}
 inline int hitRoute(double x,double y,const Value& value,const RackState& s){if(s.page!=0||y<bodyTop||y>=height)return -1;auto chain=routeChain(value);for(int i=0;i<4;++i)if(headerRect(chain[i],value,s).contains(x,y))return i;return -1;}
 inline int routeInsertion(double x,double y,const Value& value,const RackState& s){if(s.page!=0||x<54||x>1028||y<bodyTop||y>=height)return -1;auto chain=routeChain(value);for(int i=0;i<4;++i){auto r=moduleRect(chain[i],value,s);if(y<r.y+r.h/2)return i;}return 4;}
-inline Rect randomRect(int stage,const Value& v,const RackState& s){auto r=moduleRect(stage,v,s);return {r.x+805,r.y+(stage==3?1117:13),stage==3?143.:119.,30};}
+inline Rect randomRect(int stage,const Value& v,const RackState& s){auto r=moduleRect(stage,v,s);return {r.x+805,r.y+(stage==3?790:13),stage==3?143.:119.,30};}
 inline Rect enableRect(int stage,const Value& v,const RackState& s){auto r=moduleRect(stage,v,s);return {r.x+712,r.y+13,82,30};}
 inline Rect stepRect(int i,int stage,const Value& v,const RackState& s){auto r=moduleRect(stage,v,s);double y=stage==3?130:stage==4?208:226;return {r.x+30+i*57.2,r.y+y,32,stage==3?57.:stage==4?55.:46.};}
 inline int hitStep(double x,double y,const Value& v,const RackState& s,int& stage){if(s.page!=0||y<bodyTop)return -1;for(int st:{2,4})for(int i=0;i<16;++i)if(stepRect(i,st,v,s).contains(x,y)){stage=st;return i;}return -1;}
@@ -71,7 +71,7 @@ struct Motion {
  void update(const Value& value,int drag,int insertion){auto now=std::chrono::steady_clock::now();double dt=ready?std::clamp(std::chrono::duration<double>(now-last).count(),0.,.1):0.;last=now;auto chain=routeChain(value);if(drag>=0&&insertion>=0)chain=fourModuleOrder(int(std::round(moveRoute(chain,drag,insertion)*120))-1);double ease=1-std::exp(-dt/.065),top=430;routing=false;for(int stage:chain){y[stage]=ready?y[stage]+ease*(top-y[stage]):top;if(std::abs(top-y[stage])>.8)routing=true;top+=moduleHeight(stage)+14;}int playing=int(std::round(value(kUiGaterStep)*15));for(int i=0;i<16;++i){double target=i==playing&&value(kGaterEnabled)>.5?std::min(value(kUiGaterPhase),value(kUiGaterLength0+i)):0.;gate[i]+=(1-std::exp(-dt/.025))*(target-gate[i]);}for(int ch=0;ch<2;++ch){double target=value(kUiOutputL+ch);meters[ch]+=(1-std::exp(-dt/(target>meters[ch]?.075:.3)))*(target-meters[ch]);}ready=true;}
 };
 struct WaveVisual {std::array<double,waveformBins> lo{},hi{};double active=0;void update(const Value& v){for(int i=0;i<waveformBins;++i){lo[i]+=.06*((v(kUiWaveLow0+i)*2-1)-lo[i]);hi[i]+=.06*((v(kUiWaveHigh0+i)*2-1)-hi[i]);}active+=.06*((v(kUiGrainActive)>.5?1.:0.)-active);}};
-enum Art {Backplate, Atlas};
+enum Art {Backplate, Atlas, RoundScrew};
 enum Sprite {KnobFace, Pill, Tab, ActiveTab, Scope, XY, Meter, Track, Thumb, Led, Amber, Locked, Unlocked};
 inline Rect spriteRect(Sprite sprite){
  static constexpr Rect frames[]={
@@ -161,12 +161,16 @@ inline void renderControl(Painter& p,const Control& c,const Value& value,const D
 inline void rackPanel(Painter& p,Rect r){if(!visible(r))return;const Rect src{52,122,798,389};constexpr double cap=27;auto img=[&](Rect d,Rect s){if(p.image)p.image(Backplate,d,s);};img({r.x+cap,r.y+cap,r.w-2*cap,r.h-2*cap},{src.x+cap,src.y+cap,src.w-2*cap,src.h-2*cap});for(int side=0;side<2;++side){double x=side?r.x+r.w-cap:r.x,sx=side?src.x+src.w-cap:src.x;img({x,r.y,cap,cap},{sx,src.y,cap,cap});img({x,r.y+r.h-cap,cap,cap},{sx,src.y+src.h-cap,cap,cap});img({x,r.y+cap,cap,r.h-2*cap},{sx,src.y+cap,cap,src.h-2*cap});}img({r.x+cap,r.y,r.w-2*cap,cap},{src.x+cap,src.y,src.w-2*cap,cap});img({r.x+cap,r.y+r.h-cap,r.w-2*cap,cap},{src.x+cap,src.y+src.h-cap,src.w-2*cap,cap});}
 inline bool structural(ParamID id){return id==kPanMode||id==kReverbSource||id==kReverbModel||id==kFilterModel||id==kFilterSeqMode||id==kRoutingOrder||id==kModuleOrder;}
 inline void modulePanel(Painter& p,Rect r,int stage){
- rackPanel(p,r);if(!visible(r))return;
+ if(!visible(r))return;
  constexpr Rgb colors[]={{19,40,42},{30,27,36},{46,33,22},{36,26,48},{22,32,48}};
- Rect interior{r.x+27,r.y+27,r.w-54,r.h-54};
- p.box(interior,colors[stage],colors[stage],0);
- if(p.moduleBackground)p.moduleBackground(stage,interior);
+ // The JPG owns the entire module face, including the area beneath the screws.
+ p.box(r,colors[stage],colors[stage],0);
+ if(p.moduleBackground)p.moduleBackground(stage,r);
+ // Reuse only the circular metal screw faces, without any purple corner pixels.
+ if(p.image)for(int side=0;side<2;++side)for(int bottom=0;bottom<2;++bottom)
+  p.image(RoundScrew,{side?r.x+r.w-26:r.x+8,bottom?r.y+r.h-26:r.y+7,18,18},{60,129,18,18});
 }
+
 inline bool monitorVisible(ParamID id,const Value& v,const RackState& s,int lfo){
  if(s.page==2)return false;
  if(s.page==1){if(id>=kUiLfoPhase0&&id<kModWaveRnd0)return int(id-kUiLfoPhase0)%4==lfo&&visible(s.position(scope));if(id>=kUiModWave0&&id<kReverbSource)return int(id-kUiModWave0)==lfo&&visible(s.position(scope));if(id==kUiFilterSeqStep)return visible(s.position({573,836,428,104}));if(id==kUiReverb||id==kUiReverbGate)return visible(s.position({300,1118,700,138}));if(id==kUiOutputL||id==kUiOutputR)return visible(s.position({92,1376,354,96}));return false;}

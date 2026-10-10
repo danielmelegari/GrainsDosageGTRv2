@@ -60,7 +60,9 @@ ratio. Backgrounds are cached when opening the editor, not reloaded each frame.
 Missing or invalid images fall back to bundled artwork; deleting a custom file
 restores the default on the next opening.
 
-JPGs change each panel's colors, texture and decoration. Knobs, readable text,
+JPGs cover the complete module face from its left edge to its right edge, including
+the area beneath the rack screws. There is no separate purple frame. JPGs change
+each panel's colors, texture and decoration. Knobs, readable text,
 meters, buttons, layout and rack screws are separate live UI layers and do not
 move or change shape when you replace a JPG. Do not bake text or controls into
 these backgrounds. Edits outside the signed plugin bundle preserve its signature.
