@@ -16,7 +16,7 @@ using Steinberg::Vst::ParamID;
 #else
 using ParamID = std::uint32_t;
 #endif
-enum Param : ParamID { kDivision, kSize, kDensity, kPitch, kPosition, kChaos, kMix, kAttack, kRelease, kFeedback, kStep0, kGrainMix = kStep0 + 16, kGlitchMix, kGlitchDivision, kGlitchChance, kGlitchReverse, kRepeatOn, kRepeatMix, kRepeatDivision, kBypassReserved /* global BYPASS button removed; slot kept for legacy state IDs */, kLfo0, kLegacyCount = kLfo0 + qg::lfoCount * (9 + 6), kGlitchSeq = kLegacyCount, kRepeatSeq, kGlitchStep0, kRepeatStep0 = kGlitchStep0+16, kRepeatRate0 = kRepeatStep0+16, kRepeatPitch0 = kRepeatRate0+16, kStretchOn = kRepeatPitch0+16, kStretchSpeed, kRandomSteps0, kDensityFlow = kRandomSteps0+4, kTranspose, kXYX, kXYY, kXYEnable, kXTarget, kYTarget, kXAmount, kYAmount, kModuleOrder, kExtraRoutes0, kGlitchMove = kExtraRoutes0 + 8, kGlitchVariation, kGlitchRefresh, kRepeatAuto, kRepeatInterval, kRepeatDuration, kRepeatChance, kUiStep, kUiGlitch, kUiRepeat, kUiLevel, kMasterFilter, kFilterType, kFilterCutoff, kFilterResonance, kMasterLimiter, kNormalize, kFilterSlope, kFilterDrive, kGrainEnabled, kGlitchEnabled, kRepeatEnabled, kGrainPan, kPanMode, kReverbOn, kReverbType, kReverbGrid, kReverbMix, kReverbStep0, kUiReverb=kReverbStep0+16, kReverbLength, kUiWave0, kUiGrainStart=kUiWave0+128, kUiGrainEnd, kUiGrainHead, kUiGrainActive, kUiWaveSeconds, kLfoSlots0, kLfoSpeed0=kLfoSlots0+48, kReverbKill=kLfoSpeed0+4, kUiLfoPhase0, kUiLfoCycle0=kUiLfoPhase0+4, kUiLfoEpoch0=kUiLfoCycle0+4, kModWaveRnd0=kUiLfoEpoch0+4, kUiModWave0=kModWaveRnd0+4, kReverbSource=kUiModWave0+4, kReverbRandomRate, kUiReverbGate, kLimiterCeiling, kGaterEnabled, kGaterGrid, kGaterLengthRnd, kGaterStepRnd, kGaterChance, kGaterState0, kGaterLength0=kGaterState0+16, kUiGaterStep=kGaterLength0+16, kUiGaterState0, kUiGaterLength0=kUiGaterState0+16, kInputDeclick=kUiGaterLength0+16, kDeclickSensitivity, kFilterModel, kResliceEnabled, kResliceLength, kResliceMix, kResliceStep0, kResliceIndex0=kResliceStep0+16, kGaterLatch=kResliceIndex0+16, kGaterRelease0, kUiResliceStep=kGaterRelease0+16, kUiResliceActive, kReverbModel, kGaterMinLength, kGaterTie, kGaterSustain0, kGlitchTriggerRate=kGaterSustain0+16, kResliceRndOn, kResliceRndRate, kFilterSeqOn, kFilterSeqMode, kFilterSeqPattern, kFilterSeqRate, kFilterSeqDepth, kFilterSeqGlide, kCombRoot, kCombOctave, kCombScale, kUiResliceSource0, kUiFilterSeqStep=kUiResliceSource0+16, kGrainBuffer, kFreeze = kGrainBuffer+4, kRandomAll, kPresetPrev, kPresetNext, kUiTab, kCount };
+enum Param : ParamID { kDivision, kSize, kDensity, kPitch, kPosition, kChaos, kMix, kAttack, kRelease, kFeedback, kStep0, kGrainMix = kStep0 + 16, kGlitchMix, kGlitchDivision, kGlitchChance, kGlitchReverse, kRepeatOn, kRepeatMix, kRepeatDivision, kBypassReserved /* global BYPASS button removed; slot kept for legacy state IDs */, kLfo0, kLegacyCount = kLfo0 + qg::lfoCount * (9 + 6), kGlitchSeq = kLegacyCount, kRepeatSeq, kGlitchStep0, kRepeatStep0 = kGlitchStep0+16, kRepeatRate0 = kRepeatStep0+16, kRepeatPitch0 = kRepeatRate0+16, kStretchOn = kRepeatPitch0+16, kStretchSpeed, kRandomSteps0, kDensityFlow = kRandomSteps0+4, kTranspose, kXYX, kXYY, kXYEnable, kXTarget, kYTarget, kXAmount, kYAmount, kModuleOrder, kExtraRoutes0, kGlitchMove = kExtraRoutes0 + 8, kGlitchVariation, kGlitchRefresh, kRepeatAuto, kRepeatInterval, kRepeatDuration, kRepeatChance, kUiStep, kUiGlitch, kUiRepeat, kUiLevel, kMasterFilter, kFilterType, kFilterCutoff, kFilterResonance, kMasterLimiter, kNormalize, kFilterSlope, kFilterDrive, kGrainEnabled, kGlitchEnabled, kRepeatEnabled, kGrainPan, kPanMode, kReverbOn, kReverbType, kReverbGrid, kReverbMix, kReverbStep0, kUiReverb=kReverbStep0+16, kReverbLength, kUiWave0, kUiGrainStart=kUiWave0+128, kUiGrainEnd, kUiGrainHead, kUiGrainActive, kUiWaveSeconds, kLfoSlots0, kLfoSpeed0=kLfoSlots0+48, kReverbKill=kLfoSpeed0+4, kUiLfoPhase0, kUiLfoCycle0=kUiLfoPhase0+4, kUiLfoEpoch0=kUiLfoCycle0+4, kModWaveRnd0=kUiLfoEpoch0+4, kUiModWave0=kModWaveRnd0+4, kReverbSource=kUiModWave0+4, kReverbRandomRate, kUiReverbGate, kLimiterCeiling, kGaterEnabled, kGaterGrid, kGaterLengthRnd, kGaterStepRnd, kGaterChance, kGaterState0, kGaterLength0=kGaterState0+16, kUiGaterStep=kGaterLength0+16, kUiGaterState0, kUiGaterLength0=kUiGaterState0+16, kInputDeclick=kUiGaterLength0+16, kDeclickSensitivity, kFilterModel, kResliceEnabled, kResliceLength, kResliceMix, kResliceStep0, kResliceIndex0=kResliceStep0+16, kGaterLatch=kResliceIndex0+16, kGaterRelease0, kUiResliceStep=kGaterRelease0+16, kUiResliceActive, kReverbModel, kGaterMinLength, kGaterTie, kGaterSustain0, kGlitchTriggerRate=kGaterSustain0+16, kResliceRndOn, kResliceRndRate, kFilterSeqOn, kFilterSeqMode, kFilterSeqPattern, kFilterSeqRate, kFilterSeqDepth, kFilterSeqGlide, kCombRoot, kCombOctave, kCombScale, kUiResliceSource0, kUiFilterSeqStep=kUiResliceSource0+16, kGrainBuffer, kFreeze = kGrainBuffer+4, kRandomAll, kPresetPrev, kPresetNext, kUiTab, kSlotPolarity0, kRoutingOrder=kSlotPolarity0+24, kUiWaveLow0, kUiWaveHigh0=kUiWaveLow0+256, kReverbRateV2=kUiWaveHigh0+256, kUiGaterPhase, kMixLock0, kUiOutputL=kMixLock0+6, kUiOutputR, kModWaveRate0, kResliceAlgorithm=kModWaveRate0+4, kReslicePhrase, kResliceRepeat, kResliceVariation, kResliceFill, kResliceReverse, kResliceSeed, kResliceSubdivision, kResliceFade, kResliceMinAmp, kResliceMaxAmp, kResliceMinPan, kResliceMaxPan, kResliceMinPitch, kResliceMaxPitch, kResliceDuty, kResliceFillDuty, kResliceMinPhrase, kResliceMinRepeats, kResliceMaxRepeats, kResliceStutter, kResliceArea, kResliceStraight, kResliceRegular, kResliceRitard, kResliceWarpSpeed, kResliceActivity, kResliceCrushOn, kResliceMinBits, kResliceMaxBits, kResliceMinFreq, kResliceMaxFreq, kResliceCombOn, kResliceCombType, kResliceCombFeedback, kResliceMinDelay, kResliceMaxDelay, kCount };
 // Tab strip: the five top-row modules — Granulizer / PreSlicer / BeatRepeater /
 // Reslice / Gater — each own their own CARD: one shared panel area spanning the
 // canvas from extreme left to extreme right (x=16..1304, y=98..502), switched
@@ -30,6 +30,17 @@ enum Param : ParamID { kDivision, kSize, kDensity, kPitch, kPosition, kChaos, kM
 // existing AUDIO ORDER control (kModuleOrder -> aztec::moduleOrders), so no DSP
 // changes are involved.
 constexpr int tabCount=5;
+constexpr int kLegacySkinCount=int(kUiTab)+1;
+constexpr int waveformBins=256;
+constexpr int slotPolarity(int l,int slot){return kSlotPolarity0+l*6+slot;}
+// 120 permutations without changing the six legacy order values.
+inline std::array<int,5> fiveModuleOrder(int index){
+ std::array<int,5> pool{{0,1,2,3,4}},out{};const int factorial[]={24,6,2,1,1};
+ index=std::clamp(index,0,119);for(int i=0;i<5;++i){int n=index/factorial[i];index%=factorial[i];out[i]=pool[n];for(int j=n;j<4-i;++j)pool[j]=pool[j+1];}return out;
+}
+// Preserve saved routing IDs while removing the retired Preslicer stage.
+inline std::array<int,4> fourModuleOrder(int index){auto old=fiveModuleOrder(index);std::array<int,4> out{};int n=0;for(int stage:old)if(stage!=1)out[n++]=stage;return out;}
+inline double fourModuleRouting(std::array<int,4> order){for(int i=0;i<120;++i)if(fourModuleOrder(i)==order)return (i+1)/120.;return 0.;}
 // Tab values are stored normalized over (tabCount-1) so the full 0..1 range
 // maps exactly onto the five cards.
 inline double tabToValue(int tab){return double(std::clamp(tab,0,tabCount-1))/double(tabCount-1);}
@@ -89,7 +100,7 @@ constexpr int routeID(int lfo,int target) { return target<6 ? lfoID(lfo,lRoute0+
 
 namespace aztec { constexpr std::array<double,8> captureIntervals={.25,.5,1.,2.,4.,8.,16.,32.}; }
 
-namespace aztec { constexpr int presetCount=kCount; constexpr bool isMonitor(int id){return (id>=kUiStep&&id<=kUiLevel)||id==kUiReverb||(id>=kUiWave0&&id<=kUiWaveSeconds)||(id>=kUiLfoPhase0&&id<kModWaveRnd0)||(id>=kUiModWave0&&id<kReverbSource)||id==kUiReverbGate||(id>=kUiGaterStep&&id<kInputDeclick)||id==kUiResliceStep||id==kUiResliceActive||(id>=kUiResliceSource0&&id<=kUiFilterSeqStep)||id==kUiTab;} }
+namespace aztec { constexpr int presetCount=kCount; constexpr bool isMonitor(int id){return (id>=kUiStep&&id<=kUiLevel)||id==kUiReverb||(id>=kUiWave0&&id<=kUiWaveSeconds)||(id>=kUiLfoPhase0&&id<kModWaveRnd0)||(id>=kUiModWave0&&id<kReverbSource)||id==kUiReverbGate||(id>=kUiGaterStep&&id<kInputDeclick)||id==kUiResliceStep||id==kUiResliceActive||(id>=kUiResliceSource0&&id<=kUiFilterSeqStep)||id==kUiTab||(id>=kUiWaveLow0&&id<kReverbRateV2)||id==kUiGaterPhase||id==kUiOutputL||id==kUiOutputR;} }
 
 namespace aztec {
 constexpr int slotTarget(int l,int slot){return kLfoSlots0+l*12+slot*2;}
@@ -119,4 +130,31 @@ inline std::array<double,qg::modTargetCount> unpackModMagnitudes(uint64_t p) {
 inline std::array<double,kCount>& modDepthMap() { static std::array<double,kCount> m{}; return m; }
 inline void updateModDepths(const std::array<double,qg::modTargetCount>& mods) { modDepthMap()=modulationDepths(mods); }
 inline double modDepth(int id) { return id>=0&&id<int(kCount)?modDepthMap()[id]:0.; }
+}
+
+
+namespace aztec {
+inline double reverbRate(double choice,double oldRate,bool random){
+ constexpr double beats[]={1.,.5,.25,.125,1.5,.75};int n=std::clamp(int(std::round(choice*6.)),0,6);
+ return n?beats[n-1]:std::pow(.5,int(std::round(oldRate*(random?2.:3.))));
+}
+}
+
+namespace aztec {
+constexpr ParamID lockableMixes[]={kGrainMix,kGlitchMix,kRepeatMix,kResliceMix,kReverbMix,kMix};
+inline int mixLockFor(ParamID id){for(int i=0;i<6;++i)if(lockableMixes[i]==id)return int(kMixLock0)+i;return -1;}
+template<class Getter> bool mixIsLocked(ParamID id,Getter get){int lock=mixLockFor(id);return lock>=0&&get(ParamID(lock))>=.5;}
+}
+
+namespace aztec {
+template<class Getter> inline int modWaveSelection(Getter get,int lfo){int v=int(std::round(get(kModWaveRate0+lfo)*7.));return v?std::clamp(v-1,0,6):int(std::round(get(kModWaveRnd0+lfo)*4.));}
+}
+
+namespace aztec {
+inline bool retiredPreslicerParam(int id){return id==kGlitchMix||id==kGlitchDivision||id==kGlitchChance||id==kGlitchReverse||id==kGlitchSeq||(id>=kGlitchStep0&&id<kRepeatStep0)||id==kGlitchEnabled||id==kGlitchMove||id==kGlitchVariation||id==kGlitchRefresh||id==kGlitchTriggerRate;}
+inline bool availableMenuOption(ParamID id,int option){
+ if(id==kXTarget||id==kYTarget)return !retiredPreslicerParam(option-1);
+ for(int l=0;l<4;++l)for(int s=0;s<6;++s)if(id==slotTarget(l,s)){int t=option-1;return !((t>=12&&t<=15)||t==27||t==29||t==35||t>=85);}
+ return true;
+}
 }

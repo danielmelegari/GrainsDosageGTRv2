@@ -1,5 +1,13 @@
 cmake_minimum_required(VERSION 3.25)
 project(GrainsDosage VERSION 0.13.0 LANGUAGES CXX)
+set(GRAINS_EDITION "development" CACHE STRING "development, trial, or licensed")
+set_property(CACHE GRAINS_EDITION PROPERTY STRINGS development trial licensed)
+if(NOT GRAINS_EDITION MATCHES "^(development|trial|licensed)$")
+  message(FATAL_ERROR "Invalid GRAINS_EDITION")
+endif()
+if(NOT GRAINS_EDITION STREQUAL "development" AND NOT APPLE)
+  message(FATAL_ERROR "Commercial licensing currently targets macOS AU/VST3")
+endif()
 
 if(MSVC)
   # The SDK selects its CRT using SMTG_USE_STATIC_CRT. Keep it aligned with
@@ -88,6 +96,14 @@ if(APPLE)
   enable_language(OBJCXX)
   set_property(TARGET GrainsDosage PROPERTY OBJCXX_STANDARD 17)
   set_property(TARGET GrainsDosage PROPERTY OBJCXX_STANDARD_REQUIRED ON)
+  foreach(art backplate controls)
+    configure_file("assets/approved-rack/${art}.png" "${CMAKE_CURRENT_BINARY_DIR}/approved-${art}.png" COPYONLY)
+    set_source_files_properties("${CMAKE_CURRENT_BINARY_DIR}/approved-${art}.png" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+    target_sources(GrainsDosage PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/approved-${art}.png")
+  endforeach()
+  configure_file(assets/mockup/knob.png "${CMAKE_CURRENT_BINARY_DIR}/mockup-knob.png" COPYONLY)
+  set_source_files_properties("${CMAKE_CURRENT_BINARY_DIR}/mockup-knob.png" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+  target_sources(GrainsDosage PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/mockup-knob.png")
   # knobOK.png is the user-supplied knob face: copy it over the shipped knob
   # sprite so both the macOS bundle and the Windows RC resource pick it up.
   if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/workspace/assets/knobOK.png")
@@ -98,10 +114,19 @@ if(APPLE)
   target_sources(GrainsDosage PRIVATE ${GRAINS_SPRITES})
   set_source_files_properties(assets/GrainsDosage-skin.png PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
   target_sources(GrainsDosage PRIVATE src/editor_mac.mm assets/GrainsDosage-skin.png)
+  file(GLOB GRAINS_MODULE_JPGS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/module-skins/*.jpg")
+  set_source_files_properties(${GRAINS_MODULE_JPGS} PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+  target_sources(GrainsDosage PRIVATE ${GRAINS_MODULE_JPGS})
   set_source_files_properties(src/editor_mac.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
   find_library(AZTEC_COCOA_FRAMEWORK Cocoa REQUIRED)
   find_library(AZTEC_COREFOUNDATION_FRAMEWORK CoreFoundation REQUIRED)
   target_link_libraries(GrainsDosage PRIVATE ${AZTEC_COCOA_FRAMEWORK} ${AZTEC_COREFOUNDATION_FRAMEWORK})
+  if(NOT GRAINS_EDITION STREQUAL "development")
+    target_sources(GrainsDosage PRIVATE src/license_mac.mm)
+    set_source_files_properties(src/license_mac.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
+    target_compile_definitions(GrainsDosage PRIVATE GRAINS_COMMERCIAL=1 GRAINS_TRIAL=$<STREQUAL:${GRAINS_EDITION},trial>)
+    target_link_libraries(GrainsDosage PRIVATE "-framework Security")
+  endif()
 
   # Optional AudioUnit (AU v2) bundle for Logic Pro / GarageBand. Enabled with
   # -DSMTG_ENABLE_AUV2_PLUGIN=ON: builds a separate GrainsDosage.component whose
@@ -109,13 +134,7 @@ if(APPLE)
   # GrainsDosage.vst3 via Resources/plugin.vst3 (same code path as the SDK's own
   # AUv2 samples). Requires the Xcode generator and an Apple AudioUnitSDK checkout.
   if(SMTG_ENABLE_AUV2_PLUGIN AND SMTG_ENABLE_AUV2_BUILDS)
-    configure_file(src/au_info.plist.in "${CMAKE_CURRENT_BINARY_DIR}/au_info.plist" COPYONLY)
-    smtg_target_add_auv2(GrainsDosageAU
-      BUNDLE_NAME            "GrainsDosage"
-      BUNDLE_IDENTIFIER      com.danielmelegari.aztecgrains.au
-      INFO_PLIST_TEMPLATE    "${CMAKE_CURRENT_BINARY_DIR}/au_info.plist"
-      VST3_PLUGIN_TARGET     GrainsDosage
-    )
+    include(cmake/GrainsAU.cmake)
   elseif(SMTG_ENABLE_AUV2_PLUGIN)
     message(FATAL_ERROR
       "[GrainsDosage] -DSMTG_ENABLE_AUV2_PLUGIN=ON was requested but the SDK did not "
@@ -154,7 +173,9 @@ endif()
 option(GRAINS_BUILD_TESTS "Build DSP and state regression tests" OFF)
 if(GRAINS_BUILD_TESTS)
   enable_testing()
-  foreach(suite engine modulation features rhythm random master upgrade gater declick expansion state glitch_trigger musical gui_layout)
+  add_executable(grains_export_presets tools/export_factory_presets.cpp)
+  set_target_properties(grains_export_presets PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/preset-bank/$<CONFIG>")
+  foreach(suite reslice_controls reslice_dsg bank_collection modwave_rate buffer_memory engine modulation features rhythm random master upgrade gater declick expansion state glitch_trigger musical gui_layout knob_rotation routing_polarity ui_motion preset_bank)
     add_executable(grains_test_${suite} test_${suite}.cpp)
     target_include_directories(grains_test_${suite} PRIVATE "${VST3_SDK_ROOT}")
     if(MSVC)
@@ -192,3 +213,4 @@ if(GRAINS_BUILD_TESTS)
     add_test(NAME ${suite} COMMAND grains_test_${suite})
   endforeach()
 endif()
+

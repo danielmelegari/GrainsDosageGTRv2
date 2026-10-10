@@ -1,1 +1,3 @@
-(empty)artifacts/
+**/__pycache__/
+publisher-private.pem
+*private-key*.pem

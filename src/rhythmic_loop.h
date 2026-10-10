@@ -29,6 +29,10 @@ class RhythmicLoop {
     position_=0.;frozen_=true;transition_=64;
   }
 public:
+  // Engine's legacy parallel path never runs alongside this serial processor.
+  // Reuse its history bank instead of reserving another stereo 16-second ring.
+  // The caller tracks validity and resets its counters when switching paths.
+  std::array<std::vector<float>,2>& legacyStorage(){return history_;}
   void prepare(double rate){for(auto& b:history_)b.assign(size_t(rate*16.),0.f);for(auto& b:capture_)b.assign(size_t(rate*16.),0.f);smooth_=std::exp(-1./(.002*rate));reset();}
   void reset(){written_=0;firstSignal_=-1;frozen_=requested_=false;position_=blend_=0.;previous_={};transition_=0;}
   bool active()const{return frozen_&&blend_>.01;}
@@ -56,3 +60,4 @@ public:
   }
 };
 }
+

@@ -1,0 +1,22 @@
+name: Build GrainsDosage Trial — macOS AU and VST3
+on:
+  workflow_dispatch:
+  push:
+    branches: [work/mockup-purple-skin, main]
+    paths:
+      - 'src/**'
+      - 'assets/module-skins/**'
+      - 'cmake/**'
+      - 'CMakeLists.txt'
+      - 'tools/*license*'
+      - 'tools/check-au-deployment.py'
+      - 'docs/licensing.md'
+      - '.github/workflows/build-commercial.yml'
+      - '.github/workflows/build-trial.yml'
+permissions:
+  contents: read
+jobs:
+  build:
+    uses: ./.github/workflows/build-commercial.yml
+    with:
+      edition: trial
