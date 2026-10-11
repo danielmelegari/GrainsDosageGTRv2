@@ -1,0 +1,68 @@
+name: Build installers
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build VST3
+        shell: bash
+        run: |
+          # Replace with your existing Windows VST3 build steps,
+          # so the .vst3 bundle ends up under build/
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Build installer
+        shell: cmd
+        run: |
+          "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\windows\GrainsDosageGTRv2.iss
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: dist/*.exe
+
+  macos-installer:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build VST3 + AU
+        shell: bash
+        run: |
+          # Replace with your existing macOS VST3 + AU build steps,
+          # so the bundles end up under build/
+          cmake -B build -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+          cmake --build build --config Release
+
+      - name: Build pkg
+        shell: bash
+        run: |
+          chmod +x installer/macos/build-pkg.sh
+          installer/macos/build-pkg.sh "${GITHUB_REF_NAME#v}"
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-installer
+          path: dist/*.pkg
+
+      # --- Optional: attach installers to the GitHub release ---
+      # - name: Attach to release
+      #   uses: softprops/action-gh-release@v2
+      #   if: startsWith(github.ref, 'refs/tags/')
+      #   with:
+      #     files: |
+      #       dist/*.pkg
