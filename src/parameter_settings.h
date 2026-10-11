@@ -11,7 +11,8 @@ inline qg::Settings settings(const std::array<double, kCount>& saved, double tem
       if(target>=0 && target<int(kXYX)) p[target]=std::clamp(p[target]+(value(saved,axis?kXYY:kXYX)*2.-1.)*(value(saved,axis?kYAmount:kXAmount)*2.-1.),0.,1.);
     }
   }
-  qg::Settings s; s.tempo = tempo; s.sampleRate = rate;
+  qg::Settings s;const double loopWindows[]={8.,4.,2.,1.};for(int i=0;i<4;++i){s.loopOn[i]=value(p,moduleLoopOn(i))>=.5;s.loopBeats[i]=loopWindows[int(std::round(value(p,moduleLoopWindow(i))*3.))];}
+  s.tempo = tempo; s.sampleRate = rate;
   s.division = .25; // Fixed sixteenth-note density clock; no grain gate.
   s.size = .015 + value(p, kSize) * .235;
   s.density = 1. + value(p, kDensity) * 31.;

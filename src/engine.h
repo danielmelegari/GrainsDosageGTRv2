@@ -10,6 +10,7 @@
 #include "gater.h"
 #include "quantized_trigger.h"
 #include "reslice.h"
+#include "module_loop.h"
 #include "filter_bank.h"
 #include "filter_sequencer.h"
 #include "space_reverb.h"
@@ -26,6 +27,7 @@ constexpr int maxVoices = 128;
 constexpr double pi = 3.14159265358979323846;
 
 struct Settings {
+  std::array<bool,4> loopOn{};std::array<double,4> loopBeats{{8,8,8,8}};
   FilterSequenceSettings filterSequence;
   GaterSettings gater;ResliceSettings reslice;bool playing=true;int filterModel=0,reverbModel=0;
   double tempo = 120., sampleRate = 44100.;
@@ -72,6 +74,9 @@ class Engine {
   Modulation modulation_;
   FilterSequencer filterSequencer_;
   Gater gater_;Reslice reslice_;FilterBank filter_;LevelMatch match_;SpaceReverb reverb_;double moduleBlend_[3]={1.,1.,1.};bool panRight_=false;
+  std::array<ModuleLoop,4> moduleLoops_;
+  void loop(int i,float& l,float& r,bool enabled,double beat){moduleLoops_[i].process(l,r,settings_.loopOn[i],settings_.loopBeats[i],enabled,beat,settings_.tempo,settings_.playing);}
+  void loop(int i,double& l,double& r,bool enabled,double beat){float fl=float(l),fr=float(r);const bool wasActive=moduleLoops_[i].active();loop(i,fl,fr,enabled,beat);if(wasActive||moduleLoops_[i].active()){l=fl;r=fr;}}
   FreeStretch stretch_;
   Transpose transpose_;
   double grainClock_=0.;
@@ -379,6 +384,7 @@ public:
   }
   void prepare(double sampleRate) {
     settings_.sampleRate = std::max(8000., sampleRate);
+    for(auto& loop:moduleLoops_)loop.prepare(settings_.sampleRate);
     filterSequencer_.reset();gater_.prepare(settings_.sampleRate);reslice_.prepare(settings_.sampleRate);filter_.prepare(settings_.sampleRate);match_.prepare(settings_.sampleRate);reverb_.prepare(settings_.sampleRate);panRight_=false;for(int i=0;i<3;++i)moduleBlend_[i]=settings_.moduleOn[i]?1.:0.;
     const size_t capacity = size_t(settings_.sampleRate * 16.);
     for(auto& b : buffer_) b.assign(capacity, 0.f);
@@ -387,7 +393,7 @@ public:
     for(auto& v : voices_) v = {};
     repeatWrite_=0; lastOrder_=settings_.order; orderFade_=0; lastOutput_[0]=lastOutput_[1]=0.; glitchActive_ = repeating_ = false;
     stretch_.prepare(settings_.sampleRate); transpose_.prepare(settings_.sampleRate); grainClock_=0.; lastRhythm_=INT64_MIN; repeatPhase_=0.; repeatGate_=glitchGate_=0.; transition_=0;
-    serialRepeat_.prepare(settings_.sampleRate);serialGlitch_.prepare(settings_.sampleRate);glitchBlock_=false;glitchClock_.reset();glitchUntil_=-1e30;randomGlitchOpen_=false;nextGlitch_=-1e30;repeatCycle_=INT64_MIN;repeatUntil_=-1e30;previousHold_=false;
+    serialRepeat_.prepare(settings_.sampleRate);serialGlitch_.reset();glitchBlock_=false;glitchClock_.reset();glitchUntil_=-1e30;randomGlitchOpen_=false;nextGlitch_=-1e30;repeatCycle_=INT64_MIN;repeatUntil_=-1e30;previousHold_=false;
     modulation_.prepare(); grainLevel_=settings_.grainMix;
     // Reset the FREEZE crossfade engine with the buffers (no stale snapshot).
     freezeStart_=0.; freezeLength_=0.; freezeRamp_=0; freezeBlend_=0.;
@@ -513,6 +519,7 @@ public:
   }
   void resetTransport() {
     // Preserve reverb tails and level matching across host seeks/loops.
+    for(auto& loop:moduleLoops_)loop.transportReset();
     filterSequencer_.reset();reslice_.reset();gater_.resetLatch();
     serialRepeat_.reset();serialGlitch_.reset();glitchBlock_=false;glitchClock_.reset();glitchUntil_=-1e30;randomGlitchOpen_=false;nextGlitch_=-1e30;repeatCycle_=INT64_MIN;repeatUntil_=-1e30;previousHold_=false;
     lastStep_ = INT64_MIN; glitchActive_ = repeating_ = false;
@@ -635,6 +642,8 @@ public:
     }
     const double scale = settings_.densityFlow ? 1./std::max({1.,std::sqrt(weight),std::abs(wetL),std::abs(wetR)}) : (playing ? 1. / std::sqrt(double(playing)) : 0.);
     double sumL = settings_.moduleOn[0]?wetL*scale*grainLevel_*gate_:0., sumR=settings_.moduleOn[0]?wetR*scale*grainLevel_*gate_:0.;
+    loop(0,sumL,sumR,settings_.moduleOn[0],beat);
+    double repeatL=0,repeatR=0;
     if(glitchActive_ && settings_.moduleOn[1]) {
       const double phase = (beat-glitchBeat_)/(settings_.glitchRandom?glitchSlice_:settings_.glitchBeats);
       sumL += settings_.glitchMix*glitchGate_*loopRead(buffer_[0],glitchStart_,glitchLength_,phase,settings_.glitchReverse);
@@ -648,18 +657,19 @@ public:
         lastRepeat_[ch]=repeated[ch];
       }
       if(transition_>0) --transition_;
-      sumL+=settings_.repeatMix*repeatGate_*repeated[0]; sumR+=settings_.repeatMix*repeatGate_*repeated[1];
+      repeatL=settings_.repeatMix*repeatGate_*repeated[0];repeatR=settings_.repeatMix*repeatGate_*repeated[1];
     }
+    loop(1,repeatL,repeatR,settings_.moduleOn[2],beat);sumL+=repeatL;sumR+=repeatR;
     // Loudness fix: weight each contribution by its ACTIVE gate so the anti-clip gain never
     // over-divides while the repeater holds (previously repeatMix counted at full value even
     // when repeatGate_ was ducked, making repeats noticeably quieter than the dry signal).
     const double grainWeight=settings_.moduleOn[0]?grainLevel_:0.;
     const double glitchWeight=(glitchActive_&&settings_.moduleOn[1])?settings_.glitchMix*(settings_.glitchRandom?glitchGate_:1.):0.;
-    const double repeatWeight=(repeating_&&settings_.moduleOn[2])?settings_.repeatMix*repeatGate_:0.;
+    const double repeatWeight=((repeating_||moduleLoops_[1].active())&&settings_.moduleOn[2])?settings_.repeatMix*repeatGate_:0.;
     const double gain = 1./std::max(1., grainWeight + glitchWeight + repeatWeight);
     previous_[0] = sumL * gain; previous_[1] = sumR * gain;
     if(!settings_.moduleOn[0]&&!settings_.moduleOn[1]&&!settings_.moduleOn[2]){previous_[0]=inL;previous_[1]=inR;}
-    float wl=float(previous_[0]),wr=float(previous_[1]);reslice_.process(wl,wr,beat,settings_.tempo,settings_.playing);gater_.process(wl,wr,beat,settings_.tempo,settings_.playing);filter_.set(settings_.filterOn,settings_.filterType,filterSequencer_.process(settings_.filterSequence,values[8],beat,settings_.sampleRate,settings_.playing,settings_.filterModel==7||settings_.filterModel==8),values[9],false,settings_.filterSlope,values[10]*24.,0.,settings_.filterModel,settings_.filterModel==7||settings_.filterModel==8);filter_.process(wl,wr);reverb_.process(wl,wr,beat);previous_[0]=wl;previous_[1]=wr;
+    float wl=float(previous_[0]),wr=float(previous_[1]);reslice_.process(wl,wr,beat,settings_.tempo,settings_.playing);loop(2,wl,wr,settings_.reslice.enabled,beat);gater_.process(wl,wr,beat,settings_.tempo,settings_.playing);loop(3,wl,wr,settings_.gater.enabled,beat);filter_.set(settings_.filterOn,settings_.filterType,filterSequencer_.process(settings_.filterSequence,values[8],beat,settings_.sampleRate,settings_.playing,settings_.filterModel==7||settings_.filterModel==8),values[9],false,settings_.filterSlope,values[10]*24.,0.,settings_.filterModel,settings_.filterModel==7||settings_.filterModel==8);filter_.process(wl,wr);reverb_.process(wl,wr,beat);previous_[0]=wl;previous_[1]=wr;
     match_.process(dryL,dryR,previous_[0],previous_[1],settings_.normalize);
     double finalMix=settings_.mix+(1.-settings_.mix)*reverb_.killAmount();
     outL = float(dryL*(1.-finalMix)+previous_[0]*finalMix);outR=float(dryR*(1.-finalMix)+previous_[1]*finalMix);
@@ -752,7 +762,7 @@ public:
     std::array<int,5> chain=settings_.routing>=0?aztec::fiveModuleOrder(settings_.routing):std::array<int,5>{{legacy[0],legacy[1],legacy[2],-1,-1}};
     for(int stage:chain) {
       if(stage<0||stage==1)continue; // Preslicer retired; old routing IDs remain readable.
-      if(stage>=3){float l=float(signal[0]),r=float(signal[1]);if(stage==3)reslice_.process(l,r,beat,settings_.tempo,settings_.playing);else gater_.process(l,r,beat,settings_.tempo,settings_.playing);signal[0]=l;signal[1]=r;continue;}
+      if(stage>=3){float l=float(signal[0]),r=float(signal[1]);if(stage==3){reslice_.process(l,r,beat,settings_.tempo,settings_.playing);loop(2,l,r,settings_.reslice.enabled,beat);}else{gater_.process(l,r,beat,settings_.tempo,settings_.playing);loop(3,l,r,settings_.gater.enabled,beat);}signal[0]=l;signal[1]=r;continue;}
       double before[2]={signal[0],signal[1]};
       double target=settings_.moduleOn[stage]?1.:0.;moduleBlend_[stage]=target+levelSmoothing_*(moduleBlend_[stage]-target);
       if(stage==0) {
@@ -786,11 +796,12 @@ public:
         signal[0]=l;signal[1]=r;
       }
       for(int ch=0;ch<2;++ch)signal[ch]=before[ch]+moduleBlend_[stage]*(signal[ch]-before[ch]);
+      loop(stage==0?0:1,signal[0],signal[1],settings_.moduleOn[stage],beat);
     }
     if(!settings_.freeze) ++write_;
     // Feedback follows the selected chain without an extra dry injection.
     previous_[0]=signal[0]-inL;previous_[1]=signal[1]-inR;
-    float wl=float(signal[0]),wr=float(signal[1]);if(settings_.routing<0){reslice_.process(wl,wr,beat,settings_.tempo,settings_.playing);gater_.process(wl,wr,beat,settings_.tempo,settings_.playing);}filter_.set(settings_.filterOn,settings_.filterType,filterSequencer_.process(settings_.filterSequence,values[8],beat,settings_.sampleRate,settings_.playing,settings_.filterModel==7||settings_.filterModel==8),values[9],false,settings_.filterSlope,values[10]*24.,0.,settings_.filterModel,settings_.filterModel==7||settings_.filterModel==8);filter_.process(wl,wr);reverb_.process(wl,wr,beat);signal[0]=wl;signal[1]=wr;
+    float wl=float(signal[0]),wr=float(signal[1]);if(settings_.routing<0){reslice_.process(wl,wr,beat,settings_.tempo,settings_.playing);loop(2,wl,wr,settings_.reslice.enabled,beat);gater_.process(wl,wr,beat,settings_.tempo,settings_.playing);loop(3,wl,wr,settings_.gater.enabled,beat);}filter_.set(settings_.filterOn,settings_.filterType,filterSequencer_.process(settings_.filterSequence,values[8],beat,settings_.sampleRate,settings_.playing,settings_.filterModel==7||settings_.filterModel==8),values[9],false,settings_.filterSlope,values[10]*24.,0.,settings_.filterModel,settings_.filterModel==7||settings_.filterModel==8);filter_.process(wl,wr);reverb_.process(wl,wr,beat);signal[0]=wl;signal[1]=wr;
     match_.process(dryL,dryR,signal[0],signal[1],settings_.normalize);
     double finalMix=settings_.mix+(1.-settings_.mix)*reverb_.killAmount();
     outL=float(dryL*(1.-finalMix)+signal[0]*finalMix);outR=float(dryR*(1.-finalMix)+signal[1]*finalMix);

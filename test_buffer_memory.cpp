@@ -47,10 +47,12 @@ int main(){
  for(int i=0;i<8000;++i)e.process(.5f,.5f,110.+i/4000.,l,r);
  s.routing=-1;s.order=6;s.moduleOn={false,false,true};s.grainMix=0;s.repeatMix=1;s.repeatOn=true;s.repeatBeats=1.;e.set(s);
  for(int i=0;i<8000;++i){e.process(0,0,114.+i/4000.,l,r);if(i>1000)assert(std::abs(l)<1e-6&&std::abs(r)<1e-6);}
+ // Four 24-second loop rings add 768 bytes/rate; retired Preslicer banks
+ // release 256 bytes/rate. Net extra budget is 512 bytes per Hz.
  // Keep the prepared storage budget bounded at all supported host rates.
  for(double rate:{44100.,48000.,96000.,192000.}){
   qg::Engine prepared;allocatedBytes=0;watch=true;prepared.prepare(rate);watch=false;
-  assert(allocatedBytes<size_t(rate*1600.)+1048576);
+  assert(allocatedBytes<size_t(rate*2112.)+1048576);
   qg::Settings high;s=high;s.sampleRate=rate;s.routing=0;
   allocations=deallocations=0;watch=true;
   for(double seconds:{1.,16.,2.,8.,4.}){s.bufferSeconds=seconds;prepared.set(s);prepared.process(.1f,-.1f,0,l,r);}

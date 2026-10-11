@@ -16,7 +16,7 @@ void runGuiScenarios(Controller* c,Click click,Drag drag,Scroll scroll,Page actu
  auto focus=[&](int stage){page(0);setScroll(0);auto r=mockup::moduleRect(stage,val,rack);setScroll(r.y-220);};
  auto control=[&](ParamID id){for(auto c:mockup::controls(val,0,lfo,0,0,0,rack))if(c.id==id)return c.r;throw std::runtime_error("Control missing from page");};
  auto toggle=[&](ParamID id){auto r=control(id);double before=val(id);rectClick(r);check(val(id)==(before>=.5?0.:1.),"Visible toggle binding");c->setParamNormalized(id,before);};
- for(int stage:{0,2,3,4}){focus(stage);toggle(mockup::stageEnabled[stage]);}
+ for(int stage:{0,2,3,4}){focus(stage);toggle(mockup::stageEnabled[stage]);toggle(moduleLoopOn(moduleLoopIndex(stage)));check(control(moduleLoopWindow(moduleLoopIndex(stage))).w>0,"Per-module loop window selector");}
  focus(0);toggle(kFreeze);toggle(kMixLock0);auto r=control(kSize);c->setParamNormalized(kSize,.25);drag(0,r.x+r.w/2,r.y+r.h/2);drag(1,r.x+r.w/2,r.y+r.h/2-45);drag(2,r.x+r.w/2,r.y+r.h/2-45);check(std::abs(val(kSize)-.5)<.015,"Round knob drag");rectClick(r,2);check(std::abs(val(kSize)-.25)<1e-6,"Double click default");
  c->setParamNormalized(kGrainMix,.271);c->setParamNormalized(kMixLock0,0);rectClick(control(kMixLock0));rectClick(mockup::randomRect(0,val,rack));check(val(kGrainMix)==.271,"Mix lock survives Random");rectClick(control(kMixLock0));rectClick(mockup::randomRect(0,val,rack));check(val(kGrainMix)!=.271,"Unlocked mix randomises");
  focus(3);double savedMode=val(kResliceAlgorithm);const ParamID modeSliders[]={kResliceStutter,kResliceStraight,kResliceActivity};

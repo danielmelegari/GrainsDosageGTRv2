@@ -9,6 +9,7 @@ if(state.page==0){
  BODY(kStretchOn,756,309,192,32,Toggle,"FREE STRETCH");
  for(int stage:mockup::routeChain(value)){
   auto r=mockup::moduleRect(stage,value,state);double y=r.y+state.offset(),x=r.x;
+  const int loopIndex=moduleLoopIndex(stage);if(loopIndex>=0){BODY(moduleLoopOn(loopIndex),x+330,y+13,96,30,Toggle,"LOOP");BODY(moduleLoopWindow(loopIndex),x+438,y+13,173,30,Select,"WINDOW");}
   BODY(mockup::stageEnabled[stage],x+712,y+13,82,30,Toggle,"ON");
   if(stage==0){const ParamID ids[]={kSize,kDensity,kPosition,kChaos,kPitch,kGrainMix};const char* labels[]={"SIZE","DENSITY","LOOKBACK","CHAOS","PITCH","MIX"};for(int i=0;i<6;++i)BODY(ids[i],x+25+i*155,y+65,130,120,Knob,labels[i]);
    BODY(kMixLock0,x+805,y+188,110,23,Toggle,"LOCK");
