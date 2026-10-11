@@ -6,18 +6,35 @@ on:
   workflow_dispatch:
 
 jobs:
-  windows-installer:
+  windows-installers:
     runs-on: windows-latest
+    strategy:
+      matrix:
+        edition: [full, trial]
     steps:
       - uses: actions/checkout@v4
+
+      - name: Checkout VST3 SDK
+        uses: actions/checkout@v4
+        with:
+          repository: steinbergmedia/vst3sdk
+          submodules: true
+          path: vst3sdk
 
       - name: Build VST3
         shell: bash
         run: |
-          # Replace with your existing Windows VST3 build steps,
-          # so the .vst3 bundle ends up under build/
-          cmake -B build -DCMAKE_BUILD_TYPE=Release
-          cmake --build build --config Release
+          # The trial edition adds -DGRAINS_TRIAL=ON (see trial/TrialGuard.h
+          # for the matching CMake snippet).
+          if [ "${{ matrix.edition }}" = "trial" ]; then
+            cmake -B build-trial -DCMAKE_BUILD_TYPE=Release \
+              -DVST3_SDK_ROOT="$GITHUB_WORKSPACE/vst3sdk" -DGRAINS_TRIAL=ON
+            cmake --build build-trial --config Release
+          else
+            cmake -B build -DCMAKE_BUILD_TYPE=Release \
+              -DVST3_SDK_ROOT="$GITHUB_WORKSPACE/vst3sdk"
+            cmake --build build --config Release
+          fi
 
       - name: Install Inno Setup
         run: choco install innosetup -y --no-progress
@@ -25,12 +42,17 @@ jobs:
       - name: Build installer
         shell: cmd
         run: |
-          "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\windows\GrainsDosageGTRv2.iss
+          if "%EDITION%"=="trial" (
+            "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\windows\GrainsDosageGTRv2-Trial.iss
+          ) else (
+            "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\windows\GrainsDosageGTRv2.iss
+        env:
+          EDITION: ${{ matrix.edition }}
 
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
-          name: windows-installer
+          name: windows-installer-${{ matrix.edition }}
           path: dist/*.exe
 
   macos-installer:
@@ -38,12 +60,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Checkout VST3 SDK
+        uses: actions/checkout@v4
+        with:
+          repository: steinbergmedia/vst3sdk
+          submodules: true          # SDK needs its submodules (base, public.sdk, pluginterfaces...)
+          path: vst3sdk
+          # Optional: pin to a release tag for reproducible builds, e.g.
+          # ref: v3.7.12
+
       - name: Build VST3 + AU
         shell: bash
         run: |
-          # Replace with your existing macOS VST3 + AU build steps,
-          # so the bundles end up under build/
+          # -DVST3_SDK_ROOT is required by CMakeLists.txt:55 in your repo.
+          # If your AU is built by a separate CMake target/dir, add the same
+          # flag to that configure call.
           cmake -B build -DCMAKE_BUILD_TYPE=Release \
+            -DVST3_SDK_ROOT="$GITHUB_WORKSPACE/vst3sdk" \
             -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
           cmake --build build --config Release
 
@@ -66,3 +99,4 @@ jobs:
       #   with:
       #     files: |
       #       dist/*.pkg
+      #       dist/*.exe
