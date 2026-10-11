@@ -72,13 +72,17 @@ jobs:
       - name: Build VST3 + AU
         shell: bash
         run: |
-          # -DVST3_SDK_ROOT is required by CMakeLists.txt:55 in your repo.
-          # If your AU is built by a separate CMake target/dir, add the same
-          # flag to that configure call.
-          cmake -B build -DCMAKE_BUILD_TYPE=Release \
+          # -G Ninja avoids the Xcode-generator OBJCXX rule bug
+          # ("CMAKE_OBJCXX_COMPILE_OBJECT not set"). Ninja is preinstalled
+          # on GitHub macOS runners. The pkg script auto-finds the built
+          # bundles under build/, wherever your project puts them.
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
             -DVST3_SDK_ROOT="$GITHUB_WORKSPACE/vst3sdk" \
             -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
           cmake --build build --config Release
+          # Show where the bundles landed (used by build-pkg.sh, and handy
+          # for debugging):
+          find build -name "*.vst3" -o -name "*.component" | head -n 10
 
       - name: Build pkg
         shell: bash
