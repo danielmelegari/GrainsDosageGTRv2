@@ -300,6 +300,12 @@ jobs:
     timeout-minutes: 35
     steps:
     - uses: actions/checkout@v4
+    - name: Test three-device publisher ledger
+      shell: bash
+      run: |
+        python3 -m venv "$RUNNER_TEMP/license-issuer-tests"
+        "$RUNNER_TEMP/license-issuer-tests/bin/python" -m pip install cryptography
+        "$RUNNER_TEMP/license-issuer-tests/bin/python" tools/test-license-issuer.py
     - name: Test offline license and trial lifecycle
       run: bash tools/test-license-mac.sh
     - name: Fetch pinned SDKs

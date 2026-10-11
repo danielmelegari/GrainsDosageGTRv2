@@ -12,12 +12,14 @@ inline State evaluate(int64_t first,int64_t last,int64_t now) {
 }
 #ifdef GRAINS_COMMERCIAL
 inline std::atomic<bool> allowed{false};
+std::string deviceCode();
 void initialize();
 void firstOpen();
 std::string status();
 bool activate(const std::string&,std::string& error);
 #else
 inline std::atomic<bool> allowed{true};
+inline std::string deviceCode(){return {};}
 inline void initialize(){}
 inline void firstOpen(){}
 inline std::string status(){return {};}

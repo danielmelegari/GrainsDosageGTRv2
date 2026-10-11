@@ -6,6 +6,8 @@
 #endif
 #import <Foundation/Foundation.h>
 #import <Security/Security.h>
+#import <IOKit/IOKitLib.h>
+#import <CommonCrypto/CommonDigest.h>
 #include <algorithm>
 #include <chrono>
 #include <condition_variable>
@@ -14,6 +16,22 @@
 #include <unistd.h>
 
 namespace aztec::license {
+std::string deviceCode(){
+#ifdef GRAINS_LICENSE_TEST
+ return "GDDEV2-"+std::string(64,'a');
+#else
+ static const std::string code=[]()->std::string{
+  io_service_t platform=IOServiceGetMatchingService(kIOMasterPortDefault,IOServiceMatching("IOPlatformExpertDevice"));
+  if(!platform)return {};
+  CFTypeRef value=IORegistryEntryCreateCFProperty(platform,CFSTR("IOPlatformUUID"),kCFAllocatorDefault,0);IOObjectRelease(platform);
+  if(!value)return {};if(CFGetTypeID(value)!=CFStringGetTypeID()){CFRelease(value);return {};}
+  NSString* identifier=CFBridgingRelease(value);if(identifier.length<16)return {};
+  NSData* bytes=[[@"GrainsDosage-device-v2:" stringByAppendingString:identifier.lowercaseString] dataUsingEncoding:NSUTF8StringEncoding];
+  unsigned char digest[CC_SHA256_DIGEST_LENGTH];CC_SHA256(bytes.bytes,CC_LONG(bytes.length),digest);
+  std::string result="GDDEV2-";const char* hex="0123456789abcdef";for(unsigned char b:digest){result+=hex[b>>4];result+=hex[b&15];}return result;
+ }();return code;
+#endif
+}
 namespace {
 int64_t now(){return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();}
 NSString* service(){
@@ -35,15 +53,18 @@ NSString* serialPath(){NSString* root=[NSHomeDirectory() stringByAppendingPathCo
  return [root stringByAppendingPathComponent:@"license.txt"];}
 bool verify(NSString* serial){
  if(serial.length>4096)return false;
- NSArray* fields=[serial componentsSeparatedByString:@"."];if(fields.count!=3||![fields[0] isEqual:@"GDS1"])return false;
+ NSArray* fields=[serial componentsSeparatedByString:@"."];if(fields.count!=3||![fields[0] isEqual:@"GDS2"])return false;
  NSData* payload=[[NSData alloc] initWithBase64EncodedString:fields[1] options:0];
  NSData* signature=[[NSData alloc] initWithBase64EncodedString:fields[2] options:0];
  if(!payload||!signature||signature.length!=256)return false;
  NSString* message=[[NSString alloc] initWithData:payload encoding:NSUTF8StringEncoding];
- // Fixed, product-specific payload: GRAINS-DOSAGE-V1:<32 lowercase hex license ID>.
- if(message.length!=49||![message hasPrefix:@"GRAINS-DOSAGE-V1:"])return false;
- NSString* identifier=[message substringFromIndex:17];
- if(identifier.length!=32||[identifier rangeOfCharacterFromSet:[[NSCharacterSet characterSetWithCharactersInString:@"0123456789abcdef"] invertedSet]].location!=NSNotFound)return false;
+ // Signed payload binds one license and the fixed three-device policy to this Mac.
+ NSArray* parts=[message componentsSeparatedByString:@":"];
+ if(parts.count!=4||![parts[0] isEqual:@"GRAINS-DOSAGE-V2"]||![parts[3] isEqual:@"3"])return false;
+ NSCharacterSet* invalid=[[NSCharacterSet characterSetWithCharactersInString:@"0123456789abcdef"] invertedSet];
+ NSString* identifier=parts[1];NSString* device=parts[2];
+ if(identifier.length!=32||device.length!=64||[identifier rangeOfCharacterFromSet:invalid].location!=NSNotFound||[device rangeOfCharacterFromSet:invalid].location!=NSNotFound)return false;
+ const auto local=deviceCode();if(local.empty()||local!="GDDEV2-"+std::string(device.UTF8String))return false;
  NSData* keyData=[NSData dataWithBytes:publicKey length:sizeof(publicKey)];
  NSDictionary* attrs=@{(__bridge id)kSecAttrKeyType:(__bridge id)kSecAttrKeyTypeRSA,(__bridge id)kSecAttrKeyClass:(__bridge id)kSecAttrKeyClassPublic,(__bridge id)kSecAttrKeySizeInBits:@2048};
  SecKeyRef key=SecKeyCreateWithData((__bridge CFDataRef)keyData,(__bridge CFDictionaryRef)attrs,nullptr);if(!key)return false;
@@ -100,7 +121,9 @@ public:
   default:return "ACTIVATE LICENSE";}}
  bool activateSerial(const std::string& input,std::string& error){std::lock_guard<std::mutex> lock(mutex);@autoreleasepool{
   NSString* serial=[[NSString stringWithUTF8String:input.c_str()] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-  if(!verify(serial)){error="Invalid serial number for GrainsDosage.";return false;}
+  if([serial hasPrefix:@"GDS1."]){error="This portable license must be exchanged for a device activation. Send your Device Code to the publisher.";return false;}
+  if(deviceCode().empty()){error="Cannot read this Mac device code. Activation has not been saved.";return false;}
+  if(!verify(serial)){error="Invalid activation code, or the code belongs to another Mac.";return false;}
   if(![serial writeToFile:serialPath() atomically:YES encoding:NSUTF8StringEncoding error:nil]){error="Cannot save the license in Application Support.";return false;}
   refresh();return licensed;}}
 };

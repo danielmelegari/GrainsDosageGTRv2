@@ -125,7 +125,7 @@ if(APPLE)
     target_sources(GrainsDosage PRIVATE src/license_mac.mm)
     set_source_files_properties(src/license_mac.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
     target_compile_definitions(GrainsDosage PRIVATE GRAINS_COMMERCIAL=1 GRAINS_TRIAL=$<STREQUAL:${GRAINS_EDITION},trial>)
-    target_link_libraries(GrainsDosage PRIVATE "-framework Security")
+    target_link_libraries(GrainsDosage PRIVATE "-framework Security" "-framework IOKit")
   endif()
 
   # Optional AudioUnit (AU v2) bundle for Logic Pro / GarageBand. Enabled with

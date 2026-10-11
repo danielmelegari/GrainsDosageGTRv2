@@ -16,31 +16,75 @@ After expiry the header says TRIAL EXPIRED and processing fades to dry over
 check enforces expiration even with the editor closed (within 15 seconds).
 No Keychain, filesystem or signature operations occur on the audio thread.
 
-Licensed requires a valid serial before enabling processing. Click ACTIVATE in
-the header and paste the whole GDS1 serial. A valid serial also permanently
-unlocks Trial. Activation is offline, portable, and shared by AU/VST3 in the
-same account. There is no device limit, online revocation or remote reset.
-The plugin contains only an RSA public key and verifies SHA-256 signatures.
-As with any fully offline trial, this is not tamper-proof against a user who
-changes the binary, deletes Keychain records or restores an entire system backup.
+Licensed requires a valid device activation before enabling processing. A valid
+activation also permanently unlocks Trial. Activation is offline and shared by
+AU/VST3 in the same macOS account. Reinstalling on the same Mac or activating its
+other user accounts uses the same Device Code and does not consume another slot.
+The plugin contains only the RSA public key, verifies SHA-256 signatures, and
+matches the signed device hash to this Mac's IOPlatformUUID. The displayed hash
+is product-specific; the raw hardware UUID is not included in activation codes.
 
-## Publisher: issuing serials
+## Three-device offline licenses (GDS2)
 
-Keep the publisher-private.pem key private and backed up. Never put it in Git,
-the plugin, a customer download or a preset. Losing it prevents issuing new
-serials for this public key. The supplied publisher kit includes your key;
-only you should receive that kit. The public key alone is compiled into the app.
+Each customer gets a `GDL2-…` license ID. In ACTIVATE, the customer clicks **Copy
+Device Code** and sends the `GDDEV2-…` code plus their license ID to the publisher.
+The publisher issues a `GDS2.…` activation for that specific Mac. The customer
+pastes it into ACTIVATE. A license ID alone cannot activate a plugin.
 
-Install Python 3 and `python3 -m pip install cryptography`, then:
+The publisher's SQLite ledger allows **at most three distinct devices per
+license**, with a transaction protecting concurrent requests. Issuing another
+copy for the same device is allowed and consumes no additional slot. A signed
+activation for a different Mac is rejected by the plugin. Activation never uses
+a server, network call or audio-thread disk/cryptography operation.
+
+These are three lifetime registered devices, not three floating seats: permanent
+offline activations cannot be remotely revoked. There is intentionally no
+"delete device" command that could free a fourth slot while an old activation
+still works. A motherboard replacement can change the code. Hardware spoofing,
+cloned virtual hardware or modified binaries are outside the protection this
+offline scheme can provide. One authoritative publisher ledger must be used;
+restoring an old copy or keeping independent copies can lose the registration
+history. Keep current backups of both the key and ledger.
+
+### Previous portable serials
+
+New commercial builds reject GDS1 portable serials because accepting them would
+bypass the three-device policy. Exchange any previously delivered GDS1 serial for
+one new GDL2 license and device activations. Keep the original customer record to
+avoid creating multiple replacement licenses. Previously shipped binaries cannot
+be remotely upgraded or revoked and will still accept the old serials.
+The existing signing key is retained; no trial record, project or preset changes.
+
+## Publisher: issuing activations
+
+Keep `publisher-private.pem` and `licenses.sqlite` private, backed up and outside
+Git/customer downloads. Only the publisher should receive the PRIVATE kit. The
+key alone is not enough to reconstruct which computers were already activated.
+Do not run `init` again with the existing key; it is only for a new product key.
+
+Install Python 3 and `python3 -m pip install cryptography`. From the kit folder:
 
 ```sh
-python3 license-issuer.py issue --private-key publisher-private.pem --output customer-001.txt
+# Once per purchased license; save the printed GDL2 ID with the customer record.
+python3 license-issuer.py create --private-key publisher-private.pem --customer "Customer 001"
+
+# Replace both placeholders with the complete license ID and customer's Device Code.
+python3 license-issuer.py activate --private-key publisher-private.pem --license GDL2_LICENSE_ID --device GDDEV2_DEVICE_CODE --output customer-001-mac1.txt
+
+# Inspect registered devices and the used slots (0/3 to 3/3).
+python3 license-issuer.py list --private-key publisher-private.pem --license GDL2_LICENSE_ID
 ```
 
-Send only customer-001.txt to that customer. Every run creates a unique serial.
-Do not run `init` again for routine issuing: replacing the compiled public key
-would invalidate existing customers' licenses. No payment or email service is
-connected automatically.
+The ledger defaults to `licenses.sqlite` beside the private key. Send only the
+activation text file to the customer. For their second and third computers, reuse
+the SAME license ID with the new Device Code. A fourth device is refused.
+If exporting the activation file fails, retry that same device with a valid new
+output filename; the reserved slot is retained safely. No payment/email service
+or Windows commercial licensing is included.
+
+Trial remains 14 calendar days from the first editor opening, stored in Keychain
+outside the plugin and presets. This offline trial is not tamper-proof against
+Keychain deletion, binary modification or restoration of a system backup.
 
 ## Editable module graphics
 

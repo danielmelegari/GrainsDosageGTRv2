@@ -5,7 +5,7 @@
 #include <iostream>
 namespace aztec::license {void testRecord(int64_t,int64_t);void testCleanup();}
 int main(int argc,char** argv){
- using namespace aztec::license;assert(argc==2);
+ using namespace aztec::license;assert(argc==5);assert(deviceCode()=="GDDEV2-"+std::string(64,'a'));
  std::ifstream file(argv[1]);std::string serial;std::getline(file,serial);assert(!serial.empty());
  const int64_t t=std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
  assert(evaluate(t,t,t+trialSeconds-1)==State::Trial);
@@ -25,7 +25,8 @@ int main(int argc,char** argv){
  std::string error,bad=serial;auto i=bad.size()-20;bad[i]=bad[i]=='A'?'B':'A';
  assert(!activate(bad,error));assert(!allowed.load());
  assert(!activate("GDS1.invalid.invalid",error));
+ for(int i=2;i<5;++i){std::ifstream rejected(argv[i]);std::string code;std::getline(rejected,code);assert(!activate(code,error));assert(!allowed.load());}
  assert(activate(serial,error));assert(allowed.load());assert(status()=="LICENSED");
  firstOpen();assert(allowed.load()); // license overrides expired/clock-invalid trial.
- testCleanup();std::cout<<"PASS: trial boundary, persistence, clock rollback, tampering and offline activation\n";
+ testCleanup();std::cout<<"PASS: trial boundary, persistence, clock rollback, tampering, wrong-device/legacy rejection and offline device activation\n";
 }

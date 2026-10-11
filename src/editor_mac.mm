@@ -617,10 +617,14 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   auto hit=[&](mockup::Rect r){return r.contains(p.x,p.y);};
   if(!license::status().empty()&&hit({450,88,350,25})){
     NSAlert* alert=[[NSAlert alloc] init];alert.messageText=@"GrainsDosage — Offline activation";
-    alert.informativeText=@"Paste your serial number. A valid license permanently unlocks this Mac account's AU and VST3. No internet connection is needed.";
-    NSTextField* field=[[NSTextField alloc] initWithFrame:NSMakeRect(0,0,520,70)];field.placeholderString=@"GDS1.…";alert.accessoryView=field;
-    [alert addButtonWithTitle:@"Activate"];[alert addButtonWithTitle:@"Cancel"];
-    if([alert runModal]==NSAlertFirstButtonReturn){std::string error;if(!license::activate(field.stringValue.UTF8String,error)){NSAlert* problem=[[NSAlert alloc] init];problem.messageText=@"Activation failed";problem.informativeText=[NSString stringWithUTF8String:error.c_str()];[problem runModal];}}
+    alert.informativeText=@"Each license supports up to 3 computers. Send this Device Code and your license ID to the publisher, then paste the activation code issued for this Mac. No internet connection is needed.";
+    const auto code=license::deviceCode();
+    NSView* accessory=[[NSView alloc] initWithFrame:NSMakeRect(0,0,520,130)];
+    NSTextField* device=[[NSTextField alloc] initWithFrame:NSMakeRect(0,88,520,40)];device.editable=NO;device.selectable=YES;device.stringValue=code.empty()?@"Device code unavailable":[NSString stringWithUTF8String:code.c_str()];[accessory addSubview:device];
+    NSTextField* field=[[NSTextField alloc] initWithFrame:NSMakeRect(0,0,520,76)];field.placeholderString=@"Paste GDS2 activation code for this Mac…";[accessory addSubview:field];alert.accessoryView=accessory;
+    [alert addButtonWithTitle:@"Activate"];[alert addButtonWithTitle:@"Cancel"];[alert addButtonWithTitle:@"Copy Device Code"];
+    for(;;){auto response=[alert runModal];if(response==NSAlertThirdButtonReturn){if(!code.empty()){[[NSPasteboard generalPasteboard] clearContents];[[NSPasteboard generalPasteboard] setString:device.stringValue forType:NSPasteboardTypeString];}continue;}
+     if(response==NSAlertFirstButtonReturn){std::string error;if(!license::activate(field.stringValue.UTF8String,error)){NSAlert* problem=[[NSAlert alloc] init];problem.messageText=@"Activation failed";problem.informativeText=[NSString stringWithUTF8String:error.c_str()];[problem runModal];}}break;}
     [self setNeedsDisplay:YES];return;
   }
   if(hit(mockup::previous)){[self stepPreset:-1];return;}
