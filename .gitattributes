@@ -1,0 +1,2 @@
+# License signatures cover exact bytes. Never convert line endings on checkout.
+*.license -text

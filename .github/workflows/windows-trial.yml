@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/windows-trial.yml'
+      - '.gitattributes'
       - '.github/workflows/build-installers.yml'
       - 'src/**'
       - 'CMakeLists.txt'
