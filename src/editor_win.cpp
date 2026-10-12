@@ -307,18 +307,19 @@ class WinEditor final:public CPluginView{
         // (...\GrainsDosage-skin\knob.png). Drawn as-is but ROTATED so the
         // printed indicator points to 135°+270°·value — same sweep as the
         // vector fallback pointer. Swap the PNG → new look, rotation stays.
-        Gdiplus::Bitmap* face=nullptr;if(Gdiplus::Bitmap::FromHBITMAP(sprites[0],nullptr,&face)==Gdiplus::Ok&&face){
+        Gdiplus::Bitmap* face=Gdiplus::Bitmap::FromHBITMAP(sprites[0],nullptr);if(face&&face->GetLastStatus()==Gdiplus::Ok){
           {Gdiplus::Graphics g(dc);g.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
-           REAL oldTransform[3][2];g.GetTransform((Gdiplus::REAL(*)[2])oldTransform);
+           Gdiplus::Matrix oldTransform;g.GetTransform(&oldTransform);
            // GDI+ y-down: RotateTransform(t) applies [[c,-s],[s,c]]; the printed
            // UP indicator (0,-1) maps to (-sin t, -cos t). We need it along the
            // fallback pointer ray (cos angle, sin angle), so use t=-(angle+90):
            // (-sin(-(a+90)),-cos(-(a+90))) = (cos a, sin a). Verified by
            // test_knob_rotation.cpp.
-           g.TranslateTransform((REAL)cx,(REAL)cy);g.RotateTransform((REAL)-(angle+90.));g.TranslateTransform((REAL)-cx,(REAL)-cy);
-           g.DrawImage(face,Gdiplus::RectF((REAL)(cx-radius),(REAL)(cy-radius),(REAL)(radius*2),(REAL)(radius*2)));
-           g.SetTransform((const Gdiplus::REAL(*)[2])oldTransform);}
-          delete face;faceDrawn=true;}
+           g.TranslateTransform((Gdiplus::REAL)cx,(Gdiplus::REAL)cy);g.RotateTransform((Gdiplus::REAL)-(angle+90.));g.TranslateTransform((Gdiplus::REAL)-cx,(Gdiplus::REAL)-cy);
+           g.DrawImage(face,Gdiplus::RectF((Gdiplus::REAL)(cx-radius),(Gdiplus::REAL)(cy-radius),(Gdiplus::REAL)(radius*2),(Gdiplus::REAL)(radius*2)));
+           g.SetTransform(&oldTransform);}
+          faceDrawn=true;}
+          delete face;
       }
       if(!faceDrawn){knobCap(cx,cy,v);double a=(135+270*v)*qg::tau/360.;line(cx+6*std::cos(a),cy+6*std::sin(a),cx+22*std::cos(a),cy+22*std::sin(a),cream(),3);}// vector fallback: clean cap + pointer only
       box(c.x+4,c.y+74,c.w-8,19,dark(),AZSKIN(kHairline));text(display(c.id,v),c.x+5,c.y+75,c.w-10,18,12,AZSKIN(kReadout),true);}
