@@ -28,8 +28,9 @@ public:
       deadline_ = std::chrono::steady_clock::now() + std::chrono::nanoseconds(remaining * 100);
       end_ = state.start + trial::duration;
       blocked_.store(false, std::memory_order_relaxed);
-      worker_ = std::thread([this, store, state, license]() mutable {
+      worker_ = std::thread([this, store, state]() mutable {
         try {
+          unsigned unavailableChecks = 0;
           std::unique_lock<std::mutex> lock(mutex_);
           while (!wake_.wait_for(lock, std::chrono::seconds(30), [this] { return stopping_; })) {
             lock.unlock();
@@ -37,12 +38,18 @@ public:
             // by editing/deleting local state while this instance is running.
             const auto left = deadline_ - std::chrono::steady_clock::now();
             const auto secondsLeft = std::chrono::duration_cast<std::chrono::seconds>(left).count();
-            trial::License current;
             const auto minimumTime = secondsLeft > 0 ? end_ - trial::Tick(secondsLeft) * trial::second : end_;
-            const bool stateValid = store.refresh(trial::wallTime(), state, false, minimumTime);
-            if (secondsLeft <= 0 || !stateValid || !trial::loadLicense(current) || current.payload != license.payload) {
+            // The verified signed license is immutable in memory. Reopening
+            // its file and hardware registry every 30 seconds added failure
+            // points without protecting this already-fixed expiration.
+            const auto result = store.check(trial::wallTime(), state, false, minimumTime);
+            if(result==trial::Refresh::unavailable)++unavailableChecks;else unavailableChecks=0;
+            if (secondsLeft <= 0 || result==trial::Refresh::expired || result==trial::Refresh::invalid || unavailableChecks>=3) {
               blocked_.store(true, std::memory_order_relaxed);
-              return;
+            } else {
+              // Recover from a temporary file/DPAPI failure. The signed end
+              // and monotonic deadline remain fixed for this instance.
+              blocked_.store(false, std::memory_order_relaxed);
             }
             lock.lock();
           }

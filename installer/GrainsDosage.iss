@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "0.13.0"
+  #define AppVersion "0.13.1"
 #endif
 #ifndef ProjectDir
   #define ProjectDir ".."
@@ -44,14 +44,19 @@ InfoBeforeFile={#ProjectDir}\installer\BEFORE-INSTALL.txt
 [Files]
 Source: "{#ProjectDir}\{#BuildDir}\VST3\Release\GrainsDosage.vst3\*"; DestDir: "{commoncf64}\VST3\GrainsDosage.vst3"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#ProjectDir}\INSTALL-WINDOWS.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#ProjectDir}\USER-MANUAL.html"; DestDir: "{app}"; Flags: ignoreversion
 
 #ifdef Trial
 Source: "{#ProjectDir}\{#BuildDir}\registration\Release\GrainsDosageRegistration.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#ProjectDir}\TRIAL-REGISTRATION.txt"; DestDir: "{app}"; Flags: ignoreversion
 
+#endif
+
 [Icons]
+#ifdef Trial
 Name: "{group}\GrainsDosage Trial Registration"; Filename: "{app}\GrainsDosageRegistration.exe"
 #endif
+Name: "{group}\GrainsDosage User Manual"; Filename: "{app}\USER-MANUAL.html"
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

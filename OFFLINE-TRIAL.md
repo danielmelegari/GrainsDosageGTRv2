@@ -66,9 +66,13 @@ state uses Windows DPAPI with copies in the current user's registry and local
 application data. Missing/corrupt single copies, inconsistent starts, and clock
 rollback beyond two minutes block the trial. Small clock corrections do not move
 the recorded time backwards. A monotonic deadline also limits each open session.
-Storage, signature checks, and DPAPI run off the audio thread. Every 30 seconds the
-plugin rechecks the license, identity, clock, and state; expiry is checked on each
-audio block. A detected failure stays blocked for that plugin instance.
+Storage, signature checks, and DPAPI run off the audio thread. At activation, the plugin verifies the license signature and machine identity.
+Every 30 seconds it checks the clock and protected state; the signed expiry and
+monotonic deadline are checked on every audio block. There is no one-hour session
+limit. A verified license is held in memory for the session rather than repeatedly
+reopening it. Temporary storage access failures are retried; three consecutive
+failures block output until the protected state can be verified again. Invalid or
+expired state blocks immediately. None of these retries extends the signed end.
 
 Deleting both state copies does not change the signed expiry. Reinstalling the
 plugin does not reset it. Existing unsigned trials must register for a signed

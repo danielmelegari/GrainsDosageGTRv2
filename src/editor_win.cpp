@@ -20,6 +20,7 @@
 #include "filter_sequencer.h"
 #include "randomize.h"
 #include "public.sdk/source/common/pluginview.h"
+#include "pluginterfaces/gui/iplugviewcontentscalesupport.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -37,7 +38,9 @@ static inline skin::Rgb C2(int role){return skin::active().at(role);}
 constexpr double slotX[]={16,452,888};
 enum Kind{Knob,Slider,Toggle,Select,Pad,Pan,PanMode,VSlider};
 struct Control{ParamID id;double x,y,w,h;Kind kind;std::string label;};
-class WinEditor final:public CPluginView{
+class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
+  double contentScale=1.,userZoom=.70;
+  void alignToParent(){if(!window)return;RECT client{};if(GetClientRect(GetParent(window),&client)&&client.right>0&&client.bottom>0){ViewRect actual(0,0,client.right,client.bottom);onSize(&actual);}}
   EditController* controller;HWND window=nullptr;std::vector<Control> controls;
   mockup::RackState rackState;bool dragScroll=false;double scrollOrigin=0,routePointerX=0,routePointerY=0;
   int selectedGate=0,selectedReslice=0;
@@ -295,19 +298,30 @@ class WinEditor final:public CPluginView{
   void line(double x,double y,double xx,double yy,COLORREF color,int width=1){auto p=CreatePen(PS_SOLID,width,color);auto old=SelectObject(dc,p);MoveToEx(dc,int(x),int(y),nullptr);LineTo(dc,int(xx),int(yy));SelectObject(dc,old);DeleteObject(p);}
   static std::wstring wide(const std::string& s){int n=MultiByteToWideChar(CP_UTF8,0,s.data(),int(s.size()),nullptr,0);std::wstring out(size_t(n),L' ');if(n)MultiByteToWideChar(CP_UTF8,0,s.data(),int(s.size()),out.data(),n);return out;}
   static std::string utf8(const std::wstring& s){int n=WideCharToMultiByte(CP_UTF8,0,s.data(),int(s.size()),nullptr,0,nullptr,nullptr);std::string out(size_t(n),' ');if(n)WideCharToMultiByte(CP_UTF8,0,s.data(),int(s.size()),out.data(),n,nullptr,nullptr);return out;}
+  // GDI+ inherits the HDC map. Applying that map again doubles graphics zoom
+  // (text stays correct); at 50% with 2x supersampling the mistake is hidden.
+  // Give GDI+ a pixel DC, then apply the canvas transform exactly once.
+  struct PixelSpace {
+    HDC dc;int saved;Gdiplus::Matrix transform;
+    explicit PixelSpace(HDC target):dc(target),saved(SaveDC(target)){
+      SIZE viewport{},logical{};POINT origin{};
+      GetViewportExtEx(dc,&viewport);GetWindowExtEx(dc,&logical);GetViewportOrgEx(dc,&origin);
+      transform.SetElements(float(viewport.cx)/logical.cx,0,0,float(viewport.cy)/logical.cy,float(origin.x),float(origin.y));
+      SetMapMode(dc,MM_TEXT);SetViewportOrgEx(dc,0,0,nullptr);
+    }
+    ~PixelSpace(){RestoreDC(dc,saved);}
+  };
   void draw(){
     layout();mockup::Painter painter;
     painter.image=[&](int asset,mockup::Rect r,mockup::Rect source){
       auto* image=asset==mockup::Atlas?rackAtlas.get():rackBackplate.get();if(!image||image->GetLastStatus()!=Gdiplus::Ok)return;
-      Gdiplus::Graphics g(dc);SIZE viewport{},logical{};GetViewportExtEx(dc,&viewport);GetWindowExtEx(dc,&logical);
-      POINT offset{};GetViewportOrgEx(dc,&offset);g.TranslateTransform(float(offset.x),float(offset.y));g.ScaleTransform(float(viewport.cx)/logical.cx,float(viewport.cy)/logical.cy);g.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
+      PixelSpace pixels(dc);Gdiplus::Graphics g(dc);g.SetTransform(&pixels.transform);g.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
       if(asset==mockup::RoundScrew){Gdiplus::GraphicsPath circle;circle.AddEllipse(float(r.x),float(r.y),float(r.w),float(r.h));g.SetClip(&circle,Gdiplus::CombineModeIntersect);}
       g.DrawImage(image,Gdiplus::RectF(float(r.x),float(r.y),float(r.w),float(r.h)),float(source.x),float(source.y),float(source.w),float(source.h),Gdiplus::UnitPixel);
     };
     painter.box=[&](mockup::Rect r,skin::Rgb fill,skin::Rgb edge,double radius){
       // GDI+ gives rounded plates and transparent image edges at every zoom.
-      Gdiplus::Graphics g(dc);SIZE viewport{},logical{};GetViewportExtEx(dc,&viewport);GetWindowExtEx(dc,&logical);
-      POINT offset{};GetViewportOrgEx(dc,&offset);g.TranslateTransform(float(offset.x),float(offset.y));g.ScaleTransform(float(viewport.cx)/logical.cx,float(viewport.cy)/logical.cy);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+      PixelSpace pixels(dc);Gdiplus::Graphics g(dc);g.SetTransform(&pixels.transform);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
       Gdiplus::GraphicsPath path;float d=float(std::min({radius*2,r.w,r.h}));float x=float(r.x),y=float(r.y),w=float(r.w),h=float(r.h);
       if(d<1)path.AddRectangle(Gdiplus::RectF(x,y,w,h));else{path.AddArc(x,y,d,d,180,90);path.AddArc(x+w-d,y,d,d,270,90);path.AddArc(x+w-d,y+h-d,d,d,0,90);path.AddArc(x,y+h-d,d,d,90,90);path.CloseFigure();}
       auto top=skin::mix(fill,skin::C(skin::kFiligree),r.h>=20?.10:0.);
@@ -316,11 +330,10 @@ class WinEditor final:public CPluginView{
     };
     painter.text=[&](const std::string& s,mockup::Rect r,double size,skin::Rgb col,bool center){auto str=wide(s);HFONT f=CreateFontW(-int(size),0,0,0,FW_SEMIBOLD,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,ANTIALIASED_QUALITY,DEFAULT_PITCH,L"Arial");auto old=SelectObject(dc,f);SIZE extent{};GetTextExtentPoint32W(dc,str.c_str(),int(str.size()),&extent);SelectObject(dc,old);DeleteObject(f);if(extent.cx>r.w)size*=r.w/extent.cx;text(str,r.x,r.y,r.w,r.h,int(size),C(col),center,0);};
     painter.line=[&](double x,double y,double xx,double yy,skin::Rgb col,double width){line(x,y,xx,yy,C(col),int(std::max(1.,width)));};
-    painter.polygon=[&](const std::vector<std::pair<double,double>>& pts,skin::Rgb col){if(pts.size()<3)return;Gdiplus::Graphics g(dc);SIZE viewport{},logical{};GetViewportExtEx(dc,&viewport);GetWindowExtEx(dc,&logical);POINT offset{};GetViewportOrgEx(dc,&offset);g.TranslateTransform(float(offset.x),float(offset.y));g.ScaleTransform(float(viewport.cx)/logical.cx,float(viewport.cy)/logical.cy);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);std::vector<Gdiplus::PointF> points;for(auto pt:pts)points.emplace_back(float(pt.first),float(pt.second));Gdiplus::SolidBrush brush(Gdiplus::Color(255,col.r,col.g,col.b));g.FillPolygon(&brush,points.data(),int(points.size()));};
+    painter.polygon=[&](const std::vector<std::pair<double,double>>& pts,skin::Rgb col){if(pts.size()<3)return;PixelSpace pixels(dc);Gdiplus::Graphics g(dc);g.SetTransform(&pixels.transform);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);std::vector<Gdiplus::PointF> points;for(auto pt:pts)points.emplace_back(float(pt.first),float(pt.second));Gdiplus::SolidBrush brush(Gdiplus::Color(255,col.r,col.g,col.b));g.FillPolygon(&brush,points.data(),int(points.size()));};
     painter.knob=[&](mockup::Rect r,double value){
       if(!mockupKnob||mockupKnob->GetLastStatus()!=Gdiplus::Ok){disc(r.x+r.w/2,r.y+r.h/2,r.w/2,RGB(180,180,180),cream());return;}
-      Gdiplus::Graphics g(dc);SIZE viewport{},logical{};GetViewportExtEx(dc,&viewport);GetWindowExtEx(dc,&logical);
-      POINT offset{};GetViewportOrgEx(dc,&offset);g.TranslateTransform(float(offset.x),float(offset.y));g.ScaleTransform(float(viewport.cx)/logical.cx,float(viewport.cy)/logical.cy);
+      PixelSpace pixels(dc);Gdiplus::Graphics g(dc);g.SetTransform(&pixels.transform);
       g.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);g.TranslateTransform(float(r.x+r.w/2),float(r.y+r.h/2));g.RotateTransform(float(270*value-135));
       g.DrawImage(mockupKnob.get(),Gdiplus::RectF(float(-r.w/2),float(-r.h/2),float(r.w),float(r.h)));
     };
@@ -336,7 +349,7 @@ class WinEditor final:public CPluginView{
     if(hit(mockup::load)){preset(false);return;}
     if(hit(mockup::save)){preset(true);return;}
     if(rackState.page==1&&y>=mockup::bodyTop&&hit(rackState.position(mockup::skinMenu))){skinMenu();return;}
-    if(rackState.page==1&&y>=mockup::bodyTop&&hit(rackState.position(mockup::zoomMenu))){HMENU m=CreatePopupMenu();int n=1;for(int size:{50,60,70,75,80,90,100})AppendMenuW(m,MF_STRING,n++,(std::to_wstring(size)+L"%").c_str());POINT p;GetCursorPos(&p);int pick=TrackPopupMenu(m,TPM_RETURNCMD,p.x,p.y,0,window,nullptr);DestroyMenu(m);if(pick&&plugFrame){int sizes[]={50,60,70,75,80,90,100};double f=sizes[pick-1]/100.;ViewRect r(0,0,int(mockup::width*f),int(mockup::height*f));plugFrame->resizeView(this,&r);}return;}
+    if(rackState.page==1&&y>=mockup::bodyTop&&hit(rackState.position(mockup::zoomMenu))){HMENU m=CreatePopupMenu();int n=1;for(int size:{50,60,70,75,80,90,100})AppendMenuW(m,MF_STRING,n++,(std::to_wstring(size)+L"%").c_str());POINT p;GetCursorPos(&p);int pick=TrackPopupMenu(m,TPM_RETURNCMD,p.x,p.y,0,window,nullptr);DestroyMenu(m);if(pick&&plugFrame){int sizes[]={50,60,70,75,80,90,100};userZoom=sizes[pick-1]/100.;double f=userZoom*contentScale;ViewRect r(0,0,int(std::round(mockup::width*f)),int(std::round(mockup::height*f)));plugFrame->resizeView(this,&r);}return;}
     auto val=[&](ParamID id){return value(id);};int page=mockup::hitPage(x,y);if(page>=0){rackState.page=page;motion.ready=false;InvalidateRect(window,nullptr,FALSE);return;}
     if(mockup::maxScroll(rackState)>0&&hit(mockup::scrollbar())){dragScroll=true;originY=y;scrollOrigin=rackState.offset();SetCapture(window);return;}
     int route=mockup::hitRoute(x,y,val,rackState);if(route>=0){dragSlot=route;dropSlot=-1;routeMoved=false;originX=x;originY=y;routingAtDrag=mockup::routeChain(val);chooseTab(routingAtDrag[route]);SetCapture(window);return;}
@@ -356,6 +369,8 @@ class WinEditor final:public CPluginView{
   static LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp){auto* e=reinterpret_cast<WinEditor*>(GetWindowLongPtrW(hwnd,GWLP_USERDATA));if(msg==WM_NCCREATE){e=static_cast<WinEditor*>(reinterpret_cast<CREATESTRUCTW*>(lp)->lpCreateParams);SetWindowLongPtrW(hwnd,GWLP_USERDATA,reinterpret_cast<LONG_PTR>(e));e->window=hwnd;}if(!e)return DefWindowProcW(hwnd,msg,wp,lp);
     double x=0,y=0;
     switch(msg){
+      case WM_APP+74:e->alignToParent();return 0;
+      case WM_SIZE:InvalidateRect(hwnd,nullptr,FALSE);return 0;
       case WM_APP+72:return e->rackState.page;
       case WM_APP+73:e->rackState.scroll[e->rackState.page]=std::clamp(double(lp),0.,mockup::maxScroll(e->rackState));InvalidateRect(hwnd,nullptr,FALSE);return 0;
       case WM_APP+71:return e->rackBackplate&&e->rackAtlas&&e->rackBackplate->GetLastStatus()==Gdiplus::Ok&&e->rackAtlas->GetLastStatus()==Gdiplus::Ok;
@@ -365,7 +380,7 @@ class WinEditor final:public CPluginView{
         bool changed=false;for(int id=0;id<kCount;++id){double v=e->value(id);if(e->lastDisplayValues[id]!=v){e->lastDisplayValues[id]=v;if(!isMonitor(id)||mockup::monitorVisible(id,[&](ParamID p){return e->value(p);},e->rackState,e->selectedLfo))changed=true;}}
         if(e->dragSlot>=0&&e->routeMoved){double d=e->routePointerY<mockup::bodyTop+45?-18:e->routePointerY>mockup::height-45?18:0;if(d){mockup::scrollBy(e->rackState,d);e->dropSlot=mockup::routeInsertion(e->routePointerX,e->routePointerY,[&](ParamID id){return e->value(id);},e->rackState);}}if(changed)e->animationFrames=12;
         if(e->animationFrames>0||e->dragSlot>=0){--e->animationFrames;if(e->rackState.page==0&&mockup::visible(mockup::waveRect([&](ParamID id){return e->value(id);},e->rackState)))e->waveVisual.update([&](ParamID id){return e->lastDisplayValues[id];});InvalidateRect(hwnd,nullptr,FALSE);}return 0;}
-      case WM_PAINT:{PAINTSTRUCT ps;HDC screen=BeginPaint(hwnd,&ps);RECT r;GetClientRect(hwnd,&r);HDC mem=CreateCompatibleDC(screen);auto bitmap=CreateCompatibleBitmap(screen,r.right*2,r.bottom*2);auto old=SelectObject(mem,bitmap);PatBlt(mem,0,0,r.right*2,r.bottom*2,BLACKNESS);mockup::Viewport fit(r.right,r.bottom);SetMapMode(mem,MM_ANISOTROPIC);SetWindowExtEx(mem,int(mockup::width),int(mockup::height),nullptr);SetViewportExtEx(mem,int(std::round(mockup::width*fit.scale*2)),int(std::round(mockup::height*fit.scale*2)),nullptr);SetViewportOrgEx(mem,int(std::round(fit.x*2)),int(std::round(fit.y*2)),nullptr);e->dc=mem;e->draw();SetMapMode(mem,MM_TEXT);SetViewportOrgEx(mem,0,0,nullptr);SetStretchBltMode(screen,HALFTONE);SetBrushOrgEx(screen,0,0,nullptr);StretchBlt(screen,0,0,r.right,r.bottom,mem,0,0,r.right*2,r.bottom*2,SRCCOPY);SelectObject(mem,old);DeleteObject(bitmap);DeleteDC(mem);EndPaint(hwnd,&ps);return 0;}
+      case WM_PAINT:{PAINTSTRUCT ps;HDC screen=BeginPaint(hwnd,&ps);RECT r;GetClientRect(hwnd,&r);if(r.right<=0||r.bottom<=0){EndPaint(hwnd,&ps);return 0;}HDC mem=CreateCompatibleDC(screen);auto bitmap=CreateCompatibleBitmap(screen,r.right*2,r.bottom*2);auto old=SelectObject(mem,bitmap);PatBlt(mem,0,0,r.right*2,r.bottom*2,BLACKNESS);mockup::Viewport fit(r.right,r.bottom);SetMapMode(mem,MM_ANISOTROPIC);SetWindowExtEx(mem,int(mockup::width),int(mockup::height),nullptr);SetViewportExtEx(mem,int(std::round(mockup::width*fit.scale*2)),int(std::round(mockup::height*fit.scale*2)),nullptr);SetViewportOrgEx(mem,int(std::round(fit.x*2)),int(std::round(fit.y*2)),nullptr);e->dc=mem;e->draw();SetMapMode(mem,MM_TEXT);SetViewportOrgEx(mem,0,0,nullptr);SetStretchBltMode(screen,HALFTONE);SetBrushOrgEx(screen,0,0,nullptr);StretchBlt(screen,0,0,r.right,r.bottom,mem,0,0,r.right*2,r.bottom*2,SRCCOPY);SelectObject(mem,old);DeleteObject(bitmap);DeleteDC(mem);EndPaint(hwnd,&ps);return 0;}
       case WM_RBUTTONDOWN:e->point(lp,x,y);e->layout();for(const auto& c:e->controls)if((y>=mockup::bodyTop||c.id==kInputDeclick||c.id==kDeclickSensitivity)&&inside(x,y,c.x,c.y,c.w,c.h)){e->editValue(c.id);break;}return 0;
       case WM_LBUTTONDOWN:case WM_LBUTTONDBLCLK:e->point(lp,x,y);e->down(x,y,msg==WM_LBUTTONDBLCLK);return 0;
       case WM_MOUSEMOVE:e->point(lp,x,y);if(e->dragScroll){auto b=mockup::scrollbar(),t=mockup::scrollThumb(e->rackState);e->rackState.scroll[e->rackState.page]=std::clamp(e->scrollOrigin+(y-e->originY)*mockup::maxScroll(e->rackState)/std::max(1.,b.h-t.h),0.,mockup::maxScroll(e->rackState));InvalidateRect(hwnd,nullptr,FALSE);}else if(e->dragSlot>=0){e->routePointerX=x;e->routePointerY=y;if(std::hypot(x-e->originX,y-e->originY)>8)e->routeMoved=true;if(e->routeMoved)e->dropSlot=mockup::routeInsertion(x,y,[&](ParamID id){return e->value(id);},e->rackState);InvalidateRect(hwnd,nullptr,FALSE);}else if(e->dragXY){auto xy=e->rackState.position(mockup::xy);auto v=mockup::xyValue(xy,x,y);e->change(kXYX,v.first);e->change(kXYY,v.second);}else if(e->dragID>=0){double delta=(e->dragKind==Slider||e->dragKind==Pan)?(x-e->originX)/e->dragWidth:(e->originY-y)/(e->dragKind==VSlider?std::max(1.,e->dragHeight-42):180.);if(GetKeyState(VK_SHIFT)&0x8000)delta*=.1;e->dragValue=std::clamp(e->dragValue+delta,0.,1.);e->originX=x;e->originY=y;e->change(ParamID(e->dragID),e->dragValue);}return 0;
@@ -376,14 +391,26 @@ class WinEditor final:public CPluginView{
     }return DefWindowProcW(hwnd,msg,wp,lp);
   }
 public:
+  DEFINE_INTERFACES
+    DEF_INTERFACE(IPlugViewContentScaleSupport)
+  END_DEFINE_INTERFACES(CPluginView)
+  REFCOUNT_METHODS(CPluginView)
+  tresult PLUGIN_API setContentScaleFactor(ScaleFactor factor)override{
+    if(!std::isfinite(factor)||factor<=0.f||factor>8.f)return kInvalidArgument;
+    if(contentScale==factor)return kResultTrue;
+    contentScale=factor;
+    ViewRect wanted(0,0,int(std::round(mockup::width*userZoom*contentScale)),int(std::round(mockup::height*userZoom*contentScale)));
+    if(plugFrame)return plugFrame->resizeView(this,&wanted);
+    return onSize(&wanted);
+  }
   explicit WinEditor(EditController* c):controller(c){controller->addRef();rect=ViewRect(0,0,int(mockup::width*.70),int(mockup::height*.70));seed=uint32_t(GetTickCount64())^uint32_t(reinterpret_cast<uintptr_t>(this));seed|=1;loadSkin();}
   ~WinEditor()override{removed();mockupKnob.reset();rackBackplate.reset();rackAtlas.reset();if(skinDC){SelectObject(skinDC,oldSkin);DeleteDC(skinDC);}if(skin)DeleteObject(skin);for(size_t i=0;i<sprites.size();++i){if(spriteDC[i]){SelectObject(spriteDC[i],oldSprite[i]);DeleteDC(spriteDC[i]);}if(sprites[i])DeleteObject(sprites[i]);}if(imaging)Gdiplus::GdiplusShutdown(imaging);controller->release();}
   tresult PLUGIN_API isPlatformTypeSupported(FIDString type)override{return type&&std::strcmp(type,kPlatformTypeHWND)==0?kResultTrue:kResultFalse;}
-  tresult PLUGIN_API attached(void* parent,FIDString type)override{if(!parent||window||isPlatformTypeSupported(type)!=kResultTrue)return kResultFalse;HINSTANCE instance=nullptr;GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,reinterpret_cast<LPCWSTR>(&proc),&instance);WNDCLASSW wc{};wc.style=CS_DBLCLKS;wc.lpfnWndProc=proc;wc.hInstance=instance;wc.hCursor=LoadCursor(nullptr,IDC_ARROW);wc.lpszClassName=L"GrainsDosage070";RegisterClassW(&wc);window=CreateWindowExW(0,wc.lpszClassName,L"GrainsDosage",WS_CHILD|WS_VISIBLE,0,0,rect.getWidth(),rect.getHeight(),static_cast<HWND>(parent),nullptr,instance,this);if(!window)return kResultFalse;SetTimer(window,1,33,nullptr);return CPluginView::attached(parent,type);}
+  tresult PLUGIN_API attached(void* parent,FIDString type)override{if(!parent||window||isPlatformTypeSupported(type)!=kResultTrue)return kResultFalse;HINSTANCE instance=nullptr;GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,reinterpret_cast<LPCWSTR>(&proc),&instance);WNDCLASSW wc{};wc.style=CS_DBLCLKS;wc.lpfnWndProc=proc;wc.hInstance=instance;wc.hCursor=LoadCursor(nullptr,IDC_ARROW);wc.lpszClassName=L"GrainsDosage070";RegisterClassW(&wc);window=CreateWindowExW(0,wc.lpszClassName,L"GrainsDosage",WS_CHILD|WS_VISIBLE,0,0,rect.getWidth(),rect.getHeight(),static_cast<HWND>(parent),nullptr,instance,this);if(!window)return kResultFalse;SetTimer(window,1,33,nullptr);auto result=CPluginView::attached(parent,type);alignToParent();PostMessageW(window,WM_APP+74,0,0);return result;}
   tresult PLUGIN_API removed()override{end();if(window){KillTimer(window,1);DestroyWindow(window);window=nullptr;}return CPluginView::removed();}
-  tresult PLUGIN_API onSize(ViewRect* r)override{if(!r)return kInvalidArgument;auto result=CPluginView::onSize(r);if(window)SetWindowPos(window,nullptr,0,0,r->getWidth(),r->getHeight(),SWP_NOZORDER|SWP_NOMOVE);return result;}
+  tresult PLUGIN_API onSize(ViewRect* r)override{if(!r||r->getWidth()<=0||r->getHeight()<=0)return kInvalidArgument;auto result=CPluginView::onSize(r);userZoom=std::clamp(r->getWidth()/(mockup::width*contentScale),.5,1.);if(window){SetWindowPos(window,nullptr,0,0,r->getWidth(),r->getHeight(),SWP_NOZORDER|SWP_NOMOVE|SWP_NOACTIVATE);InvalidateRect(window,nullptr,FALSE);}return result;}
   tresult PLUGIN_API canResize()override{return kResultTrue;}
-  tresult PLUGIN_API checkSizeConstraint(ViewRect* r)override{if(!r)return kInvalidArgument;double f=std::clamp(r->getWidth()/mockup::width,.5,1.);r->right=r->left+int(std::round(mockup::width*f));r->bottom=r->top+int(std::round(mockup::height*f));return kResultTrue;}
+  tresult PLUGIN_API checkSizeConstraint(ViewRect* r)override{if(!r)return kInvalidArgument;double f=std::clamp(r->getWidth()/(mockup::width*contentScale),.5,1.);r->right=r->left+int(std::round(mockup::width*f*contentScale));r->bottom=r->top+int(std::round(mockup::height*f*contentScale));return kResultTrue;}
 };
 IPlugView* createEditor(EditController* controller){return new WinEditor(controller);}
 }

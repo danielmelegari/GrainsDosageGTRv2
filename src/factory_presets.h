@@ -17,7 +17,7 @@ inline std::array<double,kCount> initialParametersBeforeRemoval() {
   p[kGlitchMove]=.5;p[kGlitchVariation]=.3;p[kGlitchRefresh]=2./7.;p[kRepeatInterval]=4./7.;p[kRepeatDuration]=3./31.;p[kRepeatChance]=1.;
   p[kDensityFlow]=1.; p[kTranspose]=p[kXYX]=p[kXYY]=.5; p[kXAmount]=p[kYAmount]=.75;
   p[kGrainBuffer]=1.; // BUFFER SIZE default: 16 s (0=1 s, .25=2 s, .5=4 s, .75=8 s, 1=16 s)
-  p[kXTarget]=double(kSize+1)/kXYX; p[kYTarget]=double(kPitch+1)/kXYX;
+  p[kXTarget]=double(kSize+1)/xyDestCount; p[kYTarget]=double(kPitch+1)/xyDestCount;
   p[kDensity]=3./31.; p[kDivision]=.25; p[kSize]=.25; p[kPosition]=.05; p[kPitch]=.5;
   p[kMix]=1.; p[kAttack]=.1; p[kRelease]=.15; p[kGrainMix]=1.;
   p[kGlitchDivision]=5./15.; p[kGlitchChance]=1.; p[kRepeatMix]=1.; p[kRepeatDivision]=4./15.;
@@ -40,7 +40,7 @@ inline std::array<double,kCount> legacyFactoryPreset(int index){
  auto p=initialParametersBeforeRemoval();p[kNormalize]=1.;p[kGrainMix]=.75;p[kMix]=1.;
  auto pattern=[&](int base,unsigned bits){for(int i=0;i<16;++i)p[base+i]=(bits&(1u<<i))?1.:0.;};
  auto lfo=[&](int wave,int target,double amount,double rate){p[lfoID(0,lEnabled)]=1.;p[lfoID(0,lWave)]=wave/129.;p[slotTarget(0,0)]=(target+1)/double(qg::modTargetCount);p[slotAmount(0,0)]=.5+amount*.5;p[lfoID(0,lGrid)]=rate/20.;};
- if(index>=10&&index<=18){importedPreset(index-10,p);migrateModSlots(p);return p;}
+ if(index>=10&&index<=18){importedPreset(index-10,p);migrateModSlots(p);migrateExpandedDestinations(p,false);return p;}
  switch(index){
  case 0:p[kNormalize]=0.;p[kGrainMix]=1.;p[kSize]=.25;p[kDensity]=7./31.;break;
  case 1:p[kSize]=.6;p[kPosition]=.2;p[kChaos]=.3;p[kPanMode]=.5;lfo(0,2,.16,3);p[kReverbOn]=1.;p[kReverbMix]=.18;break;

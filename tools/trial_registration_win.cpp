@@ -9,10 +9,27 @@ int main(int argc, char** argv) {
     std::cout << id << '\n';
     return id.empty() ? 1 : 0;
   }
-  const int choice = MessageBoxW(nullptr,
+  auto date = [](Tick tick) {
+    FILETIME ft{DWORD(tick), DWORD(tick >> 32)};
+    SYSTEMTIME utc{}; FileTimeToSystemTime(&ft, &utc);
+    wchar_t buffer[64]{};
+    swprintf(buffer, sizeof(buffer)/sizeof(*buffer), L"%04u-%02u-%02u %02u:%02u UTC", utc.wYear, utc.wMonth, utc.wDay, utc.wHour, utc.wMinute);
+    return std::wstring(buffer);
+  };
+  License installed;
+  const auto installedPath=licenseDirectory()+L"\\trial.license";
+  std::wstring status=L"No valid license is installed for this computer.";
+  if(readLicense(installedPath,installed,false)){
+    const auto now=wallTime();
+    status=(now<installed.start?L"Trial has not started.":now>=installed.end?L"Trial has expired.":L"Trial is within its signed 14-day period.");
+    status+=L"\nStarts: "+date(installed.start)+L"\nExpires: "+date(installed.end);
+  }
+  if(argc==2&&std::string(argv[1])=="--status"){std::wcout<<status<<L'\n';return 0;}
+  const std::wstring prompt=status+L"\n\n"+
     L"Choose Yes to save a machine registration request on your Desktop. Send that file to the publisher.\n\n"
     L"Choose No to install the signed trial.license file you received from the publisher.\n\n"
-    L"The trial expires 14 days after the start date shown when you install the license.",
+    L"The trial lasts 14 calendar days from its signed start, with no one-hour session limit.";
+  const int choice = MessageBoxW(nullptr, prompt.c_str(),
     L"GrainsDosage Offline Trial Registration", MB_YESNOCANCEL | MB_ICONINFORMATION);
   if (choice == IDCANCEL) return 0;
   if (choice == IDYES) {
@@ -47,13 +64,6 @@ int main(int argc, char** argv) {
   const auto destination = directory + L"\\trial.license";
   // Allow choosing the already installed file without overwriting itself.
   if (std::filesystem::path(path) != std::filesystem::path(destination) && !CopyFileW(path, destination.c_str(), FALSE)) return 1;
-  auto date = [](Tick tick) {
-    FILETIME ft{DWORD(tick), DWORD(tick >> 32)};
-    SYSTEMTIME utc{}; FileTimeToSystemTime(&ft, &utc);
-    wchar_t buffer[64]{};
-    swprintf(buffer, sizeof(buffer)/sizeof(*buffer), L"%04u-%02u-%02u %02u:%02u UTC", utc.wYear, utc.wMonth, utc.wDay, utc.wHour, utc.wMinute);
-    return std::wstring(buffer);
-  };
   const auto message = L"License installed for this computer.\n\nStarts: " + date(license.start) +
     L"\nExpires: " + date(license.end) + L"\n\nReload the plugin in your DAW.";
   MessageBoxW(nullptr, message.c_str(), L"GrainsDosage", MB_OK | MB_ICONINFORMATION);

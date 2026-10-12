@@ -6,7 +6,7 @@
 #include <memory>
 #include <iostream>
 int main(){using namespace aztec;
- auto oldEncode=[](const auto& values){std::ostringstream out;out<<"GrainsDosagePreset 1 "<<kResliceAlgorithm<<'\n'<<std::setprecision(17);for(int id=0;id<int(kResliceAlgorithm);++id)out<<id<<' '<<(presetParameter(id)?values[id]:0.)<<'\n';return out.str();};
+ auto oldEncode=[](auto values){for(int l=0;l<4;++l)for(int s=0;s<6;++s)values[slotTarget(l,s)]=std::round(values[slotTarget(l,s)]*qg::modTargetCount)/101.;for(auto id:{kXTarget,kYTarget})values[id]=std::round(values[id]*xyDestCount)/int(kXYX);std::ostringstream out;out<<"GrainsDosagePreset 1 "<<kResliceAlgorithm<<'\n'<<std::setprecision(17);for(int id=0;id<int(kResliceAlgorithm);++id)out<<id<<' '<<(presetParameter(id)?values[id]:0.)<<'\n';return out.str();};
 std::set<std::string> names,states;
  for(int bank=0;bank<3;++bank){std::set<int> routes;for(int i=0;i<128;++i){auto p=bankPreset(bank,i);auto name=bankPresetName(bank,i);assert(names.insert(name).second);assert(presetBank(name)==bank&&presetCategory(name)==i/16);for(double v:p)assert(std::isfinite(v)&&v>=0&&v<=1);routes.insert(int(std::round(p[kRoutingOrder]*120))-1);
   auto previous=bankPresetBeforeMixRevision(bank,i);bool changed=false;

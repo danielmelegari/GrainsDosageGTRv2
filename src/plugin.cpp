@@ -38,14 +38,14 @@ std::array<double,kCount> defaults(){return initialParameters();}
 static constexpr int kParamEnd = int(kUiFilterSeqStep) + 1;
 bool loadState(IBStream* stream, std::array<double,kCount>& p) {
   IBStreamer in(stream,kLittleEndian); int32 magic=0;
-  if(!in.readInt32(magic) || (magic!=0x51473130 && magic!=0x51473131 && magic!=0x51473132 && magic!=0x51473133 && magic!=0x51473134 && magic!=0x51473135 && magic!=0x51473136 && magic!=0x51473137 && magic!=0x51473138 && magic!=0x51473139 && magic!=0x5147313A && magic!=0x5147313B && magic!=0x5147313C && magic!=0x5147313D && magic!=0x5147313E && magic!=0x5147313F && magic!=0x51473140 && magic!=0x51473141 && magic!=0x51473142 && magic!=0x51473143 && magic!=0x51473144 && magic!=0x51473145 && magic!=0x51473146 && magic!=0x51473147 && magic!=0x51473148 && magic!=0x51473149 && magic!=0x5147314A && magic!=0x5147314B && magic!=0x5147314C)) return false;
+  if(!in.readInt32(magic) || (magic!=0x51473130 && magic!=0x51473131 && magic!=0x51473132 && magic!=0x51473133 && magic!=0x51473134 && magic!=0x51473135 && magic!=0x51473136 && magic!=0x51473137 && magic!=0x51473138 && magic!=0x51473139 && magic!=0x5147313A && magic!=0x5147313B && magic!=0x5147313C && magic!=0x5147313D && magic!=0x5147313E && magic!=0x5147313F && magic!=0x51473140 && magic!=0x51473141 && magic!=0x51473142 && magic!=0x51473143 && magic!=0x51473144 && magic!=0x51473145 && magic!=0x51473146 && magic!=0x51473147 && magic!=0x51473148 && magic!=0x51473149 && magic!=0x5147314A && magic!=0x5147314B && magic!=0x5147314C && magic!=0x5147314D)) return false;
   auto result=defaults();
   // Layouts: legacy versions store `count` plain doubles. Current saves
   // (0x51473145, written by getState) use the same prefix plus three extra
   // fields injected after kParamEnd: buffer size, freeze flag, then the array
   // continues at kGrainBuffer+2 through kCount-1.
   const bool current=magic>=0x51473145;
-  const int storedEnd=magic==0x5147314C?int(kCount):magic==0x5147314B?int(kModuleLoopOn0):magic==0x5147314A?int(kResliceSubdivision):magic==0x51473149?int(kResliceAlgorithm):magic==0x51473148?int(kModWaveRate0):magic==0x51473147?int(kMixLock0):magic==0x51473146?int(kReverbRateV2):kLegacySkinCount;
+  const int storedEnd=magic>=0x5147314C?int(kCount):magic==0x5147314B?int(kModuleLoopOn0):magic==0x5147314A?int(kResliceSubdivision):magic==0x51473149?int(kResliceAlgorithm):magic==0x51473148?int(kModWaveRate0):magic==0x51473147?int(kMixLock0):magic==0x51473146?int(kReverbRateV2):kLegacySkinCount;
   const int count = current ? int(kParamEnd) : magic==0x51473144 ? kLegacySkinCount : magic==0x51473143 ? int(kResliceRndOn) : magic==0x51473130 ? int(kGrainMix) : (magic==0x51473131 ? int(kLfo0) : (magic==0x51473132 ? int(kLegacyCount) : (magic==0x51473133 ? int(kModuleOrder) : (magic==0x51473134 ? int(kExtraRoutes0) : (magic==0x51473135 ? int(kGlitchMove) : (magic==0x51473136 ? int(kMasterFilter) : (magic==0x51473137 ? int(kNormalize) : (magic==0x51473138 ? int(kReverbLength) : (magic==0x51473139 ? int(kUiWave0) : (magic==0x5147313A ? int(kLfoSlots0) : (magic==0x5147313B ? int(kModWaveRnd0) : (magic==0x5147313C ? int(kReverbSource) : (magic==0x5147313D ? int(kLimiterCeiling) : (magic==0x5147313E ? int(kGaterEnabled) : (magic==0x5147313F ? int(kInputDeclick) : (magic==0x51473140 ? int(kFilterModel) : (magic==0x51473141 ? int(kGaterMinLength) : int(kGlitchTriggerRate))))))))))))))))));
   for(int i=0;i<count;++i) {
     double v=0.; if(!in.readDouble(v) || !std::isfinite(v)) return false;
@@ -96,6 +96,7 @@ bool loadState(IBStream* stream, std::array<double,kCount>& p) {
   if(magic<0x51473140)result[kInputDeclick]=0.;
   if(magic<0x51473144&&count>kResliceLength)result[kResliceLength]=result[kResliceLength]<1./6.?2./3.:1.;
   if(magic==0x5147314A)result[kResliceMinPhrase]=(std::pow(2.,std::round(result[kReslicePhrase]*3.))-1.)/7.;
+  if(magic<0x5147314D)migrateExpandedDestinations(result,magic>=0x51473144,count>kYTarget);
   p=result; return true;
 }
 class Processor final : public AudioEffect {
@@ -166,7 +167,7 @@ public:
   }
   tresult PLUGIN_API getState(IBStream* stream) override {
     IBStreamer out(stream,kLittleEndian);
-    if(!out.writeInt32(0x5147314C)) return kResultFalse;
+    if(!out.writeInt32(0x5147314D)) return kResultFalse;
     for(int i=0;i<kParamEnd;++i) if(!out.writeDouble(p_[i])) return kResultFalse;
     // v0.14 additions: buffer size, freeze state, then the remaining tail ids
     // (RANDOM/PRESET slots) written like any other array entry.
@@ -428,6 +429,10 @@ public:
       auto* route=new StringListParameter(axis?STR16("Y Destination"):STR16("X Destination"),axis?kYTarget:kXTarget);
       route->appendString(STR16("None"));
       for(int id=0;id<int(kXYX);++id) { ParameterInfo info{}; getParameterInfo(id,info); route->appendString(info.title); }
+      route->appendString(STR16("Reslice Mix"));route->appendString(STR16("Reslice Window"));
+#define GRAINS_XY_LABEL(id,label) {String128 text{};UString(text,128).fromAscii(label);route->appendString(text);}
+      GRAINS_RESLICE_DESTINATIONS(GRAINS_XY_LABEL)
+#undef GRAINS_XY_LABEL
       const double def=defaults()[axis?kYTarget:kXTarget]; route->getInfo().defaultNormalizedValue=def; route->setNormalized(def); parameters.addParameter(route);
     }
     range(STR16("X Amount"),kXAmount,STR16("%"),-100,100,50);
@@ -616,8 +621,8 @@ public:
 
 BEGIN_FACTORY_DEF("Daniel Melegari", "", "")
 DEF_CLASS2(INLINE_UID_FROM_FUID(processorID), PClassInfo::kManyInstances, kVstAudioEffectClass,
-           "GrainsDosage", Vst::kDistributable, "Fx|Granular", "0.13.0", kVstVersionString, Processor::create)
+           "GrainsDosage", Vst::kDistributable, "Fx|Granular", "0.13.1", kVstVersionString, Processor::create)
 DEF_CLASS2(INLINE_UID_FROM_FUID(controllerID), PClassInfo::kManyInstances, kVstComponentControllerClass,
-           "GrainsDosage Controller", 0, "", "0.13.0", kVstVersionString, Controller::create)
+           "GrainsDosage Controller", 0, "", "0.13.1", kVstVersionString, Controller::create)
 END_FACTORY
 

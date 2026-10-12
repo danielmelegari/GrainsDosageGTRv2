@@ -18,6 +18,7 @@ on:
       - 'tools/benchmark_engine.cpp'
       - 'tools/compare_engine_cpu.py'
       - 'TRIAL-REGISTRATION.txt'
+      - 'USER-MANUAL.*'
       - 'config/windows-trial-public.b64'
 
 permissions:

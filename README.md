@@ -1,62 +1,44 @@
-# GrainsDosage 0.13.0
+# GrainsDosage 0.13.1 — purple three-page edition
 
-## Glitch Random Trigger (0.12.1)
-The Glitch Buffer step grid is replaced by a tempo-synced random trigger.
-TRIGGER EVERY offers 1/4, 1/2, 1/1 and 2/1: 1, 2, 4 and 8 quarter-note beats.
-CHANCE is the probability per interval (100% = every boundary; 0% = none).
-SLICE controls cut length. Each successful trigger plays a two-cut burst,
-capped at half the trigger interval to leave a gap. MOVE, VARIATION, REVERSE
-and MIX still shape the glitch. The module Random button also randomizes
-the interval. Playback waits for a grid boundary when enabled mid-interval.
-The previous Glitch grid/refresh parameter IDs are retained but hidden and
-ignored by the new Glitch scheduling. Old presets load with interval 1/4;
-their Glitch sequencing now follows this new behavior. The new interval is
-saved in presets and VST state and can be automated.
+This branch builds the **Modules / Modulation / Morph** interface. The audio rack contains Granulizer, Beat Repeater, generative Reslice (CutDSG, WarpDSG and PushDSG), and Gater, with per-module capture loops. The Modulation page adds four six-slot LFOs, a 19-model filter, a dedicated filter sequencer, reverb and master controls.
 
+Read the [complete user manual](USER-MANUAL.md) for installation in Cubase, every control, modulation, Morph, presets, offline registration and troubleshooting. A printable, offline HTML copy is included in the Windows installer.
 
-GrainsDosage is a VST3 effect for macOS (Intel Mojave target and Apple Silicon) and Windows 10/11 x64. This source archive contains the plugin code, 30 factory preset files, extracted GUI sprites, and GitHub Actions workflows; it does not contain prebuilt installers.
+## Current fixes
 
-## 0.13.0
+- Windows graphics and text share one scale; host attachment and VST3 DPI changes update editor dimensions.
+- Full current Reslice sound/capture controls are available as LFO and Morph destinations.
+- The registered Windows trial has a signed 14-calendar-day period, no one-hour session limit, and recovery from temporary protected-storage failures.
+- Audio CPU improvements cache unchanged calculations and protect x86 processing from denormal slowdowns. See [CPU-PERFORMANCE.md](CPU-PERFORMANCE.md).
 
-See AGGIORNAMENTO-IT.md for the dedicated filter sequencer, 64 original patterns, tuned minor Comb, 101 modulation destinations and Reslice automatic/one-shot random. Native platform builds still require GitHub Actions.
+## Windows installer
 
-## What's new
+Run [Windows 14-day trial](../../actions/workflows/windows-trial.yml) on `work/mockup-purple-skin`.
 
-- **Reslice:** records the audio after the three rearrangeable modules, then replays selected regions on a 16-step sequencer. Loop lengths: 4/1, 2/1, 1/1, and 1/2. Step controls select which captured region is played.
-- **Gater Latch:** empty steps preserve the last gate state; Release steps close it. Normal mode remains the default.
-- **Gater update:** Dry Step is removed. Each Wet step has a Sustain tail control; Minimum Length clamps fixed and randomized steps; Tie joins adjacent Wet steps into one continuous note, including across the loop. Legacy Dry values load as Wet and old parameter IDs remain unchanged.
-- **Filter bank:** 19 original filter models and combinations, including ladder, transistor, notch, resonant peak, comb, formant, phaser, and split-band families. The ladder and multimode sounds are original approximations inspired by classic synth filter behavior, not exact Nord, Moog, or Serum reproductions.
-- **Reverb:** existing sequenced reverb remains available alongside Plate, Cosmic Space, Dark Space, and Bloom Space algorithms. The latter are original diffused, modulated reverbs rather than copies of Eventide Blackhole.
-- **30 presets:** ten original factory patches, nine imported user patches from the upgrade discussion, and eleven patches demonstrating the new modules. Imported parameter values retain their original IDs; new modules default off in those nine patches.
-- **GUI:** one resizable window with brighter text and extracted skin sprites for the knobs, steps, and headers. The full layout fits at the default scale without scrolling.
-
-## Presets
-
-The plugin installs any missing factory presets when its preset menu opens and does not overwrite files already present. The 30 `.gdspreset` files are also included in `Presets/` in this archive. On first use, the nine imported user patches are available as presets 11–19.
-
-- macOS: `~/Library/Audio/Presets/GrainsDosage/`
-- Windows: `%APPDATA%\GrainsDosage\Presets\`
-
-Save custom patches from the plugin's preset menu. Presets store parameters only, not recorded audio.
-
-## Build workflows
-
-Upload the extracted archive contents to the root of a GitHub repository, or place the project folder `GrainsDosage/` in the repository. In Actions, run the matching workflow:
-
-| Workflow | Output |
+| Artifact | Contents |
 |---|---|
-| `build-vst3.yml` | VST3 bundles only (no installer): macOS Intel x64, macOS Apple Silicon arm64, Windows 10/11 x64 — each published as a ZIP artifact containing `GrainsDosage.vst3` |
+| `GrainsDosage-Windows-x64-ThreePage-14-Day-Trial` | Windows 10/11 x64 Setup executable |
+| `GrainsDosage-Windows-ThreePage-Previews` | Native Windows screenshots of all three pages |
+| `Windows-audio-CPU-comparison` | Same-runner before/after engine benchmark and audio checks |
 
-The workflow builds against its pinned Steinberg VST3 SDK, runs the regression tests and platform GUI smoke test, and publishes portable `.vst3` bundle ZIPs. There is no installer step: download the ZIP for your platform, unzip, and copy the `GrainsDosage.vst3` folder to your DAW's VST3 path. The Mac jobs and the Windows job run on their respective GitHub-hosted runners; a Linux test run is not a substitute for installing in Cubase on each target system.
+The workflow builds and tests the licensing code, verifies the native interface, builds the actual trial with the publisher's public key, and packages it using Inno Setup. It starts automatically on relevant pushes to this branch and can also be dispatched manually.
 
-## Audio pipeline and compatibility
+The [multi-platform workflow](../../actions/workflows/build-all.yml) builds the other platform/edition packages. The registered Windows trial installer comes from the dedicated Windows trial workflow.
 
-Reslice is after the three existing modules and before the Gater and master effects. Existing filter, reverb, and parameter IDs are kept stable. Legacy presets and saved states default the newly added Reslice and Latch behavior to off. The added filter/reverb models are separate choices, so the prior models remain accessible.
+## Offline licensing
 
-Run the eleven standalone suites with `ctest --test-dir build -C Release --output-on-failure` after configuring with `-DGRAINS_BUILD_TESTS=ON`. The build workflow also runs Steinberg's VST3 validator and the native platform GUI smoke test.
+The plugin requires a signed license for the registered Windows machine. All processing is available during the signed period; outside it, the trial silences output without closing the host. The registration tool shows the installed license's start/end dates. No server connection is needed.
 
-## Windows 14-day trial
+See [OFFLINE-TRIAL.md](OFFLINE-TRIAL.md) for publisher signing and machine registration. Keep the private key outside the repository. Installing the full edition replaces the trial at the same VST3 location.
 
-The trial now requires a signed offline license for the registered computer. It works with full functionality for the fixed 14-day period in the license, then silences output. A copied license is rejected on a different machine ID. The installer uses the newer three-page interface: Modules, Modulation, and Morph, plus the existing publisher public verification key.
+## Presets and compatibility
 
-See [OFFLINE-TRIAL.md](OFFLINE-TRIAL.md) for publisher key handling, registration, issuing licenses, and protection limits. Run **Windows 14-day trial**; download `GrainsDosage-Windows-x64-ThreePage-14-Day-Trial` and use the included **GrainsDosage Trial Registration** tool. Full and trial editions share the installation location; install the full edition to replace the trial. Artifact retention is separately set to 14 days.
+The factory collection contains three 128-preset banks: Legacy, Circuit Fractures and Forest Escape. Windows user presets live under `%APPDATA%\GrainsDosage\Presets\`; macOS uses `~/Library/Audio/Presets/GrainsDosage/`.
+
+Older plugin states and preset files migrate their selected destinations to the expanded lists. New presets use format 2. Check old DAW automation that changes destination selectors themselves after upgrading, because the expanded lists use new normalized positions. See the manual's automation section.
+
+## Building and checking
+
+Use CMake with the pinned VST3 SDK and `-DGRAINS_BUILD_TESTS=ON`. Run `ctest --test-dir BUILD_DIR -C Release --output-on-failure`. Windows trial configuration additionally needs `-DGRAINS_TRIAL=ON` and a public verification header; the workflow generates it with `tools/configure_trial_key.py`.
+
+Local DSP tests complement the native platform checks. A native CI smoke test is not a substitute for testing the final installer in Cubase with the user's display, audio driver and project.

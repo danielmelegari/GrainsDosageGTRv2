@@ -1,23 +1,18 @@
-GrainsDosage 0.13.0 - Windows 10/11 x64
+GrainsDosage 0.13.1 - Windows 10/11 x64, three-page interface
 
-1. Salva il progetto e chiudi Cubase o la tua DAW.
-2. Avvia GrainsDosage-0.13.0-Windows10-x64-Setup.exe.
-3. Il plugin completo viene installato in:
-   C:\Program Files\Common Files\VST3\GrainsDosage.vst3
-4. Riapri la DAW e avvia la scansione dei plugin VST3.
+1. Close Cubase and other audio hosts.
+2. Run the Windows x64 ThreePage Setup executable.
+3. For the 14-Day-Trial edition, open GrainsDosage Trial Registration in the
+   Start menu and install the publisher-signed license for your machine.
+4. Start Cubase, rescan VST3 plugins if needed, and insert GrainsDosage as an
+   audio effect. Verify version 0.13.1 in Cubase's plugin information.
 
-Richiede una DAW Windows x64 con supporto VST3.
-Il file Mac .vst3 non funziona su Windows.
-L'installer richiede privilegi amministrativi. Non include firma Authenticode.
+Installed plugin: C:\Program Files\Common Files\VST3\GrainsDosage.vst3
+The complete folder is the plugin bundle. Do not move just its internal binary.
 
-Per l'installazione manuale, estrai GrainsDosage-Windows10-x64.zip e copia
-l'intera cartella GrainsDosage.vst3 nel percorso sopra. Non estrarre soltanto
-il file interno Contents\x86_64-win\GrainsDosage.vst3.
-Non installare contemporaneamente copie dello stesso plugin in altri percorsi.
+Read GrainsDosage User Manual in the Start menu for all three pages, every
+Reslice control, modulation, Morph, presets, CPU advice and troubleshooting.
 
-Preset: menu Presets -> Open Preset Folder.
-Cartella: %APPDATA%\GrainsDosage\Presets
-Il plugin crea i 30 preset di fabbrica al primo utilizzo del menu preset.
-
-Disinstallazione: Impostazioni Windows -> App -> GrainsDosage VST3.
-I preset dell'utente restano nella cartella AppData.
+The offline trial runs from its signed start until exactly 14 calendar days
+later. There is no one-hour session timeout. Registration shows its dates.
+An unregistered, not-yet-active or expired trial produces no audio.

@@ -10,6 +10,7 @@
 #include "gater.h"
 #include "quantized_trigger.h"
 #include "reslice.h"
+#include "reslice_modulation.h"
 #include "module_loop.h"
 #include "filter_bank.h"
 #include "filter_sequencer.h"
@@ -28,6 +29,7 @@ constexpr double pi = 3.14159265358979323846;
 
 struct Settings {
   std::array<bool,4> loopOn{};std::array<double,4> loopBeats{{8,8,8,8}};
+  std::array<double,aztec::extendedResliceCount> resliceModBase{};
   FilterSequenceSettings filterSequence;
   GaterSettings gater;ResliceSettings reslice;bool playing=true;int filterModel=0,reverbModel=0;
   double tempo = 120., sampleRate = 44100.;
@@ -260,6 +262,11 @@ class Engine {
     if(modRouted_[98]){double v=values[98];settings_.reslice.slice[13]=int(std::round(v*15.));}
     if(modRouted_[99]){double v=values[99];settings_.reslice.slice[14]=int(std::round(v*15.));}
     if(modRouted_[100]){double v=values[100];settings_.reslice.slice[15]=int(std::round(v*15.));}
+    for(int i=0;i<aztec::extendedResliceCount;++i)if(modRouted_[101+i]){
+      if(i==aztec::extendedResliceCount-2)settings_.loopOn[2]=values[101+i]>=.5;
+      else if(i==aztec::extendedResliceCount-1){constexpr double windows[]={8.,4.,2.,1.};settings_.loopBeats[2]=windows[int(std::round(values[101+i]*3))];}
+      else aztec::applyResliceDestination(settings_.reslice,i,values[101+i]);
+    }
     reslice_.set(settings_.reslice);gater_.set(settings_.gater);
     reverb_.set(settings_.reverbOn,settings_.reverbType,settings_.reverbGrid,settings_.reverbPattern,settings_.reverbMix,settings_.reverbLength,settings_.reverbKill,settings_.reverbRandom,settings_.reverbRandomGrid,settings_.reverbModel);
   }
@@ -512,6 +519,7 @@ public:
     modBase_[98]=std::clamp(s.reslice.slice[13]/15.,0.,1.);
     modBase_[99]=std::clamp(s.reslice.slice[14]/15.,0.,1.);
     modBase_[100]=std::clamp(s.reslice.slice[15]/15.,0.,1.);
+    for(int i=0;i<aztec::extendedResliceCount;++i)modBase_[101+i]=s.resliceModBase[i];
     mixModulated_=false;
     for(const auto& lfo:s.lfos) if(lfo.enabled && lfo.depth>0. && (lfo.amount[5]!=0.||lfo.positive[5]!=0.||lfo.negative[5]!=0.)) mixModulated_=true;
     gateAttack_ = std::exp(-1./(s.sampleRate*std::max(.0001,s.attack)));

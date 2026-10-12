@@ -30,6 +30,7 @@ struct LocalBuffer {
   ~LocalBuffer() { if (blob.pbData) LocalFree(blob.pbData); }
 };
 enum class Read { missing, valid, invalid };
+enum class Refresh { active, expired, invalid, unavailable };
 
 // DPAPI authenticates the record and binds it to the current Windows account.
 // Entropy identifies the product; it is deliberately not treated as a secret.
@@ -100,14 +101,14 @@ public:
     CoTaskMemFree(path);
     return Store(L"Software\\GrainsDosage\\Trial", directory + L"\\GrainsDosage-Trial");
   }
-  bool refresh(Tick now, State& state, bool allowCreate, Tick minimumTime = 0) const {
-    if (directory_.empty() || registryPath_.empty()) return false;
-    if (!CreateDirectoryW(directory_.c_str(), nullptr) && GetLastError() != ERROR_ALREADY_EXISTS) return false;
+  Refresh check(Tick now, State& state, bool allowCreate, Tick minimumTime = 0) const {
+    if (directory_.empty() || registryPath_.empty()) return Refresh::unavailable;
+    if (!CreateDirectoryW(directory_.c_str(), nullptr) && GetLastError() != ERROR_ALREADY_EXISTS) return Refresh::unavailable;
     Handle file;
     file.value = CreateFileW((directory_ + L"\\licensed-state.dat").c_str(), GENERIC_READ | GENERIC_WRITE,
                             FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS,
                             FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (file.value == INVALID_HANDLE_VALUE) return false;
+    if (file.value == INVALID_HANDLE_VALUE) return Refresh::unavailable;
     // Serialize plugin instances and DAW processes, including different sessions.
     // Closing the handle releases the lock on every return path.
     OVERLAPPED overlapped{};
@@ -115,37 +116,41 @@ public:
     for (int attempt = 0; attempt < 500; ++attempt) {
       if (LockFileEx(file.value, LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY,
                      0, MAXDWORD, MAXDWORD, &overlapped)) { locked = true; break; }
-      if (GetLastError() != ERROR_LOCK_VIOLATION) return false;
+      if (GetLastError() != ERROR_LOCK_VIOLATION) return Refresh::unavailable;
       Sleep(10);
     }
-    if (!locked) return false;
+    if (!locked) return Refresh::unavailable;
     Key key;
     if (RegCreateKeyExW(HKEY_CURRENT_USER, registryPath_.c_str(), 0, nullptr, 0,
-                       KEY_QUERY_VALUE | KEY_SET_VALUE, nullptr, &key.value, nullptr) != ERROR_SUCCESS) return false;
+                       KEY_QUERY_VALUE | KEY_SET_VALUE, nullptr, &key.value, nullptr) != ERROR_SUCCESS) return Refresh::unavailable;
     State registryState{}, fileState{}, next{};
     const auto registryRead = readRegistry(key.value, registryState);
     const auto fileRead = readFile(file.value, fileState);
     if (registryRead == Read::missing && fileRead == Read::missing) {
-      if (!allowCreate || !wellFormed(state)) return false;
+      if (!allowCreate || !wellFormed(state)) return Refresh::invalid;
       next = state;
     } else if (registryRead != Read::valid || fileRead != Read::valid ||
-               !merge(registryState, fileState, next)) return false;
-    if (next.start != state.start || now < state.start) return false;
+               !merge(registryState, fileState, next)) return Refresh::invalid;
+    if (next.start != state.start || now < state.start) return Refresh::invalid;
     // Persist the high-water mark even when time has expired, so rolling the
     // clock back after a forward jump cannot reactivate an expired trial.
     bool active = advance(next, now);
     if (active && minimumTime > next.last) active = advance(next, minimumTime);
     std::vector<BYTE> bytes;
-    if (!protect(next, bytes)) return false;
+    if (!protect(next, bytes)) return Refresh::unavailable;
     LARGE_INTEGER zero{};
     DWORD count = 0;
     if (!SetFilePointerEx(file.value, zero, nullptr, FILE_BEGIN) ||
         !WriteFile(file.value, bytes.data(), DWORD(bytes.size()), &count, nullptr) || count != bytes.size() ||
-        !SetEndOfFile(file.value) || !FlushFileBuffers(file.value)) return false;
+        !SetEndOfFile(file.value) || !FlushFileBuffers(file.value)) return Refresh::unavailable;
     if (RegSetValueExW(key.value, L"LicensedStateV1", 0, REG_BINARY, bytes.data(), DWORD(bytes.size())) != ERROR_SUCCESS)
-      return false;
+      return Refresh::unavailable;
     state = next;
-    return active;
+    return active ? Refresh::active : Refresh::expired;
   }
+  bool refresh(Tick now, State& state, bool allowCreate, Tick minimumTime = 0) const {
+    return check(now,state,allowCreate,minimumTime)==Refresh::active;
+  }
+
 };
 } // namespace grains::trial

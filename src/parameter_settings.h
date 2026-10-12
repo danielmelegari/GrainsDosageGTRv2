@@ -7,8 +7,8 @@ inline qg::Settings settings(const std::array<double, kCount>& saved, double tem
   auto p=saved;
   if(value(p,kXYEnable)>=.5) {
     for(int axis=0;axis<2;++axis) {
-      const int target=int(std::round(value(saved,axis?kYTarget:kXTarget)*int(kXYX)))-1;
-      if(target>=0 && target<int(kXYX)) p[target]=std::clamp(p[target]+(value(saved,axis?kXYY:kXYX)*2.-1.)*(value(saved,axis?kYAmount:kXAmount)*2.-1.),0.,1.);
+      const int target=xyDestinationId(int(std::round(value(saved,axis?kYTarget:kXTarget)*xyDestCount))-1);
+      if(target>=0 && target<int(kCount)) p[target]=std::clamp(p[target]+(value(saved,axis?kXYY:kXYX)*2.-1.)*(value(saved,axis?kYAmount:kXAmount)*2.-1.),0.,1.);
     }
   }
   qg::Settings s;const double loopWindows[]={8.,4.,2.,1.};for(int i=0;i<4;++i){s.loopOn[i]=value(p,moduleLoopOn(i))>=.5;s.loopBeats[i]=loopWindows[int(std::round(value(p,moduleLoopWindow(i))*3.))];}
@@ -87,6 +87,7 @@ inline qg::Settings settings(const std::array<double, kCount>& saved, double tem
     const double speeds[]={.25,.5,1.,2.};l.speed=speeds[int(std::round(value(p,kLfoSpeed0+i)*3.))];l.waveRandom=modWaveSelection([&](ParamID id){return value(p,id);},i);
     for(int slot=0;slot<6;++slot){int target=int(std::round(value(p,slotTarget(i,slot))*qg::modTargetCount))-1;if(target>=0&&target<qg::modTargetCount){double amount=value(p,slotAmount(i,slot))*2.-1.;int polarity=int(std::round(value(p,slotPolarity(i,slot))*2.));if(polarity==1)l.positive[target]+=std::abs(amount);else if(polarity==2)l.negative[target]+=std::abs(amount);else l.amount[target]+=amount;}}
   }
+  for(int i=0;i<extendedResliceCount;++i)s.resliceModBase[i]=value(p,extendedResliceIds[i]);
   return s;
 }
 }

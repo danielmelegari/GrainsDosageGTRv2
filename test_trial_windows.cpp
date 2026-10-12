@@ -40,9 +40,19 @@ int main() {
   auto concurrent = [&](bool& ok) { State copy{start,start}; ok = store.refresh(start+2*second,copy,true); };
   std::thread a(concurrent,std::ref(okA)), b(concurrent,std::ref(okB)); a.join(); b.join();
   assert(okA && okB);
-  assert(store.refresh(start+300*second,state,false));
+  // Simulate two hours of 30-second maintenance, including many instances.
+  // No one-hour session timeout: the signed 14-day end is the only duration.
+  for(Tick elapsed=30*second;elapsed<=7200*second;elapsed+=30*second){
+    State copy{start,start};assert(store.refresh(start+elapsed,copy,false));
+  }
+  {
+    Handle busy;busy.value=CreateFileW((directory+L"\\licensed-state.dat").c_str(),GENERIC_READ,0,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);
+    assert(busy.value!=INVALID_HANDLE_VALUE);
+    assert(store.check(start+7201*second,state,false)==Refresh::unavailable);
+  }
+  assert(store.refresh(start+7201*second,state,false)); // Temporary access recovers.
   assert(!store.refresh(start,state,false)); // Clock rollback.
-  assert(store.refresh(start+301*second,state,false));
+  assert(store.refresh(start+7202*second,state,false));
   assert(!store.refresh(start+duration,state,false));
   State reloaded{start,start};
   assert(!store.refresh(start+duration-1,reloaded,true)); // Persisted expiration.

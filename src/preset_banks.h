@@ -66,7 +66,7 @@ inline std::array<double,kCount> bankPresetFourModuleRevision(int bank,int index
  if(retired){p[kResliceEnabled]=p[kResliceMix]=1.;p[kResliceLength]=bank==2?0.:2./3.;for(int i=0;i<16;++i)p[kResliceIndex0+i]=((i*(bank==2?1:5)+index)%16)/15.;p[kResliceRndOn]=bank==1?1.:0.;}
  std::array<int,4> order{{0,2,3,4}};for(int n=0;n<index%24;++n)std::next_permutation(order.begin(),order.end());p[kRoutingOrder]=fourModuleRouting(order);
  for(int l=0;l<4;++l)for(int slot=0;slot<6;++slot){int target=int(std::round(p[slotTarget(l,slot)]*qg::modTargetCount))-1;if((target>=12&&target<=15)||target==27||target==29){p[slotTarget(l,slot)]=1./qg::modTargetCount;}}
- for(auto id:{kXTarget,kYTarget})if(retiredPreslicerParam(int(std::round(p[id]*kXYX))-1))p[id]=double(kSize+1)/kXYX;
+ for(auto id:{kXTarget,kYTarget})if(retiredPreslicerParam(xyDestinationId(int(std::round(p[id]*xyDestCount))-1)))p[id]=double(kSize+1)/xyDestCount;
  return p;
 }
 inline std::array<double,kCount> bankPreset(int bank,int index){

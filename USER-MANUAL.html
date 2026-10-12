@@ -1,0 +1,778 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GrainsDosage 0.13.1 User Manual</title><style>body{font:16px/1.65 system-ui,Segoe UI,sans-serif;max-width:1050px;margin:40px auto;padding:0 24px;color:#20202b;background:#faf9fd}h1,h2,h3{line-height:1.2;color:#583f88}h2{margin-top:2.3em;border-bottom:1px solid #d8cbe9;padding-bottom:.4em}table{border-collapse:collapse;width:100%;font-size:.94em}td,th{padding:10px;text-align:left;border:1px solid #d9d3e3}th{background:#eee7f7}a{color:#613d99}code{overflow-wrap:anywhere}pre{white-space:pre-wrap;background:#eeeaf4;padding:16px;border-radius:8px} @media print{body{font-size:10pt;background:white;margin:0}h2,h3{break-after:avoid}tr{break-inside:avoid}a{color:inherit}pre{font-size:9pt}}</style></head><body><h1 id="grainsdosage-complete-user-manual">GrainsDosage — complete user manual</h1>
+<p><strong>Windows VST3 · purple three-page edition · 0.13.1</strong><br />
+Applies to the updated <code>work/mockup-purple-skin</code> branch. The pages are <strong>Modules</strong>, <strong>Modulation</strong>, and <strong>Morph</strong>. This manual describes the current generative Reslice, not the retired Preslicer or the old Reslice step editor. Shared sound controls also apply to the macOS build; installation and registration below describe Windows.</p>
+<h2 id="contents">Contents</h2>
+<ol>
+<li><a href="#1-install-and-register">Install and register</a></li>
+<li><a href="#2-first-session-in-cubase">First session in Cubase</a></li>
+<li><a href="#3-navigation-and-editing">Navigation and editing</a></li>
+<li><a href="#4-signal-path-and-module-loops">Signal path and module loops</a></li>
+<li><a href="#5-input-controls">Input controls</a></li>
+<li><a href="#6-granulizer">Granulizer</a></li>
+<li><a href="#7-beat-repeater">Beat Repeater</a></li>
+<li><a href="#8-reslice-every-control">Reslice: every control</a></li>
+<li><a href="#9-gater">Gater</a></li>
+<li><a href="#10-modulation">Modulation</a></li>
+<li><a href="#11-filter-and-filter-sequencer">Filter and filter sequencer</a></li>
+<li><a href="#12-reverb-and-master-output">Reverb and master output</a></li>
+<li><a href="#13-morph-xy">Morph XY</a></li>
+<li><a href="#14-presets-randomization-and-automation">Presets, randomization and automation</a></li>
+<li><a href="#15-practical-starting-patches">Practical starting patches</a></li>
+<li><a href="#16-troubleshooting-and-cpu">Troubleshooting and CPU</a></li>
+<li><a href="#17-publisher-issuing-offline-trials">Publisher: issuing offline trials</a></li>
+</ol>
+<h2 id="1-install-and-register">1. Install and register</h2>
+<h3 id="installation">Installation</h3>
+<p>Close Cubase, run the Windows trial Setup executable, and accept the administrator prompt. The installer places the complete VST3 bundle at:</p>
+<pre><code>C:\Program Files\Common Files\VST3\GrainsDosage.vst3
+</code></pre>
+<p>The bundle is a folder; do not move just its internal binary. Use Windows 10 or 11 x64 and a compatible 64-bit VST3 host. Trial and full editions occupy the same plugin location; installing one replaces the other. Your DAW identifies them as the same plugin.</p>
+<p>Start Cubase after installation. Open <strong>Studio → VST Plug-in Manager</strong> and rescan if GrainsDosage is not listed. Insert it as an <strong>audio effect</strong>, not as an instrument. It needs incoming audio.</p>
+<h3 id="offline-registration">Offline registration</h3>
+<ol>
+<li>Open <strong>GrainsDosage Trial Registration</strong> from the Windows Start menu.</li>
+<li>Choose <strong>Yes</strong> to export <code>GrainsDosage-machine-request.json</code> to the Desktop.</li>
+<li>Send this request to the publisher.</li>
+<li>When the publisher returns <code>trial.license</code>, open Registration again, choose <strong>No</strong>, and select that file.</li>
+<li>Check the displayed start and expiry dates, then reload the plugin in Cubase.</li>
+</ol>
+<p>The plugin and registration tool make no online activation requests. A license is signed for a machine ID derived locally from Windows and the system volume. It will not enable audio on another computer. Reinstalling Windows or replacing the system volume can change the ID; contact the publisher if that happens.</p>
+<p>The license is installed for the current Windows account at <code>%LOCALAPPDATA%\GrainsDosage-Trial\trial.license</code>. Another account on the same registered machine can install that same signed license, retaining the same end date.</p>
+<h3 id="exactly-what-14-days-means">Exactly what “14 days” means</h3>
+<p>The trial enables full processing during the <strong>14 calendar days between the signed start and end timestamps</strong>. It is not 14 days of accumulated playback, and it does not restart when Cubase opens. By default, the publisher's issuing tool starts the period when it issues the license; the publisher can choose a later start date before issuing it.</p>
+<p>There is <strong>no one-hour session limit</strong>. A license received several days after its start has only the remaining calendar time. Registration shows the dates in UTC each time it opens. Artifact download retention on GitHub is separate from the trial period.</p>
+<p>Before activation, before a future start, after expiry, or when protected state cannot be validated, the trial produces silence. It does not shut down Cubase or erase projects. Keep the Windows clock correct. Reinstalling or deleting trial files does not legitimately extend the signed period.</p>
+<h2 id="2-first-session-in-cubase">2. First session in Cubase</h2>
+<ol>
+<li>Load an audio loop on a stereo audio track and enable a repeating region in Cubase.</li>
+<li>Insert GrainsDosage and start playback. For live input, enable the track's input monitoring.</li>
+<li>Start with a moderate track level and keep the plugin's limiter enabled.</li>
+<li>On <strong>Modules</strong>, enable one processor at a time. Use its Mix to hear the change.</li>
+<li>On <strong>Modulation</strong>, scroll to the master section and use the master Mix to blend the complete effect with the input.</li>
+<li>Save the Cubase project and a plugin preset when you have a useful sound.</li>
+</ol>
+<p>Reslice and the module loops need time to collect incoming audio. Beat-based processors use Cubase's tempo and transport. Stopping the host can stop new rhythmic captures; reverb tails can continue.</p>
+<h2 id="3-navigation-and-editing">3. Navigation and editing</h2>
+<p>The header and the three page tabs stay in place. Each page has its own vertical scroll position. Use the mouse wheel or the scrollbar to reach lower sections.</p>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>Windows operation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Adjust a knob</td>
+<td>Drag vertically</td>
+</tr>
+<tr>
+<td>Adjust a horizontal slider</td>
+<td>Drag horizontally</td>
+</tr>
+<tr>
+<td>Adjust a vertical slider</td>
+<td>Drag vertically</td>
+</tr>
+<tr>
+<td>Fine adjustment</td>
+<td>Hold <strong>Shift</strong> while dragging</td>
+</tr>
+<tr>
+<td>Enter an exact value</td>
+<td>Click the numeric readout, or right-click a control</td>
+</tr>
+<tr>
+<td>Restore a knob/slider default</td>
+<td>Double-click its control area, outside the numeric readout</td>
+</tr>
+<tr>
+<td>Choose a discrete option</td>
+<td>Click the selector and choose its menu item</td>
+</tr>
+<tr>
+<td>Change module order</td>
+<td>Drag a module's header/handle up or down</td>
+</tr>
+<tr>
+<td>Change page</td>
+<td>Click Modules, Modulation or Morph</td>
+</tr>
+</tbody>
+</table>
+<p>Numeric entry accepts the displayed units where applicable, such as <code>123 ms</code>. Values outside the control's range are rejected.</p>
+<p>The Modulation page includes <strong>skin</strong> and <strong>zoom</strong> menus. Windows zoom choices are 50, 60, 70, 75, 80, 90 and 100%. Windows display DPI and plugin zoom combine; the editor now uses one drawing transform for graphics and text. Opening the editor should not require minimizing or resizing it to line up the controls.</p>
+<h2 id="4-signal-path-and-module-loops">4. Signal path and module loops</h2>
+<p>The main signal path is:</p>
+<p><strong>Input de-clicker → input stretch/transpose → the four rack modules in their displayed order → filter → reverb → output mixing/level matching → limiter.</strong></p>
+<p>The four rack modules are Granulizer, Beat Repeater, Reslice and Gater. The first module is at the top. Reordering changes what each processor receives: a Gater before Reslice cuts the recorded source; a Gater after Reslice gates the resulting cuts. Old saved patches can retain their legacy parallel routing until a new rack order is selected.</p>
+<p>The master dry branch comes from the input after the de-clicker's fixed delay; it is not the same as turning down only the last module's Mix.</p>
+<p>Each rack module has <strong>On</strong>, <strong>Loop</strong>, and <strong>Window</strong> controls. Loop captures and repeats that module's output independently of the others. It is separate from Granulizer Freeze, Beat Repeater Hold, and Reslice's source buffer.</p>
+<p>Loop windows are <strong>2/1, 1/1, 1/2 and 1/4</strong>: eight, four, two and one quarter-note beats. Feed audio and play long enough to fill the selected window before expecting capture. Turn Loop off to return to live processing. Changing Window releases the old capture and collects the newly selected duration. These durations are beat-based; outside 4/4, do not assume every <code>1/1</code> label means one host bar.</p>
+<h2 id="5-input-controls">5. Input controls</h2>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>Function</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Input De-clicker On</strong></td>
+<td>Repairs brief isolated discontinuities before the sound processors. It is not a general noise remover.</td>
+</tr>
+<tr>
+<td><strong>Sensitivity</strong></td>
+<td>Higher settings make smaller discontinuities eligible for repair. Reduce it if wanted transients change.</td>
+</tr>
+<tr>
+<td><strong>Transpose</strong></td>
+<td>Input pitch shift, −48 to +48 semitones.</td>
+</tr>
+<tr>
+<td><strong>Free Stretch</strong></td>
+<td>Enables independent input stretching.</td>
+</tr>
+<tr>
+<td><strong>Stretch</strong></td>
+<td>Stretch playback speed, 25–400%; 100% is normal speed.</td>
+</tr>
+</tbody>
+</table>
+<p>The de-clicker has a fixed <strong>32-sample lookahead</strong>, including when repair is disabled, so switching repair on/off does not change the reported plugin latency. Cubase uses this for delay compensation.</p>
+<h2 id="6-granulizer">6. Granulizer</h2>
+<p>The Granulizer reads small overlapping fragments from its input history.</p>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>Range and use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Size</strong></td>
+<td>15–250 ms. Short sizes produce fine grain; longer sizes retain more source detail.</td>
+</tr>
+<tr>
+<td><strong>Density</strong></td>
+<td>1–32 grains per timing step. Higher values create denser textures and can increase CPU.</td>
+</tr>
+<tr>
+<td><strong>Lookback</strong></td>
+<td>15–2,000 ms behind the live write position.</td>
+</tr>
+<tr>
+<td><strong>Chaos</strong></td>
+<td>0–100% randomness in grain generation.</td>
+</tr>
+<tr>
+<td><strong>Pitch</strong></td>
+<td>−48 to +48 semitones.</td>
+</tr>
+<tr>
+<td><strong>Mix</strong></td>
+<td>Granular contribution, 0–100%.</td>
+</tr>
+<tr>
+<td><strong>Density Flow</strong></td>
+<td>Spreads grain generation through the step instead of concentrating launches at its boundary.</td>
+</tr>
+<tr>
+<td><strong>Buffer</strong></td>
+<td>Input-history selection: 1, 2, 4, 8 or 16 seconds.</td>
+</tr>
+<tr>
+<td><strong>Freeze</strong></td>
+<td>Holds captured history while grains continue to read it.</td>
+</tr>
+<tr>
+<td><strong>Pan Mode</strong></td>
+<td>Manual, Alternate L/R, or Random L/R.</td>
+</tr>
+<tr>
+<td><strong>Pan</strong></td>
+<td>Manual position from left to right; visible in Manual mode.</td>
+</tr>
+<tr>
+<td><strong>Lock</strong></td>
+<td>Protects this Mix during supported preset/random operations.</td>
+</tr>
+</tbody>
+</table>
+<p>The waveform display shows the buffered signal and current grain activity. Changing Buffer while frozen selects a new frozen span with a transition. Freeze state can be saved, but a preset/project does <strong>not</strong> contain the recorded waveform itself; after reloading, new audio may need to fill the buffers.</p>
+<h2 id="7-beat-repeater">7. Beat Repeater</h2>
+<p>The Beat Repeater captures a rhythmic fragment and plays it repeatedly.</p>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>Function</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Length</strong></td>
+<td>Main repeat length; includes straight, triplet and dotted divisions.</td>
+</tr>
+<tr>
+<td><strong>Hold</strong></td>
+<td>Requests a sustained repeat capture.</td>
+</tr>
+<tr>
+<td><strong>Grid On</strong></td>
+<td>Uses the 16-step repeat pattern.</td>
+</tr>
+<tr>
+<td><strong>Auto</strong></td>
+<td>Requests repeat bursts automatically.</td>
+</tr>
+<tr>
+<td><strong>Interval</strong></td>
+<td>Time between automatic capture opportunities.</td>
+</tr>
+<tr>
+<td><strong>Duration</strong></td>
+<td>Burst duration, 1–32 sixteenth notes.</td>
+</tr>
+<tr>
+<td><strong>Chance</strong></td>
+<td>Probability of an automatic burst.</td>
+</tr>
+<tr>
+<td><strong>Mix / Lock</strong></td>
+<td>Repeater blend and its protection during preset/random operations.</td>
+</tr>
+<tr>
+<td><strong>Step On</strong></td>
+<td>Enables/disables the selected step.</td>
+</tr>
+<tr>
+<td><strong>Division</strong></td>
+<td>Repeat division for the selected step.</td>
+</tr>
+<tr>
+<td><strong>Step Pitch</strong></td>
+<td>Selected-step pitch, −48 to +48 semitones.</td>
+</tr>
+</tbody>
+</table>
+<p>Click a step to select it; double-click a step to toggle it. Then adjust the selected step's controls. The available divisions run from 1/1 to 1/128 and include triplet and dotted variants. A repeating texture can also be held using the independent module Loop.</p>
+<h2 id="8-reslice-every-control">8. Reslice: every control</h2>
+<p>Reslice records recent audio and makes tempo-synchronized cuts from it. The current interface has three generative modes; it is not a manually programmed 16-step slicer. The moving bars display generated source choices.</p>
+<p>All <strong>sound and capture controls in this section</strong>, including On and module Loop/Window, are available in both the LFO destination menus and Morph X/Y menus. Mix Lock and the Random button are editing actions, not audio modulation destinations. Mode-specific destinations remain selectable even when their mode is inactive; switch to the corresponding mode to hear them.</p>
+<h3 id="main-controls">Main controls</h3>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>Range / behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>On</strong></td>
+<td>Enables Reslice processing.</td>
+</tr>
+<tr>
+<td><strong>Mode</strong></td>
+<td><strong>CutDSG</strong>, <strong>WarpDSG</strong>, or <strong>PushDSG</strong>.</td>
+</tr>
+<tr>
+<td><strong>Buffer</strong></td>
+<td>Recent source-history window: 4/1, 2/1, 1/1 or 1/2 (16, 8, 4 or 2 quarter-note beats).</td>
+</tr>
+<tr>
+<td><strong>Max Phrase</strong></td>
+<td>Maximum generated phrase: 1, 2, 4 or 8 host bars.</td>
+</tr>
+<tr>
+<td><strong>Min Phrase</strong></td>
+<td>Minimum generated phrase: 1–8 host bars. Keep it no higher than Max Phrase for predictable setup.</td>
+</tr>
+<tr>
+<td><strong>Subdiv</strong></td>
+<td>1–32; higher settings shorten the generated cut durations.</td>
+</tr>
+<tr>
+<td><strong>Seed</strong></td>
+<td>1–65,535; selects the deterministic random sequence. Identical input, transport and settings are needed for repeatable results.</td>
+</tr>
+<tr>
+<td><strong>Fade</strong></td>
+<td>0–50 ms transition shaping at cuts. Increase to soften edges.</td>
+</tr>
+<tr>
+<td><strong>Duty</strong></td>
+<td>0–100% audible portion of ordinary cuts.</td>
+</tr>
+<tr>
+<td><strong>Fill Duty</strong></td>
+<td>0–100% audible portion of fill cuts.</td>
+</tr>
+<tr>
+<td><strong>Repeat Chance</strong></td>
+<td>0–100% probability of reusing a cut.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="per-cut-level-stereo-position-and-pitch">Per-cut level, stereo position and pitch</h3>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>Range</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Min Amp / Max Amp</strong></td>
+<td>0–2 linear gain; 1 is unity.</td>
+</tr>
+<tr>
+<td><strong>Min Pan / Max Pan</strong></td>
+<td>−100% to +100%.</td>
+</tr>
+<tr>
+<td><strong>Min Pitch / Max Pitch</strong></td>
+<td>−2,400 to +2,400 cents; 1,200 cents is one octave.</td>
+</tr>
+</tbody>
+</table>
+<p>The engine chooses values between each minimum/maximum pair at cut events. Matching the two values gives a fixed setting. Reversed endpoints are handled as a range, but keeping Min below Max is easier to read.</p>
+<h3 id="cutdsg">CutDSG</h3>
+<p>CutDSG focuses on repeated cuts, stutters and movement through the source history.</p>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>Function</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Min Repeats / Max Repeats</strong></td>
+<td>0–16 forced repeat counts.</td>
+</tr>
+<tr>
+<td><strong>Stutter</strong></td>
+<td>0–100% probability of shorter stuttering cuts.</td>
+</tr>
+<tr>
+<td><strong>Area</strong></td>
+<td>0–100% source-history area available to the cutter.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="warpdsg">WarpDSG</h3>
+<p>WarpDSG varies timing and playback speed.</p>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>Function</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Straight</strong></td>
+<td>0–100% preference for straight timing over irregular divisions.</td>
+</tr>
+<tr>
+<td><strong>Regular</strong></td>
+<td>0–100% probability of selecting a regular cut length.</td>
+</tr>
+<tr>
+<td><strong>Ritard</strong></td>
+<td>0–100% progressive lengthening through a phrase.</td>
+</tr>
+<tr>
+<td><strong>Speed</strong></td>
+<td>Normalized 0–1 control; centre is unity, lower values slow cuts and higher values speed them up.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="pushdsg">PushDSG</h3>
+<p><strong>Activity</strong> (0–100%) controls how much additional rhythmic subdivision is introduced into PushDSG's structured rhythm. Variation and Fill also affect the result.</p>
+<h3 id="bitcrusher">Bitcrusher</h3>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>Function</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Crusher</strong></td>
+<td>Enables the cut-level bitcrusher.</td>
+</tr>
+<tr>
+<td><strong>Min Bits / Max Bits</strong></td>
+<td>1–32 bits. Lower values are more strongly quantized.</td>
+</tr>
+<tr>
+<td><strong>Min Freq / Max Freq</strong></td>
+<td>100–48,000 Hz hold/sample-rate range, bounded by the actual processing rate.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="comb">Comb</h3>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>Function</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Comb</strong></td>
+<td>Enables the Reslice comb effect.</td>
+</tr>
+<tr>
+<td><strong>Type</strong></td>
+<td>Selects positive or negative feedback polarity.</td>
+</tr>
+<tr>
+<td><strong>Feedback</strong></td>
+<td>0–95%; higher settings strengthen resonance and decay.</td>
+</tr>
+<tr>
+<td><strong>Min Delay / Max Delay</strong></td>
+<td>1–100 ms cut-level delay range.</td>
+</tr>
+</tbody>
+</table>
+<p>This comb is inside Reslice. It is separate from the tuned Comb models in the main filter.</p>
+<h3 id="variation-and-output">Variation and output</h3>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>Function</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Variation</strong></td>
+<td>0–100% amount of variation in cut choices.</td>
+</tr>
+<tr>
+<td><strong>Fill Chance</strong></td>
+<td>0–100% chance of fills near the end of a phrase.</td>
+</tr>
+<tr>
+<td><strong>Reverse</strong></td>
+<td>0–100% probability of reversing a cut.</td>
+</tr>
+<tr>
+<td><strong>Mix</strong></td>
+<td>0–100% Reslice blend.</td>
+</tr>
+<tr>
+<td><strong>Loop / Window</strong></td>
+<td>Captures the module output; see section 4.</td>
+</tr>
+<tr>
+<td><strong>Lock</strong></td>
+<td>Protects Reslice Mix during supported preset/random operations.</td>
+</tr>
+<tr>
+<td><strong>Random</strong></td>
+<td>Generates a new set of Reslice settings. Save first if you want to return to the exact previous patch.</td>
+</tr>
+</tbody>
+</table>
+<p>Discrete destinations (Mode, On, Seed, subdivisions, etc.) select quantized values under modulation. Continuous destinations vary continuously, but a cut's sampled attributes normally become audible at the next generated cut. Modulating Seed or Mode quickly can repeatedly change the generation sequence; start with slow, shallow modulation.</p>
+<h2 id="9-gater">9. Gater</h2>
+<p>The Gater applies a rhythmic amplitude pattern.</p>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>Function</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Rate</strong></td>
+<td>Step interval: 1/4, 1/8, 1/16 or 1/32.</td>
+</tr>
+<tr>
+<td><strong>Length RND</strong></td>
+<td>Randomizes audible lengths.</td>
+</tr>
+<tr>
+<td><strong>Step RND</strong></td>
+<td>Randomizes step activity.</td>
+</tr>
+<tr>
+<td><strong>Chance</strong></td>
+<td>Probability used for random gate activity.</td>
+</tr>
+<tr>
+<td><strong>Min Length</strong></td>
+<td>Lower length bound, 5–95%.</td>
+</tr>
+<tr>
+<td><strong>Step Length</strong></td>
+<td>Selected step's length, 5–100%.</td>
+</tr>
+<tr>
+<td><strong>Sustain</strong></td>
+<td>Selected step's additional tail, 0–500 ms.</td>
+</tr>
+<tr>
+<td><strong>Latch</strong></td>
+<td>Empty steps preserve the current gate state; Release steps close it.</td>
+</tr>
+</tbody>
+</table>
+<p>Click a step to toggle its activity and select it. <strong>Shift-click</strong> a step to toggle a Release marker. In normal mode, inactive steps close the gate. In Latch mode, use Release markers deliberately; otherwise an open gate may remain open across empty steps. A pattern with no active opening steps can silence the signal. The module's On switch and module Loop are separate.</p>
+<h2 id="10-modulation">10. Modulation</h2>
+<p>There are <strong>four independent LFOs</strong>, each with <strong>six destination slots</strong>. Select an LFO, enable it, choose a waveform and route at least one nonzero amount to a destination.</p>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>Function</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Wave</strong></td>
+<td>128 shaped waves plus Sample &amp; Hold and Sample &amp; Glide.</td>
+</tr>
+<tr>
+<td><strong>Sync</strong></td>
+<td>Switches between host-tempo timing and free-running Hz.</td>
+</tr>
+<tr>
+<td><strong>Length</strong></td>
+<td>Synchronized cycle length; offers straight, triplet, dotted and long cycles.</td>
+</tr>
+<tr>
+<td><strong>Rate</strong></td>
+<td>Free-running rate, 0.01–40 Hz.</td>
+</tr>
+<tr>
+<td><strong>Points</strong></td>
+<td>1–64 random values per cycle for the random wave modes.</td>
+</tr>
+<tr>
+<td><strong>Depth</strong></td>
+<td>Global LFO output depth.</td>
+</tr>
+<tr>
+<td><strong>Phase</strong></td>
+<td>Starting phase offset.</td>
+</tr>
+<tr>
+<td><strong>Glide</strong></td>
+<td>Smoothing of random transitions and waveform changes where applicable.</td>
+</tr>
+<tr>
+<td><strong>Retrigger</strong></td>
+<td>Resets modulation from the engine's rhythmic trigger.</td>
+</tr>
+<tr>
+<td><strong>Speed</strong></td>
+<td>0.25×, 0.5×, 1× or 2× rate multiplier.</td>
+</tr>
+<tr>
+<td><strong>Mod W.</strong></td>
+<td>Tempo-quantized random waveform changes, or Off.</td>
+</tr>
+<tr>
+<td><strong>Dest</strong></td>
+<td>Selects a target; None disables that slot.</td>
+</tr>
+<tr>
+<td><strong>Amount</strong></td>
+<td>Routing depth; centre is zero.</td>
+</tr>
+<tr>
+<td><strong>Polarity</strong></td>
+<td>Bipolar, positive-only or negative-only modulation.</td>
+</tr>
+</tbody>
+</table>
+<p>The eight waveform families are Sine Warp, Skew Triangle, Pulse, Rise Curve, Fall Curve, Harmonic, Staircase and Random Curve. Sample &amp; Hold jumps between random values; Sample &amp; Glide interpolates between them.</p>
+<p>Destinations include grain parameters, stretch and transpose, filter controls, repeat controls and individual repeat pitches, reverb controls, gate controls and individual gate lengths/sustains, master Dry/Wet, filter-sequencer controls, and the complete current Reslice sound/capture controls.</p>
+<p>Multiple routes to one destination add together. Modulated values are limited to their legal normalized range. Use small amounts first; large amounts can pin a control at an endpoint for much of the cycle. Turning an LFO off removes its contribution without erasing its routing.</p>
+<h2 id="11-filter-and-filter-sequencer">11. Filter and filter sequencer</h2>
+<p>The main filter follows the rack.</p>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>Function</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>On</strong></td>
+<td>Enables the filter.</td>
+</tr>
+<tr>
+<td><strong>Cutoff</strong></td>
+<td>Logarithmic frequency control, approximately 20 Hz–20 kHz, constrained by sample rate.</td>
+</tr>
+<tr>
+<td><strong>Resonance</strong></td>
+<td>0–100% resonance.</td>
+</tr>
+<tr>
+<td><strong>Drive</strong></td>
+<td>0–24 dB nonlinear input drive.</td>
+</tr>
+<tr>
+<td><strong>Type</strong></td>
+<td>Low-pass, high-pass or band-pass where applicable.</td>
+</tr>
+<tr>
+<td><strong>Slope</strong></td>
+<td>12 or 24 dB selection where applicable.</td>
+</tr>
+<tr>
+<td><strong>Alg</strong></td>
+<td>Filter model.</td>
+</tr>
+</tbody>
+</table>
+<p>The 19 models are Classic, Northern VA, Transistor Ladder, Acid Ladder, Notch, Resonant Peak, All-pass, Comb +, Comb −, Formant A/E/I/O/U, Phaser 4, Phaser 8, Low + High, Low + Band and Band + High. These are original algorithms; model names do not imply exact emulations of another product. Type and Slope have model-dependent effects.</p>
+<p>The dedicated <strong>filter sequencer</strong> adds movement to Cutoff:</p>
+<ul>
+<li><strong>On</strong> enables it.</li>
+<li><strong>Mode</strong> chooses an original 32-step pattern or Sample &amp; Glide.</li>
+<li><strong>Pattern</strong> selects one of 64 patterns across Rise, Fall, Triangle, Bounce, Stairs, Sine, Scatter and Pulse families.</li>
+<li><strong>Rate</strong> sets step duration.</li>
+<li><strong>Depth</strong> sets the amount of movement.</li>
+<li><strong>Glide</strong> smooths it.</li>
+</ul>
+<p>With Comb + or Comb −, <strong>Root</strong>, <strong>Octave</strong> and <strong>Notes</strong> select tuned note movement. Notes can follow a minor chord or the natural minor scale.</p>
+<h2 id="12-reverb-and-master-output">12. Reverb and master output</h2>
+<p>Reverb is after the filter. Its sequencer gates the <strong>send into the reverb</strong>, allowing previously generated tails to continue between unlit steps.</p>
+<table>
+<thead>
+<tr>
+<th>Control</th>
+<th>Function</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>On</strong></td>
+<td>Enables reverb contribution.</td>
+</tr>
+<tr>
+<td><strong>Type</strong></td>
+<td>Classic, Plate, Cosmic Space, Dark Space or Bloom Space.</td>
+</tr>
+<tr>
+<td><strong>Mode</strong></td>
+<td>For Classic: Room, Chamber, Hall, Ambient or Space character.</td>
+</tr>
+<tr>
+<td><strong>Source</strong></td>
+<td>Step Sequencer or Random Impulse.</td>
+</tr>
+<tr>
+<td><strong>Rate</strong></td>
+<td>Tempo-synchronized trigger interval.</td>
+</tr>
+<tr>
+<td><strong>Amount</strong></td>
+<td>Wet reverb level, 0–100%.</td>
+</tr>
+<tr>
+<td><strong>Length</strong></td>
+<td>Decay setting, 0.2–20 seconds.</td>
+</tr>
+<tr>
+<td><strong>16 steps</strong></td>
+<td>Click to choose which step-sequencer positions feed reverb.</td>
+</tr>
+<tr>
+<td><strong>Kill Dry</strong></td>
+<td>Removes the direct signal, leaving reverb. This can cause silence before a tail has been excited.</td>
+</tr>
+<tr>
+<td><strong>Lock</strong></td>
+<td>Protects Amount during supported preset/random operations.</td>
+</tr>
+</tbody>
+</table>
+<p>The master section contains:</p>
+<ul>
+<li><strong>Mix:</strong> overall dry/effect balance. Reverb Kill Dry deliberately overrides the direct contribution.</li>
+<li><strong>Normalize:</strong> adaptive wet-level matching; not offline peak normalization.</li>
+<li><strong>Limiter:</strong> stereo-linked sample-peak limiting.</li>
+<li><strong>Limit:</strong> 0, −6 or −10 dBFS ceiling.</li>
+<li><strong>Mix Lock:</strong> protects the master Mix during supported preset/random operations.</li>
+<li><strong>Output meters:</strong> left/right output activity.</li>
+</ul>
+<p>The limiter is a sample-peak limiter, not an oversampled true-peak limiter. Use Cubase's output metering and leave headroom when required.</p>
+<h2 id="13-morph-xy">13. Morph XY</h2>
+<p>Morph lets you move two parameter offsets with one gesture.</p>
+<ol>
+<li>Enable <strong>On</strong> on the Morph page.</li>
+<li>Choose <strong>X Dest</strong> and <strong>Y Dest</strong>.</li>
+<li>Set each axis's amount.</li>
+<li>Drag inside the pad.</li>
+</ol>
+<p>Left/right controls X; down/up controls Y. The centre produces zero offset. Positive amounts increase the destination toward the right/top and decrease it toward the left/bottom; negative amounts reverse that direction. A zero amount disables that axis's effect.</p>
+<p>Morph offsets the saved base parameter; it does not replace the entire preset. LFO modulation then acts on the resulting settings. If both axes target the same parameter, their contributions combine within the legal range.</p>
+<p>The appended Reslice destinations include Mix, source Buffer, algorithm, phrase limits, repeat/variation/fill/reverse, seed, every advanced cut/crusher/comb setting, module On and module Loop/Window. Discrete selections snap between their valid options.</p>
+<p>Example: assign X to <strong>Reslice Variation</strong>, Y to <strong>Reslice Mix</strong>, use modest positive amounts, and move from the centre toward the top-right to increase both complexity and effect level.</p>
+<h2 id="14-presets-randomization-and-automation">14. Presets, randomization and automation</h2>
+<p>Use the header preset selector to browse the factory banks: <strong>Legacy</strong>, <strong>Circuit Fractures</strong>, and <strong>Forest Escape</strong>, with 128 entries per bank. The preset menu creates missing factory files. Save your own settings using <strong>Save</strong>, and use <strong>Load</strong> for an existing <code>.gdspreset</code> file. The left/right arrows step through the available preset files.</p>
+<p>Windows preset location:</p>
+<pre><code>%APPDATA%\GrainsDosage\Presets\
+</code></pre>
+<p>macOS uses <code>~/Library/Audio/Presets/GrainsDosage/</code>.</p>
+<p>Presets contain parameter values, routing and applicable control states. They do not store recorded audio, frozen waveforms, or captured loops. Save your Cubase project as well as a plugin preset when you need host routing and automation.</p>
+<p>Module <strong>Random</strong> buttons change that module's settings. The supported Mix locks preserve the selected mix controls during preset/random operations; they do not prevent ordinary manual adjustment or host automation. Save a named preset before experimenting if you need an exact return point.</p>
+<p>The expanded destination lists have a new saved-state/preset format. Earlier presets and saved plugin state are migrated so their selected destinations remain meaningful. New presets require this release or newer. <strong>Existing Cubase automation lanes that automate destination selectors themselves use the old list's normalized positions; check and reselect those destination points after upgrading.</strong> Ordinary parameter IDs remain unchanged. Automating destination <em>amounts</em> is usually more predictable than rapidly changing the selected destination.</p>
+<p>Use Cubase's Write/Read automation controls for recordable parameters. Page navigation is local UI state and is not an audio parameter. For an important existing project, retain a copy before upgrading and compare playback after loading it.</p>
+<h2 id="15-practical-starting-patches">15. Practical starting patches</h2>
+<h3 id="gentle-granular-widening">Gentle granular widening</h3>
+<p>Enable Granulizer, use Size around 70–120 ms, moderate Density, low Chaos, and Alternate L/R pan. Keep module Mix modest and blend with master Mix. Leave Freeze off for a live texture.</p>
+<h3 id="rhythmic-repeat-fill">Rhythmic repeat fill</h3>
+<p>Enable Beat Repeater and Auto, choose a short Length, set an Interval of one bar-equivalent at 4/4, and reduce Chance. Raise Duration for a longer burst. Use individual step pitches for melodic variation.</p>
+<h3 id="reslice-drum-variations">Reslice drum variations</h3>
+<p>Enable Reslice in CutDSG. Start with an 8- or 16-beat Buffer, Subdiv 8, Fade about 3 ms, matched unity amplitude, centred pan and zero pitch. Increase Variation, then Fill Chance and Repeat Chance. Add crusher or comb only after the basic rhythm is working.</p>
+<h3 id="slow-warped-texture">Slow warped texture</h3>
+<p>Choose WarpDSG, lengthen the phrase and lower Speed gradually. Use a small LFO amount on Reslice Speed or Min/Max Pitch. Add a long reverb and blend conservatively.</p>
+<h3 id="gated-ambience">Gated ambience</h3>
+<p>Place Gater late in the rack, select a few active steps and lengthen Sustain. Add sequenced reverb afterward. Try Kill Dry only after hearing a healthy reverb tail.</p>
+<h2 id="16-troubleshooting-and-cpu">16. Troubleshooting and CPU</h2>
+<h3 id="no-audio">No audio</h3>
+<ol>
+<li>Bypass the insert in Cubase to confirm the track itself has audio.</li>
+<li>Open Trial Registration and check the installed license's signed dates and machine validity.</li>
+<li>Confirm Windows date/time is correct.</li>
+<li>Disable Gater and Reverb Kill Dry temporarily; check Mix, step patterns and module states.</li>
+<li>Release Freeze and module Loops, then feed audio while the transport plays.</li>
+<li>Verify Cubase is loading the updated three-page trial from the standard VST3 folder, not another copy.</li>
+</ol>
+<p>If a valid trial unexpectedly goes silent, record the time, preset, sample rate, buffer size, number of plugin instances, and whether reopening restores sound. There is no intended one-hour timeout. This update retries temporary protected-storage access failures and can recover when validation succeeds; it still enforces the immutable signed end date on each audio block.</p>
+<p>Do not delete licensing files to troubleshoot. If the installed license has already expired or does not match the machine, contact the publisher.</p>
+<h3 id="gui-opens-at-the-wrong-scale">GUI opens at the wrong scale</h3>
+<p>This update fixes the double graphics scale and applies actual host dimensions at attachment, including VST3 DPI notifications. Close Cubase while installing it, then reopen the editor. Check Cubase's plugin information/path if the old behavior remains. Use the plugin's Zoom menu for readability; minimizing should not be necessary.</p>
+<h3 id="high-cubase-cpu-or-audio-dropouts">High Cubase CPU or audio dropouts</h3>
+<p>The audio engine continues processing when the window is closed. This release caches unchanged filter/reverb calculations and protects x86 audio processing against costly subnormal values during silence. It does not reduce audio quality or voice limits.</p>
+<p>Cubase's real-time meter depends on your CPU, audio driver, buffer size, sample rate, track routing and other plugins. Benchmark numbers from a build runner are not a promise about your computer. Higher sample rates and smaller buffers increase real-time pressure; dense grains, heavily modulated filters and complex reverbs can add work. Compare the same preset and project before/after updating. During mixing, a larger ASIO buffer or rendering a completed track can provide more processing headroom.</p>
+<h3 id="changes-are-not-audible">Changes are not audible</h3>
+<p>Check module On, module Mix and master Mix. For an LFO, check its On, Depth, destination, Amount and polarity. For Morph, check On, destination and axis amount. A mode-specific Reslice control only affects its relevant mode; cut-level values can wait until the next cut. A held module loop can keep repeating older output while you change controls upstream.</p>
+<h2 id="17-publisher-issuing-offline-trials">17. Publisher: issuing offline trials</h2>
+<p>Customers need the signed license, not the private signing key. On the private issuing computer, install Python and <code>cryptography</code>, then use the existing private key matching the public key included in this build:</p>
+<pre><code class="language-text">python tools/issue_trial_license.py issue --key /private/path/publisher-private.pem --request GrainsDosage-machine-request.json --out trial.license
+</code></pre>
+<p>Default start is issuance time. To schedule the customer's full trial window, use an explicit timezone-aware start:</p>
+<pre><code class="language-text">python tools/issue_trial_license.py issue --key /private/path/publisher-private.pem --request GrainsDosage-machine-request.json --start 2026-11-01T12:00:00Z --out trial.license
+</code></pre>
+<p>Expiry is always 14 days after that start. Keep a private registration ledger and the signing key outside this repository. Send only the license file to the registered customer. Windows <code>.license</code> files and macOS activation codes have different formats.</p>
+<p>See <a href="https://github.com/danielmelegari/GrainsDosageGTRv2/blob/work/mockup-purple-skin/OFFLINE-TRIAL.md">OFFLINE-TRIAL.md</a> for the signing-key setup and protection details. The Windows trial workflow publishes the installer, three-page screenshots and a CPU comparison report. Download retention on GitHub does not determine a customer's license expiry.</p></body></html>

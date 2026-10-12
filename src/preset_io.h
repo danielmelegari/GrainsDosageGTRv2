@@ -18,7 +18,7 @@
 namespace aztec {
 inline bool presetParameter(int id){return id>=0&&id<presetCount&&!isMonitor(id);}
 template<class Getter> std::string encodePreset(Getter get){
- std::ostringstream out;out.imbue(std::locale::classic());out<<"GrainsDosagePreset 1 "<<presetCount<<'\n'<<std::setprecision(17);
+ std::ostringstream out;out.imbue(std::locale::classic());out<<"GrainsDosagePreset 2 "<<presetCount<<'\n'<<std::setprecision(17);
  for(int i=0;i<presetCount;++i)out<<i<<' '<<(presetParameter(i)?get(i):0.)<<'\n';return out.str();
 }
 // Parse and validate completely before touching any live parameter.
@@ -28,10 +28,10 @@ template<class Getter> std::string encodePreset(Getter get){
 // their documented defaults.
 inline bool decodePreset(const std::string& text,std::array<double,kCount>& values){
  if(text.size()>65536)return false;std::istringstream in(text);in.imbue(std::locale::classic());
- std::string magic;int version=0,count=0;if(!(in>>magic>>version>>count)||magic!="GrainsDosagePreset"||version!=1||count<1||count>kCount)return false;
+ std::string magic;int version=0,count=0;if(!(in>>magic>>version>>count)||magic!="GrainsDosagePreset"||(version!=1&&version!=2)||count<1||count>kCount)return false;
  auto temp=initialParameters();for(int i=0;i<count;++i){int id;double v;if(!(in>>id>>v)||id!=i||!std::isfinite(v)||v<0.||v>1.)return false;temp[i]=v;}
  if(count==int(kResliceSubdivision))temp[kResliceMinPhrase]=(std::pow(2.,std::round(temp[kReslicePhrase]*3.))-1.)/7.;
- if(count<=kResliceRndOn&&count>kResliceLength)temp[kResliceLength]=temp[kResliceLength]<1./6.?2./3.:1.;if(count<=kInputDeclick)temp[kInputDeclick]=0.;in>>std::ws;if(!in.eof())return false;if(count<kLfoSlots0+1)migrateRoutes(temp);else if(count<=kResliceRndOn)migrateModSlots(temp);for(int id=kUiWaveLow0;id<int(kReverbRateV2);++id)temp[id]=.5;values=temp;return true;
+ if(count<=kResliceRndOn&&count>kResliceLength)temp[kResliceLength]=temp[kResliceLength]<1./6.?2./3.:1.;if(count<=kInputDeclick)temp[kInputDeclick]=0.;in>>std::ws;if(!in.eof())return false;if(count<kLfoSlots0+1)migrateRoutes(temp);else if(count<=kResliceRndOn)migrateModSlots(temp);for(int id=kUiWaveLow0;id<int(kReverbRateV2);++id)temp[id]=.5;if(version==1)migrateExpandedDestinations(temp,count>kResliceRndOn,count>kYTarget);values=temp;return true;
 }
 // PRESET < / > buttons: cycle through every .gdspreset file in the user's preset
 // folder (same sorted order both editors show in their menus). direction is -1 or +1.
