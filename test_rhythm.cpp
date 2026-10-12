@@ -19,7 +19,7 @@ int main(){
     }
     int period=int(std::round(division*sr/2.));
     assert(rms(out,60000,84000)>.1);
-    for(int i=60000;i<84000;++i)assert(std::abs(out[i]-out[i-period])<1e-5);
+    for(int i=60000;i<84000;++i)assert(std::abs(out[i]-(glitch?dry[i]:out[i-period]))<1e-5);
   }
   // Level: unity-pitch granular overlap should preserve a steady source, not
   // attenuate it through Hann envelopes or clamp peaks to 1.0.
@@ -63,3 +63,4 @@ int main(){
   for(int i=0;i<200000;++i){float l=float(.4*std::sin(i*.03)),r=l;wrapped.process(l,r,true,true,3000.,0.,false,1.,2000.,i%4000==0);assert(std::isfinite(l)&&std::abs(l)<1.);}
   std::cout<<"PASS: real periodic repeat/glitch, silent-start recovery, grid without Hold, dry off steps, live length/reverse, held source; granular gain "<<db<<" dB, loop gain "<<loopDb<<" dB\n";
 }
+

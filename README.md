@@ -57,6 +57,6 @@ Run the eleven standalone suites with `ctest --test-dir build -C Release --outpu
 
 ## Windows 14-day trial
 
-The trial now requires a signed offline license for the registered computer. It works with full functionality for the fixed 14-day period in the license, then silences output. A copied license is rejected on a different machine ID. The publisher must configure the public verification key before the workflow can publish an installer.
+The trial now requires a signed offline license for the registered computer. It works with full functionality for the fixed 14-day period in the license, then silences output. A copied license is rejected on a different machine ID. The installer uses the newer three-page interface: Modules, Modulation, and Morph, plus the existing publisher public verification key.
 
-See [OFFLINE-TRIAL.md](OFFLINE-TRIAL.md) for one-time key setup, registration, issuing licenses, and protection limits. Run **Windows 14-day trial** after setup; download `GrainsDosage-Windows-x64-14-Day-Trial` and use the included **GrainsDosage Trial Registration** tool. Full and trial editions share the installation location; install the full edition to replace the trial. Artifact retention is separately set to 14 days.
+See [OFFLINE-TRIAL.md](OFFLINE-TRIAL.md) for publisher key handling, registration, issuing licenses, and protection limits. Run **Windows 14-day trial**; download `GrainsDosage-Windows-x64-ThreePage-14-Day-Trial` and use the included **GrainsDosage Trial Registration** tool. Full and trial editions share the installation location; install the full edition to replace the trial. Artifact retention is separately set to 14 days.

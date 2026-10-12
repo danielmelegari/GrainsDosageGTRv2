@@ -5,7 +5,10 @@
 #include <cstdio>
 using namespace aztec;
 int main(){
-  assert(theme::themes().size()==6);
+  assert(theme::themes().size()==7);
+  assert(skin::kDefaultTheme==6);
+  assert(theme::findTheme("purple")==6);
+  assert(skin::purple().at(skin::kAccent).g==241);
   assert(theme::findTheme("aurora")==4);
   assert(skin::themeIndex("aurora")==4);
   assert(theme::parseSkinText("theme = aurora\n"));
@@ -46,3 +49,4 @@ int main(){
   std::printf("ALL THEME TESTS PASSED\n");
   return 0;
 }
+

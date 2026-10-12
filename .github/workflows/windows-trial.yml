@@ -3,7 +3,7 @@ name: Windows 14-day trial
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, work/mockup-purple-skin]
     paths:
       - '.github/workflows/windows-trial.yml'
       - '.gitattributes'
@@ -16,6 +16,7 @@ on:
       - 'tests/**'
       - 'tools/*trial*'
       - 'TRIAL-REGISTRATION.txt'
+      - 'config/windows-trial-public.b64'
 
 permissions:
   contents: read
@@ -40,13 +41,11 @@ jobs:
           cmake --build build-test --config Release --parallel 4
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           ctest --test-dir build-test -C Release --output-on-failure
-      - name: Publisher setup reminder
-        if: vars.GRAINS_TRIAL_PUBLIC_KEY == ''
-        run: echo "Licensing tests ran. No installer will be published until GRAINS_TRIAL_PUBLIC_KEY is configured. See OFFLINE-TRIAL.md." >> $env:GITHUB_STEP_SUMMARY
+      - name: Verify native three-page Windows interface
+        run: ./build-test/gui-test/Release/aztec_gui_smoke_win.exe
 
   windows-trial:
     needs: windows-trial-tests
-    if: vars.GRAINS_TRIAL_PUBLIC_KEY != ''
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
@@ -69,15 +68,23 @@ jobs:
           cmake --build build-trial --config Release --parallel 4
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           ctest --test-dir build-trial -C Release --output-on-failure
+      - name: Verify native three-page Windows interface
+        run: ./build-trial/gui-test/Release/aztec_gui_smoke_win.exe
       - name: Install Inno Setup
         run: choco install innosetup -y --no-progress
       - name: Package Windows trial installer
         shell: cmd
         run: '"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DTrial /DBuildDir=build-trial installer\GrainsDosage.iss'
+      - name: Upload three-page interface previews
+        uses: actions/upload-artifact@v4
+        with:
+          name: GrainsDosage-Windows-ThreePage-Previews
+          path: windows-page-*.png
+          if-no-files-found: error
       - name: Upload trial installer
         uses: actions/upload-artifact@v4
         with:
-          name: GrainsDosage-Windows-x64-14-Day-Trial
+          name: GrainsDosage-Windows-x64-ThreePage-14-Day-Trial
           path: dist/*-14-Day-Trial-Setup.exe
           if-no-files-found: error
           retention-days: 14
