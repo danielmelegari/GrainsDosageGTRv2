@@ -80,6 +80,14 @@ smtg_add_vst3plugin(GrainsDosage
   src/parameters.h
   src/editor.h
 )
+option(GRAINS_TRIAL "Build the Windows 14-day trial" OFF)
+if(GRAINS_TRIAL)
+  if(NOT WIN32)
+    message(FATAL_ERROR "GRAINS_TRIAL currently supports Windows only")
+  endif()
+  target_compile_definitions(GrainsDosage PRIVATE GRAINS_TRIAL)
+  target_link_libraries(GrainsDosage PRIVATE advapi32)
+endif()
 target_link_libraries(GrainsDosage PRIVATE sdk)
 # Built against the SDK: parameters.h must use the real Steinberg::Vst::ParamID.
 target_compile_definitions(GrainsDosage PRIVATE GRAINS_HAVE_VST3_SDK)

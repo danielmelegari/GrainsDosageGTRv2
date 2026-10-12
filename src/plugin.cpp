@@ -1,4 +1,7 @@
 #include "engine.h"
+#ifdef GRAINS_TRIAL
+#include "trial_guard.h"
+#endif
 #include "declick.h"
 #include "master_fx.h"
 #include "parameters.h"
@@ -170,6 +173,9 @@ bool loadState(IBStream* stream, std::array<double,kCount>& p) {
 }
 class Processor final : public AudioEffect {
   qg::Engine engine_;
+#ifdef GRAINS_TRIAL
+  grains::TrialGuard trial_;
+#endif
   qg::InputDeclick declick_;
   qg::MasterFx master_;
   std::array<double, kCount> p_{};
@@ -259,6 +265,21 @@ public:
   // compile here. The Controller below receives setComponentState and applies
   // the full parameter array through updateStates().
   tresult PLUGIN_API process(ProcessData& data) override {
+#ifdef GRAINS_TRIAL
+    if(trial_.expired()) {
+      for(int32 bus=0;bus<data.numOutputs;++bus) {
+        auto& out=data.outputs[bus];
+        out.silenceFlags=~uint64(0);
+        for(int32 ch=0;ch<out.numChannels;++ch) {
+          if(data.symbolicSampleSize==kSample32 && out.channelBuffers32 && out.channelBuffers32[ch])
+            std::memset(out.channelBuffers32[ch],0,size_t(data.numSamples)*sizeof(float));
+          else if(data.symbolicSampleSize==kSample64 && out.channelBuffers64 && out.channelBuffers64[ch])
+            std::memset(out.channelBuffers64[ch],0,size_t(data.numSamples)*sizeof(double));
+        }
+      }
+      return kResultOk;
+    }
+#endif
     // No allocations: fixed queue cursors, updated at the exact sample offset.
     std::array<IParamValueQueue*, kCount> queues{};
     std::array<int32,kCount> cursors{};std::array<int,kCount> queueIDs{};int queueCount=0;

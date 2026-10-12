@@ -54,3 +54,9 @@ The workflow builds against its pinned Steinberg VST3 SDK, runs the regression t
 Reslice is after the three existing modules and before the Gater and master effects. Existing filter, reverb, and parameter IDs are kept stable. Legacy presets and saved states default the newly added Reslice and Latch behavior to off. The added filter/reverb models are separate choices, so the prior models remain accessible.
 
 Run the eleven standalone suites with `ctest --test-dir build -C Release --output-on-failure` after configuring with `-DGRAINS_BUILD_TESTS=ON`. The build workflow also runs Steinberg's VST3 validator and the native platform GUI smoke test.
+
+## Windows 14-day trial
+
+Run **Windows 14-day trial** in GitHub Actions (also runs on relevant pushes to main). Download the `GrainsDosage-Windows-x64-14-Day-Trial` artifact and run the installer. The trial starts on the first plugin load for the current Windows user, lasts 14 calendar days, then silences plugin output. Installing again does not reset its registry record. Full and trial editions use the same plugin identity and installation location; install the full edition to replace the trial.
+
+This is a local evaluation guard, not tamper-resistant licensing: deleting the per-user registry record can reset it. A corrupt record, unavailable registry, or detected clock rollback expires the trial. Artifact retention is separately set to 14 days.
