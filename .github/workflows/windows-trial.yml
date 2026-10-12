@@ -15,6 +15,8 @@ on:
       - 'test_*.cpp'
       - 'tests/**'
       - 'tools/*trial*'
+      - 'tools/benchmark_engine.cpp'
+      - 'tools/compare_engine_cpu.py'
       - 'TRIAL-REGISTRATION.txt'
       - 'config/windows-trial-public.b64'
 
