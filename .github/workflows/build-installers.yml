@@ -18,6 +18,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Configure publisher public key
+        if: matrix.edition == 'trial'
+        env:
+          GRAINS_TRIAL_PUBLIC_KEY: ${{ vars.GRAINS_TRIAL_PUBLIC_KEY }}
+        run: python tools/configure_trial_key.py "$env:RUNNER_TEMP/trial_public_key.h"
+
       - name: Checkout VST3 SDK
         uses: actions/checkout@v4
         with:
@@ -33,7 +39,7 @@ jobs:
           # for the trial implementation).
           if [ "${{ matrix.edition }}" = "trial" ]; then
             cmake -B build-trial -DCMAKE_BUILD_TYPE=Release \
-              -DVST3_SDK_ROOT="$GITHUB_WORKSPACE/vst3sdk" -DGRAINS_TRIAL=ON -DSMTG_CREATE_PLUGIN_LINK=OFF
+              -DVST3_SDK_ROOT="$GITHUB_WORKSPACE/vst3sdk" -DGRAINS_TRIAL=ON -DGRAINS_TRIAL_PUBLIC_KEY_HEADER="$RUNNER_TEMP/trial_public_key.h" -DSMTG_CREATE_PLUGIN_LINK=OFF
             cmake --build build-trial --config Release
           else
             cmake -B build -DCMAKE_BUILD_TYPE=Release \

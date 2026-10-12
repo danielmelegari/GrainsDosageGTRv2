@@ -1,1 +1,4 @@
 (empty)artifacts/
+
+__pycache__/
+*private*.pem

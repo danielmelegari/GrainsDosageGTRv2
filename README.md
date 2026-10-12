@@ -57,6 +57,6 @@ Run the eleven standalone suites with `ctest --test-dir build -C Release --outpu
 
 ## Windows 14-day trial
 
-Run **Windows 14-day trial** in GitHub Actions (also runs on relevant pushes to main). Download the `GrainsDosage-Windows-x64-14-Day-Trial` artifact and run the installer. The trial starts on the first plugin load for the current Windows user, lasts 14 calendar days, then silences plugin output. Installing again does not reset its registry record. Full and trial editions use the same plugin identity and installation location; install the full edition to replace the trial.
+The trial now requires a signed offline license for the registered computer. It works with full functionality for the fixed 14-day period in the license, then silences output. A copied license is rejected on a different machine ID. The publisher must configure the public verification key before the workflow can publish an installer.
 
-This is a local evaluation guard, not tamper-resistant licensing: deleting the per-user registry record can reset it. A corrupt record, unavailable registry, or detected clock rollback expires the trial. Artifact retention is separately set to 14 days.
+See [OFFLINE-TRIAL.md](OFFLINE-TRIAL.md) for one-time key setup, registration, issuing licenses, and protection limits. Run **Windows 14-day trial** after setup; download `GrainsDosage-Windows-x64-14-Day-Trial` and use the included **GrainsDosage Trial Registration** tool. Full and trial editions share the installation location; install the full edition to replace the trial. Artifact retention is separately set to 14 days.

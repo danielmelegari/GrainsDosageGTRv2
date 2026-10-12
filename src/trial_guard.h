@@ -1,42 +1,67 @@
 #pragma once
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
+#include "trial_license_win.h"
+#include <atomic>
 #include <chrono>
-#include <cstdint>
+#include <condition_variable>
+#include <mutex>
+#include <thread>
 
 namespace grains {
-// Per-user trial starts on first plugin load. Registry I/O stays off the audio thread.
+// Storage and DPAPI run only at construction and on the maintenance thread.
 class TrialGuard {
+  mutable std::atomic<bool> blocked_{true};
   std::chrono::steady_clock::time_point deadline_{};
+  trial::Tick end_ = 0;
+  std::mutex mutex_;
+  std::condition_variable wake_;
+  bool stopping_ = false;
+  std::thread worker_;
 public:
-  TrialGuard() {
-    constexpr std::uint64_t duration = 14ULL * 24 * 60 * 60 * 10000000;
-    FILETIME ft{};
-    GetSystemTimeAsFileTime(&ft);
-    ULARGE_INTEGER timestamp{};
-    timestamp.LowPart=ft.dwLowDateTime; timestamp.HighPart=ft.dwHighDateTime;
-    const auto now=timestamp.QuadPart;
-    HKEY key{}; DWORD disposition{};
-    if(RegCreateKeyExW(HKEY_CURRENT_USER,L"Software\\GrainsDosage\\Trial",0,nullptr,0,
-                      KEY_QUERY_VALUE|KEY_SET_VALUE,nullptr,&key,&disposition)!=ERROR_SUCCESS) return;
-    std::uint64_t start=now, last=now; DWORD type{}, size=sizeof(start);
-    bool valid=true;
-    if(disposition==REG_CREATED_NEW_KEY) {
-      valid=RegSetValueExW(key,L"Start",0,REG_QWORD,reinterpret_cast<const BYTE*>(&start),sizeof(start))==ERROR_SUCCESS;
-    } else {
-      valid=RegQueryValueExW(key,L"Start",nullptr,&type,reinterpret_cast<BYTE*>(&start),&size)==ERROR_SUCCESS
-        && type==REG_QWORD && size==sizeof(start);
-      size=sizeof(last);
-      valid=valid && RegQueryValueExW(key,L"LastSeen",nullptr,&type,reinterpret_cast<BYTE*>(&last),&size)==ERROR_SUCCESS
-        && type==REG_QWORD && size==sizeof(last);
-    }
-    valid=valid && now>=start && now>=last && now-start<duration;
-    if(valid) valid=RegSetValueExW(key,L"LastSeen",0,REG_QWORD,reinterpret_cast<const BYTE*>(&now),sizeof(now))==ERROR_SUCCESS;
-    RegCloseKey(key);
-    if(valid) deadline_=std::chrono::steady_clock::now()+std::chrono::seconds((duration-(now-start))/10000000);
+  TrialGuard() noexcept {
+    try {
+      trial::License license;
+      if (!trial::loadLicense(license)) return;
+      auto store = trial::Store::production();
+      trial::State state{license.start, license.start};
+      if (!store.refresh(trial::wallTime(), state, true)) return;
+      const auto remaining = trial::duration - (state.last - state.start);
+      deadline_ = std::chrono::steady_clock::now() + std::chrono::nanoseconds(remaining * 100);
+      end_ = state.start + trial::duration;
+      blocked_.store(false, std::memory_order_relaxed);
+      worker_ = std::thread([this, store, state, license]() mutable {
+        try {
+          std::unique_lock<std::mutex> lock(mutex_);
+          while (!wake_.wait_for(lock, std::chrono::seconds(30), [this] { return stopping_; })) {
+            lock.unlock();
+            // The fixed signed expiry and monotonic deadline cannot be extended
+            // by editing/deleting local state while this instance is running.
+            const auto left = deadline_ - std::chrono::steady_clock::now();
+            const auto secondsLeft = std::chrono::duration_cast<std::chrono::seconds>(left).count();
+            trial::License current;
+            const auto minimumTime = secondsLeft > 0 ? end_ - trial::Tick(secondsLeft) * trial::second : end_;
+            const bool stateValid = store.refresh(trial::wallTime(), state, false, minimumTime);
+            if (secondsLeft <= 0 || !stateValid || !trial::loadLicense(current) || current.payload != license.payload) {
+              blocked_.store(true, std::memory_order_relaxed);
+              return;
+            }
+            lock.lock();
+          }
+        } catch (...) { blocked_.store(true, std::memory_order_relaxed); }
+      });
+    } catch (...) { blocked_.store(true, std::memory_order_relaxed); }
   }
-  bool expired() const { return std::chrono::steady_clock::now()>=deadline_; }
+  ~TrialGuard() {
+    { std::lock_guard<std::mutex> lock(mutex_); stopping_ = true; }
+    wake_.notify_one();
+    if (worker_.joinable()) worker_.join();
+  }
+  bool expired() const {
+    if (blocked_.load(std::memory_order_relaxed)) return true;
+    if (std::chrono::steady_clock::now() >= deadline_ || trial::wallTime() >= end_) {
+      blocked_.store(true, std::memory_order_relaxed);
+      return true;
+    }
+    return false;
+  }
 };
-}
+} // namespace grains

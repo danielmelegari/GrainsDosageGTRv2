@@ -44,6 +44,14 @@ InfoBeforeFile={#ProjectDir}\installer\BEFORE-INSTALL.txt
 Source: "{#ProjectDir}\{#BuildDir}\VST3\Release\GrainsDosage.vst3\*"; DestDir: "{commoncf64}\VST3\GrainsDosage.vst3"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#ProjectDir}\INSTALL-WINDOWS.txt"; DestDir: "{app}"; Flags: ignoreversion
 
+#ifdef Trial
+Source: "{#ProjectDir}\{#BuildDir}\registration\Release\GrainsDosageRegistration.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#ProjectDir}\TRIAL-REGISTRATION.txt"; DestDir: "{app}"; Flags: ignoreversion
+
+[Icons]
+Name: "{group}\GrainsDosage Trial Registration"; Filename: "{app}\GrainsDosageRegistration.exe"
+#endif
+
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "italian"; MessagesFile: "compiler:Languages\Italian.isl"

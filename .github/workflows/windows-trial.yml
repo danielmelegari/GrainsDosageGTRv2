@@ -12,12 +12,15 @@ on:
       - 'installer/**'
       - 'assets/**'
       - 'test_*.cpp'
+      - 'tests/**'
+      - 'tools/*trial*'
+      - 'TRIAL-REGISTRATION.txt'
 
 permissions:
   contents: read
 
 jobs:
-  windows-trial:
+  windows-trial-tests:
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
@@ -29,8 +32,37 @@ jobs:
           ref: 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
           submodules: recursive
           path: vst3sdk
+      - name: Configure test-only trial (never distributed)
+        run: cmake -S . -B build-test -DVST3_SDK_ROOT="$env:GITHUB_WORKSPACE/vst3sdk" -DGRAINS_TRIAL=ON -DGRAINS_TRIAL_PUBLIC_KEY_HEADER="$env:GITHUB_WORKSPACE/tests/trial_test_public_key.h" -DGRAINS_BUILD_TESTS=ON -DSMTG_CREATE_PLUGIN_LINK=OFF
+      - name: Build and test Windows licensing
+        run: |
+          cmake --build build-test --config Release --parallel 4
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --test-dir build-test -C Release --output-on-failure
+      - name: Publisher setup reminder
+        if: vars.GRAINS_TRIAL_PUBLIC_KEY == ''
+        run: echo "Licensing tests ran. No installer will be published until GRAINS_TRIAL_PUBLIC_KEY is configured. See OFFLINE-TRIAL.md." >> $env:GITHUB_STEP_SUMMARY
+
+  windows-trial:
+    needs: windows-trial-tests
+    if: vars.GRAINS_TRIAL_PUBLIC_KEY != ''
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure publisher public key
+        env:
+          GRAINS_TRIAL_PUBLIC_KEY: ${{ vars.GRAINS_TRIAL_PUBLIC_KEY }}
+        run: python tools/configure_trial_key.py "$env:RUNNER_TEMP/trial_public_key.h"
+      - name: Checkout tested VST3 SDK
+        uses: actions/checkout@v4
+        with:
+          repository: steinbergmedia/vst3sdk
+          ref: 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
+          submodules: recursive
+          path: vst3sdk
       - name: Configure 14-day trial
-        run: cmake -S . -B build-trial -DVST3_SDK_ROOT="$env:GITHUB_WORKSPACE/vst3sdk" -DGRAINS_TRIAL=ON -DGRAINS_BUILD_TESTS=ON -DSMTG_CREATE_PLUGIN_LINK=OFF
+        run: cmake -S . -B build-trial -DVST3_SDK_ROOT="$env:GITHUB_WORKSPACE/vst3sdk" -DGRAINS_TRIAL=ON -DGRAINS_TRIAL_PUBLIC_KEY_HEADER="$env:RUNNER_TEMP/trial_public_key.h" -DGRAINS_BUILD_TESTS=ON -DSMTG_CREATE_PLUGIN_LINK=OFF
       - name: Build and test
         run: |
           cmake --build build-trial --config Release --parallel 4

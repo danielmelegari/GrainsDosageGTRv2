@@ -1,0 +1,16 @@
+GRAINSDOSAGE - REGISTERED WINDOWS TRIAL
+
+This trial works only with a signed license for your computer.
+
+1. Open "GrainsDosage Trial Registration" from the Start menu.
+2. Choose Yes to save your machine request on the Desktop.
+3. Send GrainsDosage-machine-request.json to the publisher.
+4. After receiving trial.license, open the registration tool again.
+5. Choose No, select your license, and reload the plugin in your DAW.
+
+The license has a fixed start date and expires exactly 14 days later.
+The registration tool shows both dates. Before activation or after expiry,
+the trial plugin produces no audio. It does not close or modify your DAW.
+A license issued for another computer will not work here.
+
+No internet connection is required. Reinstalling does not extend the trial.
