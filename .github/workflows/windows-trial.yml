@@ -95,6 +95,14 @@ jobs:
           name: GrainsDosage-Windows-ThreePage-Previews
           path: windows-page-*.png
           if-no-files-found: error
+      - name: Upload complete user manual
+        uses: actions/upload-artifact@v4
+        with:
+          name: GrainsDosage-User-Manual
+          path: |
+            USER-MANUAL.html
+            USER-MANUAL.md
+          if-no-files-found: error
       - name: Upload trial installer
         uses: actions/upload-artifact@v4
         with:

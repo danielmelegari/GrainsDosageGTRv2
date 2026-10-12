@@ -156,6 +156,9 @@ int main() {
     assert(std::abs(controller.getParamNormalized(ParamID(i))-def[i])<1e-12);
   }
   for(int idx=0;idx<controller.getParameterCount();++idx) { ParameterInfo info{}; assert(controller.getParameterInfo(idx,info)==kResultTrue); assert(info.id!=ParamID(kBypassReserved)); }
+  {String128 text{};assert(controller.getParamStringByValue(kXTarget,double(kTranspose+1)/xyDestCount,text)==kResultTrue);assert(entryText(text)=="Input Transpose");
+   assert(controller.getParameterObject(slotTarget(0,0))->getInfo().stepCount==qg::modTargetCount);
+   assert(controller.getParameterObject(kXTarget)->getInfo().stepCount==xyDestCount);}
   auto xy=defaults(); xy[kXYEnable]=1.; xy[kXYX]=1.; xy[kXYY]=0.;
   auto mapped=settings(xy,120.,48000.); assert(mapped.pitch==-48. && mapped.size>.18);
   xy[kXTarget]=double(kTranspose+1)/xyDestCount; assert(settings(xy,120.,48000.).transpose==48.);

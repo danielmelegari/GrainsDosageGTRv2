@@ -428,7 +428,7 @@ public:
     for(int axis=0;axis<2;++axis) {
       auto* route=new StringListParameter(axis?STR16("Y Destination"):STR16("X Destination"),axis?kYTarget:kXTarget);
       route->appendString(STR16("None"));
-      for(int id=0;id<int(kXYX);++id) { ParameterInfo info{}; getParameterInfo(id,info); route->appendString(info.title); }
+      for(int id=0;id<int(kXYX);++id) { auto* parameter=getParameterObject(ParamID(id));route->appendString(parameter?parameter->getInfo().title:STR16("Reserved")); }
       route->appendString(STR16("Reslice Mix"));route->appendString(STR16("Reslice Window"));
 #define GRAINS_XY_LABEL(id,label) {String128 text{};UString(text,128).fromAscii(label);route->appendString(text);}
       GRAINS_RESLICE_DESTINATIONS(GRAINS_XY_LABEL)
