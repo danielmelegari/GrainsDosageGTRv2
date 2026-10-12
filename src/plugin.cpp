@@ -1,4 +1,5 @@
 #include "engine.h"
+#include "audio_float_mode.h"
 #if defined(_WIN32) && GRAINS_TRIAL
 #include "trial_guard.h"
 #endif
@@ -193,6 +194,7 @@ public:
   // compile here. The Controller below receives setComponentState and applies
   // the full parameter array through updateStates().
   tresult PLUGIN_API process(ProcessData& data) override {
+    qg::ScopedAudioFloatMode audioFloatMode;
 #if defined(_WIN32) && GRAINS_TRIAL
     if(trial_.expired()) {
       for(int32 bus=0;bus<data.numOutputs;++bus) {

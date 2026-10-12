@@ -23,6 +23,7 @@ AppName=GrainsDosage
 AppVersion={#AppVersion}
 AppPublisher=Daniel Melegari
 DefaultDirName={autopf}\GrainsDosage
+DefaultGroupName=GrainsDosage
 DisableDirPage=yes
 DisableProgramGroupPage=yes
 ArchitecturesAllowed=x64compatible

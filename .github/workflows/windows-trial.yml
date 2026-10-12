@@ -34,13 +34,24 @@ jobs:
           ref: 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
           submodules: recursive
           path: vst3sdk
+      - name: Checkout CPU comparison baseline
+        uses: actions/checkout@v4
+        with:
+          ref: b88e029aaa45c2a26795ad1a242c78e55972c018
+          path: cpu-baseline
       - name: Configure test-only trial (never distributed)
-        run: cmake -S . -B build-test -DVST3_SDK_ROOT="$env:GITHUB_WORKSPACE/vst3sdk" -DGRAINS_TRIAL=ON -DGRAINS_TRIAL_PUBLIC_KEY_HEADER="$env:GITHUB_WORKSPACE/tests/trial_test_public_key.h" -DGRAINS_BUILD_TESTS=ON -DSMTG_CREATE_PLUGIN_LINK=OFF
+        run: cmake -S . -B build-test -DGRAINS_BENCHMARK_BASELINE="$env:GITHUB_WORKSPACE/cpu-baseline" -DVST3_SDK_ROOT="$env:GITHUB_WORKSPACE/vst3sdk" -DGRAINS_TRIAL=ON -DGRAINS_TRIAL_PUBLIC_KEY_HEADER="$env:GITHUB_WORKSPACE/tests/trial_test_public_key.h" -DGRAINS_BUILD_TESTS=ON -DSMTG_CREATE_PLUGIN_LINK=OFF
       - name: Build and test Windows licensing
         run: |
           cmake --build build-test --config Release --parallel 4
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           ctest --test-dir build-test -C Release --output-on-failure
+      - name: Compare audio CPU and output on the same Windows runner
+        run: python tools/compare_engine_cpu.py build-test/Release/grains_benchmark_baseline.exe build-test/Release/grains_benchmark_engine.exe cpu-report.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Windows-audio-CPU-comparison
+          path: cpu-report.txt
       - name: Verify native three-page Windows interface
         run: ./build-test/gui-test/Release/aztec_gui_smoke_win.exe
 

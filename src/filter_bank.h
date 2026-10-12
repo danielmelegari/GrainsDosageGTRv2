@@ -9,12 +9,17 @@ inline constexpr int filterModelCount=sizeof(filterModels)/sizeof(*filterModels)
 class FilterBank {
  struct Svf {double a=0,b=0;std::array<double,3> run(double x,double g,double k){double h=1./(1.+g*(g+k)),v1=h*(a+g*(x-b)),v2=b+g*v1;a=2*v1-a;b=2*v2-b;if(std::abs(a)<1e-20)a=0;if(std::abs(b)<1e-20)b=0;return {v2,x-k*v1-v2,k*v1};}};
  struct Voice {
+  double coefficientFc=-1.,coefficientSr=-1.,g=0.;std::array<double,8> phaserCoefficients{};
   int model=0;std::array<std::array<Svf,4>,2> svf{};double ladder[2][4]{},allpass[2][8]{},oldInput[2]{},feedback[2]{};
   std::array<std::vector<double>,2> delay;int write=0,valid=0;double combDelay=0.,oldCombDelay=0.;int combFade=0;
   void prepare(){for(auto& d:delay)d.assign(16384,0.);reset(0);}
-  void reset(int m){model=m;svf={};for(int c=0;c<2;++c){for(auto& x:ladder[c])x=0;for(auto& x:allpass[c])x=0;oldInput[c]=feedback[c]=0;}write=valid=0;combDelay=oldCombDelay=0.;combFade=0;}
+  void reset(int m){model=m;coefficientFc=-1.;svf={};for(int c=0;c<2;++c){for(auto& x:ladder[c])x=0;for(auto& x:allpass[c])x=0;oldInput[c]=feedback[c]=0;}write=valid=0;combDelay=oldCombDelay=0.;combFade=0;}
   void process(double* x,double sr,double fc,double res,double slope,int type,bool tuned){
-   double g=std::tan(3.141592653589793*std::clamp(fc,20.,sr*.4)/sr),k=1./(.5+11.5*res);
+   if(fc!=coefficientFc||sr!=coefficientSr){
+    coefficientFc=fc;coefficientSr=sr;g=std::tan(3.141592653589793*std::clamp(fc,20.,sr*.4)/sr);
+    if(model==14||model==15){const int count=model==14?4:8;for(int j=0;j<count;++j){double f=std::clamp(fc*std::pow(1.35,j-(count-1)*.5),20.,sr*.4),t=std::tan(3.141592653589793*f/sr);phaserCoefficients[j]=(t-1.)/(t+1.);}}
+   }
+   double k=1./(.5+11.5*res);
    for(int c=0;c<2;++c){double input=x[c],out=input;
     if(model==1){auto y=svf[c][0].run(std::tanh(input*1.3)/1.3,g,std::max(.13,k));double first=y[type];auto z=svf[c][1].run(std::tanh(first*1.2)/1.2,g,std::max(.2,k));out=first+slope*(z[type]-first);}
     else if(model==2||model==3){
@@ -36,7 +41,7 @@ class FilterBank {
      out/=1.5;
     }else if(model==14||model==15){
      double y=input+.7*res*std::tanh(feedback[c]);int count=model==14?4:8;
-     for(int j=0;j<count;++j){double f=std::clamp(fc*std::pow(1.35,j-(count-1)*.5),20.,sr*.4),t=std::tan(3.141592653589793*f/sr),a=(t-1.)/(t+1.);double v=a*y+allpass[c][j];allpass[c][j]=y-a*v;y=v;}
+     for(int j=0;j<count;++j){double a=phaserCoefficients[j];double v=a*y+allpass[c][j];allpass[c][j]=y-a*v;y=v;}
      feedback[c]=y;out=.5*(input+y);
     }else{
      auto y=svf[c][0].run(input,g,k);
