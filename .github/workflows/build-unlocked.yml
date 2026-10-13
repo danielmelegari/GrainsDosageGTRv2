@@ -1,0 +1,96 @@
+name: GrainsDosage — Full Unlocked VST3 (no activation)
+on:
+  workflow_dispatch:
+  push:
+    branches: [work/mockup-purple-skin]
+    paths:
+      - '.github/workflows/build-unlocked.yml'
+      - 'CMakeLists.txt'
+      - 'src/**'
+      - 'assets/**'
+      - 'test_*'
+      - 'tools/check-*.py'
+      - 'docs/unlocked-builds.md'
+permissions:
+  contents: read
+concurrency:
+  group: grains-unlocked-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  vst3:
+    name: Full Unlocked VST3 — ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            platform: Windows
+          - os: macos-15-intel
+            platform: macOS
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: steinbergmedia/vst3sdk
+          ref: 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
+          submodules: recursive
+          path: vst3sdk
+      - name: Configure Windows unlocked release
+        if: runner.os == 'Windows'
+        run: >-
+          cmake -S . -B build
+          -DVST3_SDK_ROOT="$env:GITHUB_WORKSPACE/vst3sdk"
+          -DGRAINS_EDITION=unlocked -DGRAINS_TRIAL=OFF
+          -DGRAINS_BUILD_TESTS=ON -DSMTG_CREATE_PLUGIN_LINK=OFF
+      - name: Configure macOS universal unlocked release
+        if: runner.os == 'macOS'
+        run: >-
+          cmake -S . -B build -G Xcode
+          -DVST3_SDK_ROOT="$GITHUB_WORKSPACE/vst3sdk"
+          -DGRAINS_EDITION=unlocked -DGRAINS_TRIAL=OFF
+          -DGRAINS_BUILD_TESTS=ON -DSMTG_CREATE_PLUGIN_LINK=OFF
+          -DSMTG_ENABLE_AUV2_PLUGIN=OFF -DSMTG_BUILD_UNIVERSAL_BINARY=ON
+          '-DCMAKE_OSX_ARCHITECTURES=x86_64;arm64' -DCMAKE_OSX_DEPLOYMENT_TARGET=10.14
+          '-DCMAKE_CXX_FLAGS=-Werror=unguarded-availability -Werror=unguarded-availability-new'
+          '-DCMAKE_OBJCXX_FLAGS=-Werror=unguarded-availability -Werror=unguarded-availability-new'
+      - name: Build Release VST3 and tests
+        run: cmake --build build --config Release --parallel 4
+      - name: DSP, session and activation-free audio checks
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Windows editor checks and package
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./build/gui-test/Release/aztec_gui_smoke_win.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Path package -Force | Out-Null
+          Copy-Item build/VST3/Release/GrainsDosage.vst3 package/GrainsDosage.vst3 -Recurse
+          Copy-Item docs/unlocked-builds.md package/READ-ME-FIRST.md
+          Copy-Item USER-MANUAL.html package/
+          python tools/check-public-only.py --unlocked package
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Path dist -Force | Out-Null
+          Compress-Archive -Path package/* -DestinationPath dist/GrainsDosage-Windows-Full-Unlocked-VST3.zip
+      - name: macOS editor, deployment, signature and package
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          build/gui-test/Release/aztec_gui_smoke mockup-native-mac.png
+          VST=build/VST3/Release/GrainsDosage.vst3
+          python3 tools/check-au-deployment.py "$VST"
+          codesign --force --sign - --timestamp=none "$VST"
+          codesign --verify --deep --strict "$VST"
+          mkdir -p package dist
+          ditto "$VST" package/GrainsDosage.vst3
+          cp docs/unlocked-builds.md package/READ-ME-FIRST.md
+          cp USER-MANUAL.html package/
+          python3 tools/check-public-only.py --unlocked package
+          ditto -c -k --sequesterRsrc package dist/GrainsDosage-macOS-Full-Unlocked-VST3.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GrainsDosage-${{ matrix.platform }}-VST3-Full-Unlocked
+          path: dist/*.zip
+          if-no-files-found: error
+          retention-days: 30

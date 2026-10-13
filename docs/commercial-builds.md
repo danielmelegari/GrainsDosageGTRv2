@@ -12,6 +12,8 @@ One commit and one source tree build these five deliverables in **GrainsDosage â
 
 Additional artifacts contain the complete user/publisher manuals, Windows CPU comparison and native Apple Silicon AU validation. Download the artifact, then extract its inner ZIP. Trial and Licensed use the existing plugin IDs and installation paths; install one edition at a time. A signed activation determines the trial interval or permanent entitlement. Development remains the default CMake edition and is unrestricted; development binaries are not commercial deliverables.
 
+For explicitly activation-free distribution, the separate **GrainsDosage â€” Full Unlocked VST3 (no activation)** workflow builds `GRAINS_EDITION=unlocked` for Windows and universal macOS. These VST3s run on any computer without Machine ID checks, a keygen, an activation code or expiry. See [Full Unlocked installation and workflow](unlocked-builds.md). Their artifact names include `Full-Unlocked` to distinguish them from the machine-bound Licensed edition above.
+
 ## License compatibility and audio
 
 - Mac permanent `GDS2` payload: `GRAINS-DOSAGE-V2:<32-hex-license-id>:<64-hex-device>:3`; unchanged from the existing issuer.

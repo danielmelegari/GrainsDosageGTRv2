@@ -4,12 +4,22 @@
 #include "public.sdk/source/vst/hosting/parameterchanges.h"
 #include <cassert>
 #include <iostream>
+#ifdef GRAINS_COMMERCIAL
 namespace aztec::license {
 void initialize(){} void firstOpen(){} std::string deviceCode(){return {};}
 std::string status(){return {};}
 bool activate(const std::string&,std::string&){return false;}
 }
+#endif
 int main(){
+#ifdef GRAINS_UNLOCKED
+ static_assert(!aztec::license::activationRequired);
+ assert(aztec::license::allowed.load());
+ aztec::license::initialize();aztec::license::firstOpen();
+ assert(aztec::license::allowed.load());
+ assert(aztec::license::deviceCode().empty());
+ assert(aztec::license::status()=="LICENSE ACTIVE - UNLOCKED");
+#endif
  constexpr int size=128;constexpr double rate=48000.;
  for(int format:{kSample32,kSample64}){
   aztec::license::allowed.store(true);auto* p=new Processor;assert(p->initialize(nullptr)==kResultOk);
@@ -28,6 +38,7 @@ int main(){
   // Valid trial / permanent authorization: real limiter/DSP is active, nonzero.
   for(int b=0;b<16;++b)assert(p->process(data)==kResultOk);
   assert(left(size-1)>.1&&left(size-1)<.51);assert(!(output.silenceFlags&1));
+#ifndef GRAINS_UNLOCKED
   double previous=left(size-1);aztec::license::allowed.store(false);
   for(int b=0;b<10;++b){assert(p->process(data)==kResultOk);for(int i=0;i<size;++i){assert(std::isfinite(left(i)));assert(std::abs(left(i)-previous)<.01);previous=left(i);}}
   // Expired/invalid license disables processing, not the DAW signal.
@@ -40,7 +51,12 @@ int main(){
   for(int i=0;i<size;++i){fL[i]=float(.001*i);dL[i]=.001*i+1e-12;}
   assert(p->process(data)==kResultOk);
   for(int i=32;i<size;++i)assert(left(i)==(format==kSample32?double(fL[i-32]):dL[i-32]));
+#endif
   p->setActive(false);p->terminate();p->release();
  }
+#ifdef GRAINS_UNLOCKED
+ std::cout<<"PASS: unlocked 32/64-bit VST3 processes audio with no activation or Machine ID\n";
+#else
  std::cout<<"PASS: real 32/64-bit VST3 audio stays active under authorization, fades to dry on expiry and recovers on activation without a DAW restart\n";
+#endif
 }

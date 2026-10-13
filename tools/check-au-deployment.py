@@ -46,4 +46,5 @@ def check_bundle(bundle):
 if __name__ == '__main__':
     root = pathlib.Path(sys.argv[1])
     check_bundle(root)
-    check_bundle(root / 'Contents/Resources/plugin.vst3')
+    if root.suffix == '.component':
+        check_bundle(root / 'Contents/Resources/plugin.vst3')

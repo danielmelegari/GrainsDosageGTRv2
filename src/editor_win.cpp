@@ -373,13 +373,13 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
     };
     painter.clip=[&](mockup::Rect r){SaveDC(dc);IntersectClipRect(dc,int(r.x),int(r.y),int(r.x+r.w),int(r.y+r.h));};painter.unclip=[&](){RestoreDC(dc,-1);};
     mockup::render(painter,[&](ParamID id){return value(id);},[&](ParamID id,double v){return utf8(display(id,v));},utf8(presetName),tab(),selectedLfo,selectedRepeat,selectedGate,selectedReslice,&waveVisual,dragSlot,dropSlot,&motion,mockup::RenderPass::All,rackState);
-    const auto status=license::status();if(!status.empty()){mockup::Rect button{450,88,350,25};mockup::pill(painter,button);painter.text(status+"  ·  ACTIVATE",button,11,{230,233,237},true);}
+    const auto status=license::status();if(!status.empty()){mockup::Rect button{450,88,350,25};mockup::pill(painter,button);painter.text(status+(license::activationRequired?"  ·  ACTIVATE":""),button,11,{230,233,237},true);}
 
   }
   void end(){if(dragID>=0)controller->endEdit(ParamID(dragID));if(dragXY){controller->endEdit(kXYX);controller->endEdit(kXYY);}dragID=dragSlot=dropSlot=-1;dragXY=routeMoved=dragScroll=false;animationFrames=12;}
   void down(double x,double y,bool dbl){layout();SetFocus(window);
     auto hit=[&](mockup::Rect r){return r.contains(x,y);};
-    if(!license::status().empty()&&hit({450,88,350,25})){activationDialog();return;}
+    if(license::activationRequired&&!license::status().empty()&&hit({450,88,350,25})){activationDialog();return;}
     if(hit(mockup::previous)){stepPreset(-1);return;}
     if(hit(mockup::next)){stepPreset(1);return;}
     if(hit(mockup::preset)){presetMenu();return;}

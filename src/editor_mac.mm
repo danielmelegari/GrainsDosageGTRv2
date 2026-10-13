@@ -513,7 +513,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   const auto licenseText=aztec::license::status();
   if(!licenseText.empty()){
     mockup::Rect licenseButton{450,88,350,25};mockup::pill(painter,licenseButton);
-    painter.text(licenseText+"  ·  ACTIVATE",licenseButton,11,{230,233,237},true);
+    painter.text(licenseText+(aztec::license::activationRequired?"  ·  ACTIVATE":""),licenseButton,11,{230,233,237},true);
   }
   }
   [NSGraphicsContext restoreGraphicsState];
@@ -615,7 +615,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   if(!owner)return;[self.window makeFirstResponder:self];NSPoint p=[self logical:event];[self layoutControls];
   using namespace aztec;
   auto hit=[&](mockup::Rect r){return r.contains(p.x,p.y);};
-  if(!license::status().empty()&&hit({450,88,350,25})){
+  if(license::activationRequired&&!license::status().empty()&&hit({450,88,350,25})){
     NSAlert* alert=[[NSAlert alloc] init];alert.messageText=@"GrainsDosage — Offline activation";
     alert.informativeText=@"Send this complete Device Code to the publisher for a signed 14-day trial or permanent activation. Permanent licenses support up to 3 computers. Paste the full GDS2 code from your TXT file. No internet connection is needed.";
     const auto code=license::deviceCode();
