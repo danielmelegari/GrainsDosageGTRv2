@@ -152,9 +152,9 @@ public:
 
  }}
  std::string label(){switch(viewState.load()){
-  case State::Licensed:return "LICENSED";
+  case State::Licensed:return "LICENSE ACTIVE";
   case State::Ready:return "START TRIAL";
-  case State::Trial:return "TRIAL ACTIVE - "+std::to_string(std::max<int64_t>(1,(starts.load()+trialSeconds-now()+86399)/86400))+" DAYS";
+  case State::Trial:return "14 DAYS LICENSE ACTIVE - "+std::to_string(std::max<int64_t>(1,(starts.load()+trialSeconds-now()+86399)/86400))+" DAYS LEFT";
   case State::Expired:return "TRIAL EXPIRED";
   case State::ClockError:return "CHECK SYSTEM CLOCK";
   case State::StorageError:return "LICENSE STORAGE ERROR";

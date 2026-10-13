@@ -23,14 +23,14 @@ int main(int argc,char** argv){
  // Trial signatures come from the actual native GUI backend, with test-only RSA.
  for(int i=6;i<10;++i){std::ifstream rejected(argv[i]);std::string code;std::getline(rejected,code);assert(!activate(code,error));assert(!allowed.load());}
  std::ifstream trialFile(argv[5]);std::string trialCode;std::getline(trialFile,trialCode);
- assert(activate(trialCode,error));assert(allowed.load());assert(status().find("14 DAYS")!=std::string::npos);
+ assert(activate(trialCode,error));assert(allowed.load());assert(status()=="14 DAYS LICENSE ACTIVE - 14 DAYS LEFT");
  testRecord(t-10,t+1000,true);firstOpen();assert(!allowed.load());assert(status()=="CHECK SYSTEM CLOCK");
  testRecord(t-10,t,true);firstOpen();assert(allowed.load());
- testTime(t+7200);firstOpen();assert(allowed.load());assert(status().find("TRIAL ACTIVE")!=std::string::npos);
+ testTime(t+7200);firstOpen();assert(allowed.load());assert(status().find("14 DAYS LICENSE ACTIVE")!=std::string::npos);
  testTime(t+trialSeconds);firstOpen();assert(!allowed.load());assert(status()=="TRIAL EXPIRED");
  testTime(0);
- assert(activate(serial,error));assert(allowed.load());assert(status()=="LICENSED");
+ assert(activate(serial,error));assert(allowed.load());assert(status()=="LICENSE ACTIVE");
  firstOpen();assert(allowed.load()); // license overrides expired/clock-invalid trial.
- assert(!activate(trialCode,error));assert(status()=="LICENSED"); // do not downgrade a paid activation
+ assert(!activate(trialCode,error));assert(status()=="LICENSE ACTIVE"); // do not downgrade a paid activation
  testCleanup();std::cout<<"PASS: trial boundary, persistence, clock rollback, tampering, wrong-device/legacy rejection and offline device activation\n";
 }

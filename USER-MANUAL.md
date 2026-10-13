@@ -1,6 +1,6 @@
 # GrainsDosage — complete user manual
 
-**Windows VST3 · purple three-page edition · 0.13.3**\
+**Windows VST3 · purple three-page edition · 0.13.4**\
 Applies to the updated `work/mockup-purple-skin` branch. The pages are **Modules**, **Modulation**, and **Morph**. This manual describes the current generative Reslice, not the retired Preslicer or the old Reslice step editor. Shared sound controls also apply to the macOS build; installation and registration below describe Windows.
 
 ## Contents
@@ -43,7 +43,7 @@ Start Cubase after installation. Open **Studio → VST Plug-in Manager** and res
 2. Click **Copy Machine ID** and send the full code to the publisher. Trial mode does not need a License ID.
 3. Open `GrainsDosage-Trial-Key.txt` or `GrainsDosage-Permanent-Key.txt`, copy its entire content and paste it into the activation field.
 4. Click **Activate**. Processing becomes available immediately without restarting Cubase.
-5. Check **TRIAL ACTIVE — N DAYS**, **TRIAL EXPIRED**, or **LICENSED** in the header.
+5. Check **14 DAYS LICENSE ACTIVE — N DAYS LEFT**, **TRIAL EXPIRED**, or **LICENSE ACTIVE** in the header.
 
 The separate **GrainsDosage Trial Registration** Start-menu utility remains available: **Yes** exports a JSON machine request, and **No** imports the TXT or a legacy `.license` file. Reload the plugin after using this external utility.
 

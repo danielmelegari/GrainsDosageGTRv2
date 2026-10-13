@@ -53,8 +53,8 @@ public:
  ~Manager(){{std::lock_guard<std::mutex> lock(mutex);stopping=true;}wake.notify_all();worker.join();}
  void open(){std::lock_guard<std::mutex> lock(mutex);load();}
  std::string label(){switch(visible.load(std::memory_order_acquire)){
-  case aztec::license::State::Licensed:return "LICENSED";
-  case aztec::license::State::Trial:{const Tick finish=end.load(),current=wallTime();return current>=finish?"TRIAL EXPIRED":"TRIAL ACTIVE - "+std::to_string((finish-current+86400*second-1)/(86400*second))+" DAYS";}
+  case aztec::license::State::Licensed:return "LICENSE ACTIVE";
+  case aztec::license::State::Trial:{const Tick finish=end.load(),current=wallTime();return current>=finish?"TRIAL EXPIRED":"14 DAYS LICENSE ACTIVE - "+std::to_string((finish-current+86400*second-1)/(86400*second))+" DAYS LEFT";}
   case aztec::license::State::Expired:return "TRIAL EXPIRED";
   case aztec::license::State::StorageError:return "LICENSE STORAGE ERROR";
   case aztec::license::State::ClockError:return "CHECK SYSTEM CLOCK";
