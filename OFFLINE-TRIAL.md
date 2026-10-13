@@ -2,8 +2,12 @@
 
 The Windows trial requires a publisher-signed license for that computer. No server,
 account, or internet connection is needed by the plugin or registration tool.
-Without a valid license the trial plugin silences output. The full edition remains
-unrestricted; distribute only the trial installer to evaluation users.
+Without a valid license the commercial plugin disables its effect and passes
+latency-aligned dry audio. Expiry uses a 20 ms fade, preserving DAW operation.
+Development builds remain unrestricted and must not be distributed as commercial
+binaries. Trial and Licensed commercial builds use the same signed activation
+system. See [the unified build guide](docs/commercial-builds.md) and
+[the native publisher app guide](docs/license-generator.md).
 
 ## Publisher setup
 

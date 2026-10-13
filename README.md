@@ -1,4 +1,4 @@
-# GrainsDosage 0.13.1 — purple three-page edition
+# GrainsDosage 0.13.2 — purple three-page edition
 
 This branch builds the **Modules / Modulation / Morph** interface. The audio rack contains Granulizer, Beat Repeater, generative Reslice (CutDSG, WarpDSG and PushDSG), and Gater, with per-module capture loops. The Modulation page adds four six-slot LFOs, a 19-model filter, a dedicated filter sequencer, reverb and master controls.
 
@@ -27,7 +27,7 @@ The [multi-platform workflow](../../actions/workflows/build-all.yml) builds the 
 
 ## Offline licensing
 
-The plugin requires a signed license for the registered Windows machine. All processing is available during the signed period; outside it, the trial silences output without closing the host. The registration tool shows the installed license's start/end dates. No server connection is needed.
+The plugin requires a signed license for the registered Windows machine. All processing is available during the signed period; outside it, the effect fades to latency-aligned dry without interrupting the host. The registration tool shows the installed license's start/end dates. No server connection is needed.
 
 See [OFFLINE-TRIAL.md](OFFLINE-TRIAL.md) for publisher signing and machine registration. Keep the private key outside the repository. Installing the full edition replaces the trial at the same VST3 location.
 

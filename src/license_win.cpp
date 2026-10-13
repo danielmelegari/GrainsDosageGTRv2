@@ -42,11 +42,16 @@ class Manager {
 
   refresh(true);
  }
- void load(){License next;if(readLicense(licenseDirectory()+L"\\trial.license",next,false))adopt(next);else{verified=false;publish(aztec::license::State::Required);}}
+ void load(){
+  License next;
+  if(readLicense(licenseDirectory()+L"\\trial.license",next,false)){
+   if(!verified||next.payload!=license.payload)adopt(next);else refresh();
+  }else if(verified)refresh();else publish(aztec::license::State::Required);
+ }
 public:
  Manager(){load();worker=std::thread([this]{std::unique_lock<std::mutex> lock(mutex);while(!wake.wait_for(lock,std::chrono::seconds(1),[this]{return stopping;})){try{refresh();}catch(...){publish(aztec::license::State::StorageError);}}});}
  ~Manager(){{std::lock_guard<std::mutex> lock(mutex);stopping=true;}wake.notify_all();worker.join();}
- void open(){std::lock_guard<std::mutex> lock(mutex);if(!verified)load();else refresh();}
+ void open(){std::lock_guard<std::mutex> lock(mutex);load();}
  std::string label(){switch(visible.load(std::memory_order_acquire)){
   case aztec::license::State::Licensed:return "LICENSED";
   case aztec::license::State::Trial:{const Tick finish=end.load(),current=wallTime();return current>=finish?"TRIAL EXPIRED":"TRIAL ACTIVE - "+std::to_string((finish-current+86400*second-1)/(86400*second))+" DAYS";}
@@ -71,7 +76,7 @@ public:
   }
   if(saved)saved=MoveFileExW(temporary,(directory+L"\\trial.license").c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)!=0;
   if(!saved){DeleteFileW(temporary);error="Cannot save the activation file.";return false;}
-  adopt(next);if(!allowed.load()){error="License saved, but its protected state or system clock is invalid. Correct the clock/storage access and reopen the plugin.";return false;}return true;
+  if(verified&&next.payload==license.payload)refresh(true);else adopt(next);if(!allowed.load()){error="License saved, but its protected state or system clock is invalid. Correct the clock/storage access and reopen the plugin.";return false;}return true;
  }
 };
 Manager& manager(){static Manager instance;return instance;}

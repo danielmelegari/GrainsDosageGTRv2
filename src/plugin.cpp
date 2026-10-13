@@ -605,8 +605,8 @@ public:
 
 BEGIN_FACTORY_DEF("Daniel Melegari", "", "")
 DEF_CLASS2(INLINE_UID_FROM_FUID(processorID), PClassInfo::kManyInstances, kVstAudioEffectClass,
-           "GrainsDosage", Vst::kDistributable, "Fx|Granular", "0.13.1", kVstVersionString, Processor::create)
+           "GrainsDosage", Vst::kDistributable, "Fx|Granular", "0.13.2", kVstVersionString, Processor::create)
 DEF_CLASS2(INLINE_UID_FROM_FUID(controllerID), PClassInfo::kManyInstances, kVstComponentControllerClass,
-           "GrainsDosage Controller", 0, "", "0.13.1", kVstVersionString, Controller::create)
+           "GrainsDosage Controller", 0, "", "0.13.2", kVstVersionString, Controller::create)
 END_FACTORY
 
