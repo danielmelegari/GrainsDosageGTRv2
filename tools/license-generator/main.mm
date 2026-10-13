@@ -32,7 +32,7 @@ using namespace grains::issuer;
 - (void)applicationDidFinishLaunching:(NSNotification*)notification {
   (void)notification;self.window=[[NSWindow alloc] initWithContentRect:NSMakeRect(0,0,760,730) styleMask:NSWindowStyleMaskTitled|NSWindowStyleMaskClosable|NSWindowStyleMaskMiniaturizable backing:NSBackingStoreBuffered defer:NO];self.window.title=[NSString stringWithFormat:@"GrainsDosage License Generator %@",[NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"]?:@""];
   [self label:@"GrainsDosage" frame:NSMakeRect(28,673,470,35) size:28];
-  [self label:@"LICENSE GENERATOR  ·  OFFLINE  ·  RSA SIGNED" frame:NSMakeRect(30,649,660,22) size:12];
+  [self label:[NSString stringWithFormat:@"LICENSE GENERATOR v%@  ·  OFFLINE  ·  RSA SIGNED",[NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"]?:@""] frame:NSMakeRect(30,649,700,22) size:12];
   self.mode=[NSSegmentedControl segmentedControlWithLabels:@[@"TRIAL 14 DAYS",@"PERMANENT"] trackingMode:NSSegmentSwitchTrackingSelectOne target:self action:@selector(changeMode:)];self.mode.frame=NSMakeRect(28,598,704,34);self.mode.selectedSegment=0;[self.window.contentView addSubview:self.mode];
   [self label:@"Nome cliente — permanente" frame:NSMakeRect(30,564,690,22) size:13];
   self.customer=[[NSTextField alloc] initWithFrame:NSMakeRect(30,534,700,28)];self.customer.delegate=self;self.customer.placeholderString=@"Usare lo stesso nome per riutilizzare la licenza del cliente";[self.window.contentView addSubview:self.customer];
