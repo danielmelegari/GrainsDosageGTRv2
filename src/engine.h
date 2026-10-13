@@ -684,7 +684,9 @@ public:
     if(!settings_.freeze) ++write_;
   }
   void process(float inL,float inR,double beat,float& outL,float& outR) {
-    if(extendedMod_)settings_=baseSettings_;
+    // applyExtended assigns every routed field from the fixed modBase_ each
+    // sample. Copying the entire settings/LFO matrices here is redundant;
+    // set() already restores the base when a route or automation value changes.
     // Advance the FREEZE crossfade ramp (50 ms fade-in / 100 ms fade-out).
     if(freezeRamp_>0) {
       const double sr = std::max(8000., settings_.sampleRate);

@@ -18,7 +18,7 @@ for repeat in range(3):
 lines = ['48 kHz stereo, 256-sample blocks, 10 seconds/preset; median of 3 runs.',
          'CPU is % of one core for the engine only, not the DAW or GUI.',
          'preset | before | after | reduction | audio']
-for preset in ('-1', '0', '1', '8', '24', '25', '29'):
+for preset in ('-1', '0', '1', '8', '24', '25', '29', '100'):
     before, after = results['before', preset], results['after', preset]
     if len({h for _, h in before + after}) != 1:
         raise ValueError(f'Audio output changed for preset {preset}')

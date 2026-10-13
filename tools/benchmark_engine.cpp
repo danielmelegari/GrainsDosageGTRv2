@@ -26,8 +26,9 @@ static double cpuSeconds(){
 #endif
 }
 int main(){
- for(int preset: {-1,0,1,8,24,25,29}) {
-  auto p=preset<0?aztec::initialParameters():aztec::legacyFactoryPreset(preset);
+ for(int preset: {-1,0,1,8,24,25,29,100}) {
+  auto p=preset<0?aztec::initialParameters():aztec::legacyFactoryPreset(preset==100?29:preset);
+  if(preset==100)p[aztec::slotTarget(0,0)]=22./qg::modTargetCount; // Extended Reslice Mix route.
   qg::Engine e;e.prepare(48000);uint64_t hash=14695981039346656037ULL;
   const double start=cpuSeconds();
   for(int n=0;n<480000;++n){
