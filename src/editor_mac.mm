@@ -617,7 +617,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   auto hit=[&](mockup::Rect r){return r.contains(p.x,p.y);};
   if(!license::status().empty()&&hit({450,88,350,25})){
     NSAlert* alert=[[NSAlert alloc] init];alert.messageText=@"GrainsDosage — Offline activation";
-    alert.informativeText=@"Each license supports up to 3 computers. Send this Device Code and your license ID to the publisher, then paste the activation code issued for this Mac. No internet connection is needed.";
+    alert.informativeText=@"Send this complete Device Code to the publisher for a signed 14-day trial or permanent activation. Permanent licenses support up to 3 computers. Paste the full GDS2 code from your TXT file. No internet connection is needed.";
     const auto code=license::deviceCode();
     NSView* accessory=[[NSView alloc] initWithFrame:NSMakeRect(0,0,520,130)];
     NSTextField* device=[[NSTextField alloc] initWithFrame:NSMakeRect(0,88,520,40)];device.editable=NO;device.selectable=YES;device.stringValue=code.empty()?@"Device code unavailable":[NSString stringWithUTF8String:code.c_str()];[accessory addSubview:device];

@@ -39,11 +39,13 @@ Start Cubase after installation. Open **Studio → VST Plug-in Manager** and res
 
 ### Offline registration
 
-1. Open **GrainsDosage Trial Registration** from the Windows Start menu.
-2. Choose **Yes** to export `GrainsDosage-machine-request.json` to the Desktop.
-3. Send this request to the publisher.
-4. When the publisher returns `trial.license`, open Registration again, choose **No**, and select that file.
-5. Check the displayed start and expiry dates, then reload the plugin in Cubase.
+1. Click **ACTIVATE** in the plugin header.
+2. Click **Copy Machine ID** and send the full code to the publisher. Trial mode does not need a License ID.
+3. Open `GrainsDosage-Trial-Key.txt` or `GrainsDosage-Permanent-Key.txt`, copy its entire content and paste it into the activation field.
+4. Click **Activate**. Processing becomes available immediately without restarting Cubase.
+5. Check **TRIAL ACTIVE — N DAYS**, **TRIAL EXPIRED**, or **LICENSED** in the header.
+
+The separate **GrainsDosage Trial Registration** Start-menu utility remains available: **Yes** exports a JSON machine request, and **No** imports the TXT or a legacy `.license` file. Reload the plugin after using this external utility.
 
 The plugin and registration tool make no online activation requests. A license is signed for a machine ID derived locally from Windows and the system volume. It will not enable audio on another computer. Reinstalling Windows or replacing the system volume can change the ID; contact the publisher if that happens.
 
@@ -55,7 +57,7 @@ The trial enables full processing during the **14 calendar days between the sign
 
 There is **no one-hour session limit**. A license received several days after its start has only the remaining calendar time. Registration shows the dates in UTC each time it opens. Artifact download retention on GitHub is separate from the trial period.
 
-Before activation, before a future start, after expiry, or when protected state cannot be validated, the trial produces silence. It does not shut down Cubase or erase projects. Keep the Windows clock correct. Reinstalling or deleting trial files does not legitimately extend the signed period.
+Before activation, before a future start, after expiry, or when protected state cannot be validated, the effect passes the original signal with its normal 32-sample latency. At expiry, it fades from processing to dry over 20 milliseconds; it does not silence Cubase or erase projects. Keep the Windows clock correct. Reinstalling or deleting trial files does not legitimately extend the signed period.
 
 ## 2. First session in Cubase
 
@@ -433,6 +435,10 @@ Cubase's real-time meter depends on your CPU, audio driver, buffer size, sample 
 Check module On, module Mix and master Mix. For an LFO, check its On, Depth, destination, Amount and polarity. For Morph, check On, destination and axis amount. A mode-specific Reslice control only affects its relevant mode; cut-level values can wait until the next cut. A held module loop can keep repeating older output while you change controls upstream.
 
 ## 17. Publisher: issuing offline trials
+
+For normal issuance on macOS Mojave 10.14 Intel, use **GrainsDosage License Generator.app**. Its [publisher guide](docs/license-generator.md) covers one-time setup of the existing RSA private key in Keychain, the persistent SQLite register, 14-day trials, and permanent licenses for up to three devices. It exports only `GrainsDosage-Trial-Key.txt` or `GrainsDosage-Permanent-Key.txt`. Reissuing a trial for the same machine retains the original dates. Windows registration accepts either TXT and shows whether the license is trial or permanent. Signed GDDEV2 trials and Windows permanent codes require the matching updated plugin build.
+
+The command-line alternative below is for existing Windows publisher workflows; it does not automatically update the native generator’s ledger. Keep one authoritative issuance history.
 
 Customers need the signed license, not the private signing key. On the private issuing computer, install Python and `cryptography`, then use the existing private key matching the public key included in this build:
 

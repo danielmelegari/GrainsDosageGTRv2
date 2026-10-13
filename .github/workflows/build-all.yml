@@ -1,351 +1,206 @@
-name: GrainsDosage — macOS, Windows, AU, Trial, Licensed
-'on':
-  workflow_dispatch: {}
+name: GrainsDosage — Commercial builds and License Generator
+on:
+  workflow_dispatch:
+  workflow_call:
   push:
-    branches:
-    - main
-    - work/mockup-purple-skin
+    branches: [main, work/mockup-purple-skin]
     paths:
-    - src/**
-    - assets/**
-    - cmake/**
-    - tools/**
-    - docs/**
-    - test_*
-    - CMakeLists.txt
-    - .github/workflows/**
+      - 'src/**'
+      - 'assets/**'
+      - 'cmake/**'
+      - 'tools/**'
+      - 'docs/**'
+      - 'config/**'
+      - 'installer/**'
+      - 'test_*'
+      - 'tests/**'
+      - 'CMakeLists.txt'
+      - 'USER-MANUAL.*'
+      - '.github/workflows/**'
 permissions:
   contents: read
 concurrency:
-  group: grains-build-${{ github.ref }}
+  group: grains-commercial-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  macos:
-    runs-on: macos-15-intel
-    timeout-minutes: 30
-    steps:
-    - uses: actions/checkout@v4
-    - name: Download tested VST3 SDK
-      shell: bash
-      run: |
-        git clone --no-checkout https://github.com/steinbergmedia/vst3sdk.git "$RUNNER_TEMP/vst3sdk"
-        git -C "$RUNNER_TEMP/vst3sdk" checkout 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
-        git -C "$RUNNER_TEMP/vst3sdk" submodule update --init --recursive --depth 1
-    - name: Configure universal Mac build
-      if: runner.os == 'macOS'
-      shell: bash
-      run: cmake -S . -B build -G Xcode -DVST3_SDK_ROOT="$RUNNER_TEMP/vst3sdk" '-DCMAKE_OSX_ARCHITECTURES=x86_64;arm64' -DCMAKE_OSX_DEPLOYMENT_TARGET=10.14 -DSMTG_CREATE_PLUGIN_LINK=OFF
-        -DSMTG_BUILD_UNIVERSAL_BINARY=ON -DGRAINS_BUILD_TESTS=ON
-    - name: Configure Windows build
-      if: runner.os == 'Windows'
-      shell: bash
-      run: cmake -S . -B build -DVST3_SDK_ROOT="$RUNNER_TEMP/vst3sdk" -DSMTG_CREATE_PLUGIN_LINK=OFF -DGRAINS_BUILD_TESTS=ON
-    - name: Build
-      shell: bash
-      run: cmake --build build --config Release --parallel 4
-    - name: Regression tests
-      shell: bash
-      run: ctest --test-dir build -C Release --output-on-failure
-    - name: Mac native interactions and screenshot
-      if: runner.os == 'macOS'
-      shell: bash
-      run: build/gui-test/Release/aztec_gui_smoke mockup-native-mac.png
-    - name: Windows native interactions
-      if: runner.os == 'Windows'
-      shell: bash
-      run: build/gui-test/Release/aztec_gui_smoke_win.exe
-    - name: Export preset bank
-      shell: bash
-      run: |
-        mkdir -p GrainsDosage-Legacy-128 GrainsDosage-Circuit-Fractures-128 GrainsDosage-Forest-Escape-128
-        build/preset-bank/Release/grains_export_presets GrainsDosage-Legacy-128 0
-        build/preset-bank/Release/grains_export_presets GrainsDosage-Circuit-Fractures-128 1
-        build/preset-bank/Release/grains_export_presets GrainsDosage-Forest-Escape-128 2
-    - name: Package Mac VST3
-      if: runner.os == 'macOS'
-      shell: bash
-      run: |
-        lipo build/VST3/Release/GrainsDosage.vst3/Contents/MacOS/GrainsDosage -verify_arch x86_64 arm64
-        codesign --force --sign - --timestamp=none build/VST3/Release/GrainsDosage.vst3
-        for bank in Legacy Circuit-Fractures Forest-Escape; do
-          ditto -c -k --keepParent "GrainsDosage-$bank-128" "GrainsDosage-Purple-$bank-128.zip"
-        done
-        ditto -c -k --sequesterRsrc --keepParent build/VST3/Release/GrainsDosage.vst3 GrainsDosage-Purple-macOS-Universal.vst3.zip
-    - name: Package Windows VST3
-      if: runner.os == 'Windows'
-      shell: pwsh
-      run: |
-        Compress-Archive -Path build/VST3/Release/GrainsDosage.vst3 -DestinationPath GrainsDosage-Purple-Windows.vst3.zip
-        foreach ($bank in @('Legacy', 'Circuit-Fractures', 'Forest-Escape')) {
-          Compress-Archive -Path "GrainsDosage-$bank-128" -DestinationPath "GrainsDosage-Purple-$bank-128.zip"
-        }
-    - uses: actions/upload-artifact@v4
-      with:
-        name: GrainsDosage-Purple-${{ runner.os }}
-        path: |
-          GrainsDosage-Purple-*.zip
-          mockup-native-mac*.png
-        if-no-files-found: error
-    - uses: actions/download-artifact@v4
-      with:
-        name: GrainsDosage-macOS-AU
-        path: shipped-au
-    - name: Validate the shipped AU archive on Intel
-      shell: bash
-      run: |-
-        set -euo pipefail
-        mkdir -p "$HOME/Library/Audio/Plug-Ins/Components"
-        ditto -x -k shipped-au/GrainsDosage-macOS-Universal.component.zip "$HOME/Library/Audio/Plug-Ins/Components"
-        AU="$HOME/Library/Audio/Plug-Ins/Components/GrainsDosage.component"
-        codesign --verify --deep --strict "$AU"
-        python3 tools/check-au-deployment.py "$AU"
-        killall -9 AudioComponentRegistrar || true
-        arch -x86_64 /usr/bin/auval -a | tee registered-intel.txt
-        grep -E 'aufx[[:space:]]+Gdsg[[:space:]]+Dmeg' registered-intel.txt
-        arch -x86_64 /usr/bin/auval -v aufx Gdsg Dmeg 2>&1 | tee auval-intel.txt
-        grep -F 'AU VALIDATION SUCCEEDED.' auval-intel.txt
-    - uses: actions/upload-artifact@v4
-      with:
-        name: GrainsDosage-AU-validation-Intel
-        path: |-
-          registered-intel.txt
-          auval-intel.txt
-    name: macOS VST3
-    needs: au
+  generator:
+    uses: ./.github/workflows/license-generator.yml
   windows:
+    name: Windows VST3 ${{ matrix.edition }}
     runs-on: windows-2022
-    timeout-minutes: 30
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        edition: [trial, licensed]
     steps:
-    - uses: actions/checkout@v4
-    - name: Download tested VST3 SDK
-      shell: bash
-      run: |
-        git clone --no-checkout https://github.com/steinbergmedia/vst3sdk.git "$RUNNER_TEMP/vst3sdk"
-        git -C "$RUNNER_TEMP/vst3sdk" checkout 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
-        git -C "$RUNNER_TEMP/vst3sdk" submodule update --init --recursive --depth 1
-    - name: Configure universal Mac build
-      if: runner.os == 'macOS'
-      shell: bash
-      run: cmake -S . -B build -G Xcode -DVST3_SDK_ROOT="$RUNNER_TEMP/vst3sdk" '-DCMAKE_OSX_ARCHITECTURES=x86_64;arm64' -DCMAKE_OSX_DEPLOYMENT_TARGET=10.14 -DSMTG_CREATE_PLUGIN_LINK=OFF
-        -DSMTG_BUILD_UNIVERSAL_BINARY=ON -DGRAINS_BUILD_TESTS=ON
-    - name: Configure Windows build
-      if: runner.os == 'Windows'
-      shell: bash
-      run: cmake -S . -B build -DVST3_SDK_ROOT="$RUNNER_TEMP/vst3sdk" -DSMTG_CREATE_PLUGIN_LINK=OFF -DGRAINS_BUILD_TESTS=ON
-    - name: Build
-      shell: bash
-      run: cmake --build build --config Release --parallel 4
-    - name: Regression tests
-      shell: bash
-      run: ctest --test-dir build -C Release --output-on-failure
-    - name: Mac native interactions and screenshot
-      if: runner.os == 'macOS'
-      shell: bash
-      run: build/gui-test/Release/aztec_gui_smoke mockup-native-mac.png
-    - name: Windows native interactions
-      if: runner.os == 'Windows'
-      shell: bash
-      run: build/gui-test/Release/aztec_gui_smoke_win.exe
-    - name: Export preset bank
-      shell: bash
-      run: |
-        mkdir -p GrainsDosage-Legacy-128 GrainsDosage-Circuit-Fractures-128 GrainsDosage-Forest-Escape-128
-        build/preset-bank/Release/grains_export_presets GrainsDosage-Legacy-128 0
-        build/preset-bank/Release/grains_export_presets GrainsDosage-Circuit-Fractures-128 1
-        build/preset-bank/Release/grains_export_presets GrainsDosage-Forest-Escape-128 2
-    - name: Package Mac VST3
-      if: runner.os == 'macOS'
-      shell: bash
-      run: |
-        lipo build/VST3/Release/GrainsDosage.vst3/Contents/MacOS/GrainsDosage -verify_arch x86_64 arm64
-        codesign --force --sign - --timestamp=none build/VST3/Release/GrainsDosage.vst3
-        for bank in Legacy Circuit-Fractures Forest-Escape; do
-          ditto -c -k --keepParent "GrainsDosage-$bank-128" "GrainsDosage-Purple-$bank-128.zip"
-        done
-        ditto -c -k --sequesterRsrc --keepParent build/VST3/Release/GrainsDosage.vst3 GrainsDosage-Purple-macOS-Universal.vst3.zip
-    - name: Package Windows VST3
-      if: runner.os == 'Windows'
-      shell: pwsh
-      run: |
-        Compress-Archive -Path build/VST3/Release/GrainsDosage.vst3 -DestinationPath GrainsDosage-Purple-Windows.vst3.zip
-        foreach ($bank in @('Legacy', 'Circuit-Fractures', 'Forest-Escape')) {
-          Compress-Archive -Path "GrainsDosage-$bank-128" -DestinationPath "GrainsDosage-Purple-$bank-128.zip"
-        }
-    - uses: actions/upload-artifact@v4
-      with:
-        name: GrainsDosage-Purple-${{ runner.os }}
-        path: |
-          GrainsDosage-Purple-*.zip
-          mockup-native-mac*.png
-        if-no-files-found: error
-    name: Windows VST3
-  au:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: steinbergmedia/vst3sdk
+          ref: 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
+          submodules: recursive
+          path: vst3sdk
+      - uses: actions/checkout@v4
+        with:
+          ref: b88e029aaa45c2a26795ad1a242c78e55972c018
+          path: cpu-baseline
+      - name: Configure existing production public key
+        # No private-key secret is used by any build or packaging step.
+        run: python tools/configure_trial_key.py "$env:RUNNER_TEMP/trial_public_key.h"
+      - name: Configure commercial build from this commit
+        run: cmake -S . -B build -DVST3_SDK_ROOT="$env:GITHUB_WORKSPACE/vst3sdk" -DGRAINS_EDITION=${{ matrix.edition }} -DGRAINS_TRIAL_PUBLIC_KEY_HEADER="$env:RUNNER_TEMP/trial_public_key.h" -DGRAINS_BUILD_TESTS=ON -DSMTG_CREATE_PLUGIN_LINK=OFF -DGRAINS_BENCHMARK_BASELINE="$env:GITHUB_WORKSPACE/cpu-baseline"
+      - name: Build
+        run: cmake --build build --config Release --parallel 4
+      - name: DSP, license signatures, machine identity, expiry and state tests
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Compare audio CPU and exact output with previous engine
+        if: matrix.edition == 'trial'
+        run: python tools/compare_engine_cpu.py build/Release/grains_benchmark_baseline.exe build/Release/grains_benchmark_engine.exe cpu-report.txt
+      - uses: actions/upload-artifact@v4
+        if: matrix.edition == 'trial'
+        with:
+          name: Windows-audio-CPU-comparison
+          path: cpu-report.txt
+          if-no-files-found: error
+      - name: Native three-page editor and DPI tests
+        run: ./build/gui-test/Release/aztec_gui_smoke_win.exe
+      - name: Stage signed-license build
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path package -Force | Out-Null
+          Copy-Item build/VST3/Release/GrainsDosage.vst3 package/GrainsDosage.vst3 -Recurse
+          Copy-Item build/registration/Release/GrainsDosageRegistration.exe package/
+          Copy-Item USER-MANUAL.html package/
+          Copy-Item TRIAL-REGISTRATION.txt package/
+          python tools/check-public-only.py package
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Compress-Archive -Path package/* -DestinationPath GrainsDosage-Windows-${{ matrix.edition }}-VST3.zip
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+      - name: Package installer
+        shell: pwsh
+        run: |
+          $editionFlag = if ('${{ matrix.edition }}' -eq 'trial') { '/DTrial' } else { '/DLicensed' }
+          & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' $editionFlag /DBuildDir=build installer/GrainsDosage.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GrainsDosage-Windows-VST3-${{ matrix.edition }}
+          path: |
+            GrainsDosage-Windows-${{ matrix.edition }}-VST3.zip
+            dist/*Setup.exe
+            windows-page-*.png
+          if-no-files-found: error
+          retention-days: 30
+  macos:
+    name: macOS AU and VST3 ${{ matrix.edition }}
+    runs-on: macos-15-intel
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        edition: [trial, licensed]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Native RSA issuance and license lifecycle tests
+        run: bash tools/test-license-mac.sh
+      - name: Fetch pinned SDKs
+        run: |
+          git clone --no-checkout https://github.com/steinbergmedia/vst3sdk.git "$RUNNER_TEMP/vst3sdk"
+          git -C "$RUNNER_TEMP/vst3sdk" checkout 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
+          git -C "$RUNNER_TEMP/vst3sdk" submodule update --init --recursive --depth 1
+          git clone https://github.com/apple/AudioUnitSDK.git "$RUNNER_TEMP/AudioUnitSDK"
+          git -C "$RUNNER_TEMP/AudioUnitSDK" checkout 53a9a2008aae7fb1b0a9f093dd523b9b12f6c0d9
+      - name: Configure same-source universal AU and VST3
+        run: >-
+          cmake -S . -B build -G Xcode
+          -DVST3_SDK_ROOT="$RUNNER_TEMP/vst3sdk"
+          -DSMTG_AUDIOUNIT_SDK_PATH="$RUNNER_TEMP/AudioUnitSDK"
+          -DSMTG_ENABLE_AUV2_PLUGIN=ON -DSMTG_CREATE_PLUGIN_LINK=OFF
+          -DSMTG_BUILD_UNIVERSAL_BINARY=ON '-DCMAKE_OSX_ARCHITECTURES=x86_64;arm64'
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=10.14 -DGRAINS_EDITION=${{ matrix.edition }}
+          -DGRAINS_BUILD_TESTS=ON
+          '-DCMAKE_CXX_FLAGS=-Werror=unguarded-availability -Werror=unguarded-availability-new'
+          '-DCMAKE_OBJCXX_FLAGS=-Werror=unguarded-availability -Werror=unguarded-availability-new'
+      - name: Build AU, VST3 and regression tests
+        run: cmake --build build --config Release --parallel 4
+      - name: Audio and session regression tests
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Native editor interactions
+        run: build/gui-test/Release/aztec_gui_smoke mockup-native-mac.png
+      - name: Verify public-only bundles and deployment; sign ad hoc
+        run: |
+          AU=build/AU/Release/GrainsDosage.component
+          VST=build/VST3/Release/GrainsDosage.vst3
+          python3 tools/check-au-deployment.py "$AU"
+          python3 tools/check-public-only.py "$AU" "$VST"
+          codesign --force --sign - --timestamp=none "$AU/Contents/Resources/plugin.vst3"
+          codesign --force --sign - --timestamp=none "$AU"
+          codesign --force --sign - --timestamp=none "$VST"
+          codesign --verify --deep --strict "$AU"
+          codesign --verify --deep --strict "$VST"
+      - name: Validate Audio Unit on Intel
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/Library/Audio/Plug-Ins/Components"
+          ditto build/AU/Release/GrainsDosage.component "$HOME/Library/Audio/Plug-Ins/Components/GrainsDosage.component"
+          killall -9 AudioComponentRegistrar || true
+          arch -x86_64 /usr/bin/auval -v aufx Gdsg Dmeg 2>&1 | tee auval-intel.txt
+          grep -F 'AU VALIDATION SUCCEEDED.' auval-intel.txt
+      - name: Package commercial edition
+        run: |
+          mkdir -p package
+          ditto -c -k --sequesterRsrc --keepParent build/AU/Release/GrainsDosage.component package/GrainsDosage-${{ matrix.edition }}.component.zip
+          ditto -c -k --sequesterRsrc --keepParent build/VST3/Release/GrainsDosage.vst3 package/GrainsDosage-${{ matrix.edition }}.vst3.zip
+          cp docs/licensing.md package/READ-ME-FIRST.md
+          cp USER-MANUAL.html auval-intel.txt package/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GrainsDosage-${{ matrix.edition }}-macOS
+          path: package/
+          if-no-files-found: error
+          retention-days: 30
+  apple-silicon:
+    name: Verify shipped AU on Apple Silicon (${{ matrix.edition }})
+    needs: macos
     runs-on: macos-15
-    timeout-minutes: 35
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        edition: [trial, licensed]
     steps:
-    - uses: actions/checkout@v4
-    - name: Fetch pinned SDKs
-      shell: bash
-      run: |
-        git clone --no-checkout https://github.com/steinbergmedia/vst3sdk.git "$RUNNER_TEMP/vst3sdk"
-        git -C "$RUNNER_TEMP/vst3sdk" checkout 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
-        git -C "$RUNNER_TEMP/vst3sdk" submodule update --init --recursive --depth 1
-        git clone https://github.com/apple/AudioUnitSDK.git "$RUNNER_TEMP/AudioUnitSDK"
-        git -C "$RUNNER_TEMP/AudioUnitSDK" checkout 53a9a2008aae7fb1b0a9f093dd523b9b12f6c0d9
-    - name: Configure universal AUv2
-      run: cmake -S . -B build-au -G Xcode -DVST3_SDK_ROOT="$RUNNER_TEMP/vst3sdk" -DSMTG_AUDIOUNIT_SDK_PATH="$RUNNER_TEMP/AudioUnitSDK" -DSMTG_ENABLE_AUV2_PLUGIN=ON
-        -DSMTG_CREATE_PLUGIN_LINK=OFF -DSMTG_BUILD_UNIVERSAL_BINARY=ON '-DCMAKE_OSX_ARCHITECTURES=x86_64;arm64' -DCMAKE_OSX_DEPLOYMENT_TARGET=10.14 '-DCMAKE_CXX_FLAGS=-Werror=unguarded-availability
-        -Werror=unguarded-availability-new' '-DCMAKE_OBJCXX_FLAGS=-Werror=unguarded-availability -Werror=unguarded-availability-new'
-    - name: Build Audio Unit
-      run: cmake --build build-au --config Release --target GrainsDosageAU --parallel 4
-    - name: Verify and sign self-contained component
-      run: |
-        AU=build-au/AU/Release/GrainsDosage.component
-        plutil -lint "$AU/Contents/Info.plist"
-        python3 tools/check-au-deployment.py "$AU"
-        test ! -L "$AU/Contents/Resources/plugin.vst3"
-        lipo "$AU/Contents/MacOS/GrainsDosage" -verify_arch x86_64 arm64
-        lipo "$AU/Contents/Resources/plugin.vst3/Contents/MacOS/GrainsDosage" -verify_arch x86_64 arm64
-        codesign --force --sign - --timestamp=none "$AU/Contents/Resources/plugin.vst3"
-        codesign --force --sign - --timestamp=none "$AU"
-        codesign --verify --deep --strict "$AU"
-        mkdir -p "$HOME/Library/Audio/Plug-Ins/Components"
-        ditto "$AU" "$HOME/Library/Audio/Plug-Ins/Components/GrainsDosage.component"
-        killall -9 AudioComponentRegistrar || true
-    - name: Validate Audio Unit
-      run: |
-        set -o pipefail
-        auval -v aufx Gdsg Dmeg | tee auval.txt
-    - name: Package component
-      run: |
-        ditto -c -k --sequesterRsrc --keepParent build-au/AU/Release/GrainsDosage.component GrainsDosage-macOS-Universal.component.zip
-    - name: Validate the shipped archive on Apple Silicon
-      shell: bash
-      run: |-
-        set -euo pipefail
-        mkdir -p "$RUNNER_TEMP/shipped-au" "$HOME/Library/Audio/Plug-Ins/Components"
-        ditto -x -k GrainsDosage-macOS-Universal.component.zip "$RUNNER_TEMP/shipped-au"
-        AU="$RUNNER_TEMP/shipped-au/GrainsDosage.component"
-        codesign --verify --deep --strict "$AU"
-        python3 tools/check-au-deployment.py "$AU"
-        ditto "$AU" "$HOME/Library/Audio/Plug-Ins/Components/GrainsDosage.component"
-        killall -9 AudioComponentRegistrar || true
-        arch -arm64 /usr/bin/auval -a | tee registered-arm64.txt
-        grep -E 'aufx[[:space:]]+Gdsg[[:space:]]+Dmeg' registered-arm64.txt
-        arch -arm64 /usr/bin/auval -v aufx Gdsg Dmeg 2>&1 | tee auval-arm64.txt
-        grep -F 'AU VALIDATION SUCCEEDED.' auval-arm64.txt
-        cp docs/audio-unit.md READ-ME-FIRST.md
-        cp tools/diagnose-au.sh diagnose-au.sh
-    - uses: actions/upload-artifact@v4
-      with:
-        name: GrainsDosage-macOS-AU
-        path: |-
-          GrainsDosage-macOS-Universal.component.zip
-          auval*.txt
-          registered-arm64.txt
-          READ-ME-FIRST.md
-          diagnose-au.sh
-        if-no-files-found: error
-    name: AU
-  trial:
-    runs-on: macos-15-intel
-    timeout-minutes: 35
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: GrainsDosage-${{ matrix.edition }}-macOS
+          path: shipped
+      - name: Validate actual distributed archive
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/Library/Audio/Plug-Ins/Components"
+          ditto -x -k shipped/GrainsDosage-${{ matrix.edition }}.component.zip "$HOME/Library/Audio/Plug-Ins/Components"
+          AU="$HOME/Library/Audio/Plug-Ins/Components/GrainsDosage.component"
+          codesign --verify --deep --strict "$AU"
+          python3 tools/check-au-deployment.py "$AU"
+          killall -9 AudioComponentRegistrar || true
+          arch -arm64 /usr/bin/auval -v aufx Gdsg Dmeg 2>&1 | tee auval-arm64.txt
+          grep -F 'AU VALIDATION SUCCEEDED.' auval-arm64.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GrainsDosage-${{ matrix.edition }}-Apple-Silicon-validation
+          path: auval-arm64.txt
+  manual:
+    runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - name: Test offline license and trial lifecycle
-      run: bash tools/test-license-mac.sh
-    - name: Fetch pinned SDKs
-      shell: bash
-      run: |
-        git clone --no-checkout https://github.com/steinbergmedia/vst3sdk.git "$RUNNER_TEMP/vst3sdk"
-        git -C "$RUNNER_TEMP/vst3sdk" checkout 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
-        git -C "$RUNNER_TEMP/vst3sdk" submodule update --init --recursive --depth 1
-        git clone https://github.com/apple/AudioUnitSDK.git "$RUNNER_TEMP/AudioUnitSDK"
-        git -C "$RUNNER_TEMP/AudioUnitSDK" checkout 53a9a2008aae7fb1b0a9f093dd523b9b12f6c0d9
-    - name: Configure universal AUv2
-      run: cmake -S . -B build-au -G Xcode -DVST3_SDK_ROOT="$RUNNER_TEMP/vst3sdk" -DSMTG_AUDIOUNIT_SDK_PATH="$RUNNER_TEMP/AudioUnitSDK" -DSMTG_ENABLE_AUV2_PLUGIN=ON
-        -DSMTG_CREATE_PLUGIN_LINK=OFF -DSMTG_BUILD_UNIVERSAL_BINARY=ON '-DCMAKE_OSX_ARCHITECTURES=x86_64;arm64' -DCMAKE_OSX_DEPLOYMENT_TARGET=10.14 -DGRAINS_EDITION=trial
-        '-DCMAKE_CXX_FLAGS=-Werror=unguarded-availability -Werror=unguarded-availability-new' '-DCMAKE_OBJCXX_FLAGS=-Werror=unguarded-availability -Werror=unguarded-availability-new'
-    - name: Build Audio Unit
-      run: cmake --build build-au --config Release --target GrainsDosageAU --parallel 4
-    - name: Verify, sign and validate AU
-      run: |
-        set -euo pipefail
-        AU=build-au/AU/Release/GrainsDosage.component
-        python3 tools/check-au-deployment.py "$AU"
-        codesign --force --sign - --timestamp=none "$AU/Contents/Resources/plugin.vst3"
-        codesign --force --sign - --timestamp=none "$AU"
-        codesign --verify --deep --strict "$AU"
-        mkdir -p "$HOME/Library/Audio/Plug-Ins/Components"
-        ditto "$AU" "$HOME/Library/Audio/Plug-Ins/Components/GrainsDosage.component"
-        killall -9 AudioComponentRegistrar || true
-        auval -v aufx Gdsg Dmeg 2>&1 | tee auval.txt
-        grep -F 'AU VALIDATION SUCCEEDED.' auval.txt
-    - name: Package edition
-      run: |
-        mkdir -p package
-        ditto -c -k --sequesterRsrc --keepParent build-au/AU/Release/GrainsDosage.component package/GrainsDosage-trial.component.zip
-        codesign --force --sign - --timestamp=none build-au/VST3/Release/GrainsDosage.vst3
-        ditto -c -k --sequesterRsrc --keepParent build-au/VST3/Release/GrainsDosage.vst3 package/GrainsDosage-trial.vst3.zip
-        cp docs/licensing.md package/READ-ME-FIRST.md
-        cp auval.txt package/
-    - uses: actions/upload-artifact@v4
-      with:
-        name: GrainsDosage-trial-macOS
-        path: package/
-        if-no-files-found: error
-    name: Trial
-  licensed:
-    runs-on: macos-15-intel
-    timeout-minutes: 35
-    steps:
-    - uses: actions/checkout@v4
-    - name: Test three-device publisher ledger
-      shell: bash
-      run: |
-        python3 -m venv "$RUNNER_TEMP/license-issuer-tests"
-        "$RUNNER_TEMP/license-issuer-tests/bin/python" -m pip install cryptography
-        "$RUNNER_TEMP/license-issuer-tests/bin/python" tools/test-license-issuer.py
-    - name: Test offline license and trial lifecycle
-      run: bash tools/test-license-mac.sh
-    - name: Fetch pinned SDKs
-      shell: bash
-      run: |
-        git clone --no-checkout https://github.com/steinbergmedia/vst3sdk.git "$RUNNER_TEMP/vst3sdk"
-        git -C "$RUNNER_TEMP/vst3sdk" checkout 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
-        git -C "$RUNNER_TEMP/vst3sdk" submodule update --init --recursive --depth 1
-        git clone https://github.com/apple/AudioUnitSDK.git "$RUNNER_TEMP/AudioUnitSDK"
-        git -C "$RUNNER_TEMP/AudioUnitSDK" checkout 53a9a2008aae7fb1b0a9f093dd523b9b12f6c0d9
-    - name: Configure universal AUv2
-      run: cmake -S . -B build-au -G Xcode -DVST3_SDK_ROOT="$RUNNER_TEMP/vst3sdk" -DSMTG_AUDIOUNIT_SDK_PATH="$RUNNER_TEMP/AudioUnitSDK" -DSMTG_ENABLE_AUV2_PLUGIN=ON
-        -DSMTG_CREATE_PLUGIN_LINK=OFF -DSMTG_BUILD_UNIVERSAL_BINARY=ON '-DCMAKE_OSX_ARCHITECTURES=x86_64;arm64' -DCMAKE_OSX_DEPLOYMENT_TARGET=10.14 -DGRAINS_EDITION=licensed
-        '-DCMAKE_CXX_FLAGS=-Werror=unguarded-availability -Werror=unguarded-availability-new' '-DCMAKE_OBJCXX_FLAGS=-Werror=unguarded-availability -Werror=unguarded-availability-new'
-    - name: Build Audio Unit
-      run: cmake --build build-au --config Release --target GrainsDosageAU --parallel 4
-    - name: Verify, sign and validate AU
-      run: |
-        set -euo pipefail
-        AU=build-au/AU/Release/GrainsDosage.component
-        python3 tools/check-au-deployment.py "$AU"
-        codesign --force --sign - --timestamp=none "$AU/Contents/Resources/plugin.vst3"
-        codesign --force --sign - --timestamp=none "$AU"
-        codesign --verify --deep --strict "$AU"
-        mkdir -p "$HOME/Library/Audio/Plug-Ins/Components"
-        ditto "$AU" "$HOME/Library/Audio/Plug-Ins/Components/GrainsDosage.component"
-        killall -9 AudioComponentRegistrar || true
-        auval -v aufx Gdsg Dmeg 2>&1 | tee auval.txt
-        grep -F 'AU VALIDATION SUCCEEDED.' auval.txt
-    - name: Package edition
-      run: |
-        mkdir -p package
-        ditto -c -k --sequesterRsrc --keepParent build-au/AU/Release/GrainsDosage.component package/GrainsDosage-licensed.component.zip
-        codesign --force --sign - --timestamp=none build-au/VST3/Release/GrainsDosage.vst3
-        ditto -c -k --sequesterRsrc --keepParent build-au/VST3/Release/GrainsDosage.vst3 package/GrainsDosage-licensed.vst3.zip
-        cp docs/licensing.md package/READ-ME-FIRST.md
-        cp auval.txt package/
-    - uses: actions/upload-artifact@v4
-      with:
-        name: GrainsDosage-licensed-macOS
-        path: package/
-        if-no-files-found: error
-    name: Licensed
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GrainsDosage-User-and-Publisher-Manuals
+          path: |
+            USER-MANUAL.html
+            USER-MANUAL.md
+            docs/license-generator.md
+            docs/licensing.md
+            docs/commercial-builds.md

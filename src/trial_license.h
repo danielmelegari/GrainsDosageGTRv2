@@ -9,6 +9,8 @@
 namespace grains::trial {
 struct License {
   std::string machine;
+  bool permanent = false;
+  std::string licenseId;
   Tick start = 0, end = 0;
   std::string payload;
   std::vector<unsigned char> signature;
@@ -34,7 +36,7 @@ inline bool parseLicense(const std::string& text, License& license) {
     pos = end + 1;
     if (i == 3) payloadEnd = pos;
   }
-  if (pos != text.size() || lines[0] != "GRAINS-TRIAL-1" || !machineIdValid(lines[1])) return false;
+  if (pos != text.size() || (lines[0] != "GRAINS-TRIAL-1" && lines[0] != "GRAINS-PERMANENT-1") || !machineIdValid(lines[1])) return false;
   License result;
   result.machine = std::string(lines[1]);
   auto number = [](std::string_view s, Tick& n) {
@@ -42,8 +44,13 @@ inline bool parseLicense(const std::string& text, License& license) {
     const auto r = std::from_chars(s.data(), s.data() + s.size(), n);
     return r.ec == std::errc{} && r.ptr == s.data() + s.size();
   };
-  if (!number(lines[2], result.start) || !number(lines[3], result.end) || result.start == 0 ||
-      result.end <= result.start || result.end - result.start != duration || lines[4].size() != 512) return false;
+  if (lines[0] == "GRAINS-PERMANENT-1") {
+    if (lines[2].size()!=32 || lines[3]!="3") return false;
+    for(char c:lines[2]) if(hexDigit(c)<0) return false;
+    result.permanent=true;result.licenseId=std::string(lines[2]);
+  } else if (!number(lines[2], result.start) || !number(lines[3], result.end) || result.start == 0 ||
+      result.end <= result.start || result.end - result.start != duration) return false;
+  if(lines[4].size()!=512) return false;
   result.signature.resize(256);
   for (size_t i = 0; i < result.signature.size(); ++i) {
     int a = hexDigit(lines[4][2*i]), b = hexDigit(lines[4][2*i+1]);

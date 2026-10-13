@@ -13,6 +13,10 @@
 #endif
 #ifdef Trial
   #define EditionSuffix "-14-Day-Trial"
+  #define Commercial
+#elif defined(Licensed)
+  #define EditionSuffix "-Licensed"
+  #define Commercial
 #else
   #define EditionSuffix ""
 #endif
@@ -46,14 +50,14 @@ Source: "{#ProjectDir}\{#BuildDir}\VST3\Release\GrainsDosage.vst3\*"; DestDir: "
 Source: "{#ProjectDir}\INSTALL-WINDOWS.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#ProjectDir}\USER-MANUAL.html"; DestDir: "{app}"; Flags: ignoreversion
 
-#ifdef Trial
+#ifdef Commercial
 Source: "{#ProjectDir}\{#BuildDir}\registration\Release\GrainsDosageRegistration.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#ProjectDir}\TRIAL-REGISTRATION.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 #endif
 
 [Icons]
-#ifdef Trial
+#ifdef Commercial
 Name: "{group}\GrainsDosage Trial Registration"; Filename: "{app}\GrainsDosageRegistration.exe"
 #endif
 Name: "{group}\GrainsDosage User Manual"; Filename: "{app}\USER-MANUAL.html"

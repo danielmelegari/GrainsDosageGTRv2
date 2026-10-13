@@ -1,8 +1,5 @@
 #include "engine.h"
 #include "audio_float_mode.h"
-#if defined(_WIN32) && GRAINS_TRIAL
-#include "trial_guard.h"
-#endif
 #include "license.h"
 #include "parameter_settings.h"
 #include "declick.h"
@@ -102,9 +99,6 @@ bool loadState(IBStream* stream, std::array<double,kCount>& p) {
 class Processor final : public AudioEffect {
   double licenseGain_=aztec::license::allowed.load(std::memory_order_relaxed)?1.:0.;
   qg::Engine engine_;
-#if defined(_WIN32) && GRAINS_TRIAL
-  grains::TrialGuard trial_;
-#endif
   qg::InputDeclick declick_;
   qg::MasterFx master_;
   std::array<double, kCount> p_{};
@@ -196,21 +190,7 @@ public:
   // the full parameter array through updateStates().
   tresult PLUGIN_API process(ProcessData& data) override {
     qg::ScopedAudioFloatMode audioFloatMode;
-#if defined(_WIN32) && GRAINS_TRIAL
-    if(trial_.expired()) {
-      for(int32 bus=0;bus<data.numOutputs;++bus) {
-        auto& out=data.outputs[bus];
-        out.silenceFlags=~uint64(0);
-        for(int32 ch=0;ch<out.numChannels;++ch) {
-          if(data.symbolicSampleSize==kSample32 && out.channelBuffers32 && out.channelBuffers32[ch])
-            std::memset(out.channelBuffers32[ch],0,size_t(data.numSamples)*sizeof(float));
-          else if(data.symbolicSampleSize==kSample64 && out.channelBuffers64 && out.channelBuffers64[ch])
-            std::memset(out.channelBuffers64[ch],0,size_t(data.numSamples)*sizeof(double));
-        }
-      }
-      return kResultOk;
-    }
-#endif
+
     // No allocations: fixed queue cursors, updated at the exact sample offset.
     std::array<IParamValueQueue*, kCount> queues{};
     std::array<int32,kCount> cursors{};std::array<int,kCount> queueIDs{};int queueCount=0;
@@ -271,10 +251,11 @@ public:
         auto& in = data.inputs[0]; auto& out = data.outputs[0];
         float l = (in.silenceFlags & 1) ? 0.f : in.channelBuffers32[0][n], r = in.numChannels > 1 ? ((in.silenceFlags & 2) ? 0.f : in.channelBuffers32[1][n]) : l;
         aztec::modCell().packed.store(engine_.lastModPacked_.load(std::memory_order_relaxed),std::memory_order_relaxed);
-        double dl=l,dr=r;declick_.process(dl,dr,value(p_,kInputDeclick)>=.5,value(p_,kDeclickSensitivity),s.bypass);l=float(dl);r=float(dr);
-        float a,b; engine_.process(l,r,beat,a,b);
-        if(s.bypass) { a=l; b=r; }else master_.process(a,b);
-        if(licenseGain_<1.){a=float(l+licenseGain_*(double(a)-l));b=float(r+licenseGain_*(double(b)-r));}
+        double dl=l,dr=r;declick_.process(dl,dr,value(p_,kInputDeclick)>=.5,value(p_,kDeclickSensitivity),s.bypass||licenseGain_<=0.);l=float(dl);r=float(dr);
+        const float rawL=float(declick_.dry(0)),rawR=float(declick_.dry(1));
+        float a=l,b=r;if(licenseGain_>0.)engine_.process(l,r,beat,a,b);
+        if(s.bypass) { a=l; b=r; }else if(licenseGain_>0.)master_.process(a,b);
+        if(licenseGain_<1.){a=float(rawL+licenseGain_*(double(a)-rawL));b=float(rawR+licenseGain_*(double(b)-rawR));}
         peak=std::max({peak,std::abs(double(a)),std::abs(double(b))});
         squareL+=double(a)*a;squareR+=double(b)*b;
         out.channelBuffers32[0][n] = a;
@@ -285,16 +266,19 @@ public:
         auto& in = data.inputs[0]; auto& out = data.outputs[0];
         double l = (in.silenceFlags & 1) ? 0. : in.channelBuffers64[0][n];
         double r = in.numChannels>1 ? ((in.silenceFlags & 2) ? 0. : in.channelBuffers64[1][n]) : l;
-        declick_.process(l,r,value(p_,kInputDeclick)>=.5,value(p_,kDeclickSensitivity),s.bypass);
-        float a,b; engine_.process(float(l),float(r),beat,a,b);
-        if(!s.bypass)master_.process(a,b);
-        if(licenseGain_<1.){a=float(l+licenseGain_*(double(a)-l));b=float(r+licenseGain_*(double(b)-r));}
-        peak=std::max({peak,std::abs(s.bypass?l:double(a)),std::abs(s.bypass?r:double(b))});
-        squareL+=(s.bypass?l:double(a))*(s.bypass?l:double(a));squareR+=(s.bypass?r:double(b))*(s.bypass?r:double(b));
-        out.channelBuffers64[0][n] = s.bypass ? l : a;
-        if(out.numChannels > 1) out.channelBuffers64[1][n] = s.bypass ? r : b;
-        if(out.channelBuffers64[0][n]!=0.) out.silenceFlags &= ~uint64(1);
-        if(out.numChannels>1 && out.channelBuffers64[1][n]!=0.) out.silenceFlags &= ~uint64(2);
+        declick_.process(l,r,value(p_,kInputDeclick)>=.5,value(p_,kDeclickSensitivity),s.bypass||licenseGain_<=0.);
+        const double rawL=declick_.dry(0),rawR=declick_.dry(1);
+        float a=float(l),b=float(r);if(licenseGain_>0.)engine_.process(float(l),float(r),beat,a,b);
+        if(!s.bypass&&licenseGain_>0.)master_.process(a,b);
+        const double wetL=s.bypass?l:double(a),wetR=s.bypass?r:double(b);
+        const double finalL=licenseGain_<1.?rawL+licenseGain_*(wetL-rawL):wetL;
+        const double finalR=licenseGain_<1.?rawR+licenseGain_*(wetR-rawR):wetR;
+        peak=std::max({peak,std::abs(finalL),std::abs(finalR)});
+        squareL+=finalL*finalL;squareR+=finalR*finalR;
+        out.channelBuffers64[0][n]=finalL;
+        if(out.numChannels>1)out.channelBuffers64[1][n]=finalR;
+        if(finalL!=0.)out.silenceFlags&=~uint64(1);
+        if(out.numChannels>1&&finalR!=0.)out.silenceFlags&=~uint64(2);
       }
     }
     if(data.outputParameterChanges&&data.numSamples>0){

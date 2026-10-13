@@ -1,3 +1,12 @@
 artifacts/
 **/__pycache__/
 *private*.pem
+
+# Publisher secrets and activation history must never be committed.
+*.pem
+*.p12
+*.pfx
+*.key
+*.sqlite
+*.sqlite-*
+build-license-generator/

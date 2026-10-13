@@ -1,0 +1,39 @@
+#include "crypto.h"
+#include "ledger.h"
+#include "../../src/trial_license.h"
+#include <cassert>
+#include <fstream>
+#include <iostream>
+using namespace grains::issuer;
+static void write(const std::string& path,const std::string& value){std::ofstream file(path);file<<value;assert(file.good());}
+int main(int argc,char** argv){@autoreleasepool{
+ assert(argc==2);const std::string root=argv[1];NSData* pem=[NSData dataWithContentsOfFile:@((root+"/private.pem").c_str())];SecKeyRef key=importKey(pem,false);assert(matches(key));
+ // Isolated Keychain exercises one-time persistence and normal signing lookup.
+ SecKeychainRef previous=nullptr,temporary=nullptr;CFArrayRef previousSearch=nullptr;
+ assert(SecKeychainCopyDefault(&previous)==errSecSuccess);assert(SecKeychainCopySearchList(&previousSearch)==errSecSuccess);
+ const std::string keychainPath=root+"/issuer-test.keychain";const char password[]="temporary-test-only";
+ assert(SecKeychainCreate(keychainPath.c_str(),sizeof(password)-1,password,false,nullptr,&temporary)==errSecSuccess);
+ assert(SecKeychainSetDefault(temporary)==errSecSuccess);
+ const void* entry=temporary;CFArrayRef list=CFArrayCreate(nullptr,&entry,1,&kCFTypeArrayCallBacks);assert(SecKeychainSetSearchList(list)==errSecSuccess);CFRelease(list);
+ storeKey(key);SecKeyRef restored=loadKey();assert(matches(restored));assert(!signPayload(restored,"test persistence",true).empty());CFRelease(restored);
+ storeLedgerPath(@((root+"/generator.sqlite").c_str()));assert([ledgerPath() isEqualToString:@((root+"/generator.sqlite").c_str())]);
+ Ledger db(root+"/generator.sqlite",fingerprint(),true);Grant g;const std::string device="GDDEV2-"+std::string(64,'a'),id="GDL2-0123456789abcdef0123456789abcdef";
+ const auto signMac=[&](const Grant& grant){return signPayload(key,grant.payload,true);};
+ write(root+"/serial",db.issue(false,device,"Test customer","",id,1700000000,signMac,g));
+ const int64_t now=(int64_t)[NSDate.date timeIntervalSince1970];
+ write(root+"/signed-trial",db.issue(true,device,"","","",now-10,signMac,g));
+ write(root+"/expired-trial",signPayload(key,"GRAINS-DOSAGE-TRIAL-V2:"+std::string(64,'a')+":"+std::to_string(now-1209700)+":"+std::to_string(now-100),true));
+ write(root+"/future-trial",signPayload(key,"GRAINS-DOSAGE-TRIAL-V2:"+std::string(64,'a')+":"+std::to_string(now+100)+":"+std::to_string(now+1209700),true));
+ write(root+"/wrong-trial-period",signPayload(key,"GRAINS-DOSAGE-TRIAL-V2:"+std::string(64,'a')+":"+std::to_string(now-10)+":"+std::to_string(now+3600),true));
+ write(root+"/wrong-trial-device",signPayload(key,"GRAINS-DOSAGE-TRIAL-V2:"+std::string(64,'b')+":"+std::to_string(now-10)+":"+std::to_string(now-10+1209600),true));
+ for(bool trial:{false,true}){
+  auto code=db.issue(trial,std::string(64,'c'),"Test customer","",id,now,[&](const Grant& grant){return signPayload(key,grant.payload,false);},g);
+  grains::trial::License license;assert(grains::trial::parseLicense(code,license));assert(license.permanent==!trial);
+  write(root+(trial?"/windows-trial":"/windows-permanent"),code);
+ }
+ NSData* wrong=[NSData dataWithContentsOfFile:@((root+"/wrong-private.pem").c_str())];bool rejected=false;try{SecKeyRef bad=importKey(wrong,false);CFRelease(bad);}catch(...){rejected=true;}assert(rejected);
+ CFRelease(key);
+ assert(SecKeychainSetDefault(previous)==errSecSuccess);assert(SecKeychainSetSearchList(previousSearch)==errSecSuccess);
+ assert(SecKeychainDelete(temporary)==errSecSuccess);CFRelease(temporary);CFRelease(previous);CFRelease(previousSearch);
+ std::cout<<"PASS: native generator imports matching RSA, rejects another key, signs both platforms and verifies its signatures\n";
+}return 0;}

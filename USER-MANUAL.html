@@ -30,18 +30,19 @@ Applies to the updated <code>work/mockup-purple-skin</code> branch. The pages ar
 <p>Start Cubase after installation. Open <strong>Studio → VST Plug-in Manager</strong> and rescan if GrainsDosage is not listed. Insert it as an <strong>audio effect</strong>, not as an instrument. It needs incoming audio.</p>
 <h3 id="offline-registration">Offline registration</h3>
 <ol>
-<li>Open <strong>GrainsDosage Trial Registration</strong> from the Windows Start menu.</li>
-<li>Choose <strong>Yes</strong> to export <code>GrainsDosage-machine-request.json</code> to the Desktop.</li>
-<li>Send this request to the publisher.</li>
-<li>When the publisher returns <code>trial.license</code>, open Registration again, choose <strong>No</strong>, and select that file.</li>
-<li>Check the displayed start and expiry dates, then reload the plugin in Cubase.</li>
+<li>Click <strong>ACTIVATE</strong> in the plugin header.</li>
+<li>Click <strong>Copy Machine ID</strong> and send the full code to the publisher. Trial mode does not need a License ID.</li>
+<li>Open <code>GrainsDosage-Trial-Key.txt</code> or <code>GrainsDosage-Permanent-Key.txt</code>, copy its entire content and paste it into the activation field.</li>
+<li>Click <strong>Activate</strong>. Processing becomes available immediately without restarting Cubase.</li>
+<li>Check <strong>TRIAL ACTIVE — N DAYS</strong>, <strong>TRIAL EXPIRED</strong>, or <strong>LICENSED</strong> in the header.</li>
 </ol>
+<p>The separate <strong>GrainsDosage Trial Registration</strong> Start-menu utility remains available: <strong>Yes</strong> exports a JSON machine request, and <strong>No</strong> imports the TXT or a legacy <code>.license</code> file. Reload the plugin after using this external utility.</p>
 <p>The plugin and registration tool make no online activation requests. A license is signed for a machine ID derived locally from Windows and the system volume. It will not enable audio on another computer. Reinstalling Windows or replacing the system volume can change the ID; contact the publisher if that happens.</p>
 <p>The license is installed for the current Windows account at <code>%LOCALAPPDATA%\GrainsDosage-Trial\trial.license</code>. Another account on the same registered machine can install that same signed license, retaining the same end date.</p>
 <h3 id="exactly-what-14-days-means">Exactly what “14 days” means</h3>
 <p>The trial enables full processing during the <strong>14 calendar days between the signed start and end timestamps</strong>. It is not 14 days of accumulated playback, and it does not restart when Cubase opens. By default, the publisher's issuing tool starts the period when it issues the license; the publisher can choose a later start date before issuing it.</p>
 <p>There is <strong>no one-hour session limit</strong>. A license received several days after its start has only the remaining calendar time. Registration shows the dates in UTC each time it opens. Artifact download retention on GitHub is separate from the trial period.</p>
-<p>Before activation, before a future start, after expiry, or when protected state cannot be validated, the trial produces silence. It does not shut down Cubase or erase projects. Keep the Windows clock correct. Reinstalling or deleting trial files does not legitimately extend the signed period.</p>
+<p>Before activation, before a future start, after expiry, or when protected state cannot be validated, the effect passes the original signal with its normal 32-sample latency. At expiry, it fades from processing to dry over 20 milliseconds; it does not silence Cubase or erase projects. Keep the Windows clock correct. Reinstalling or deleting trial files does not legitimately extend the signed period.</p>
 <h2 id="2-first-session-in-cubase">2. First session in Cubase</h2>
 <ol>
 <li>Load an audio loop on a stereo audio track and enable a repeating region in Cubase.</li>
@@ -768,6 +769,8 @@ Applies to the updated <code>work/mockup-purple-skin</code> branch. The pages ar
 <h3 id="changes-are-not-audible">Changes are not audible</h3>
 <p>Check module On, module Mix and master Mix. For an LFO, check its On, Depth, destination, Amount and polarity. For Morph, check On, destination and axis amount. A mode-specific Reslice control only affects its relevant mode; cut-level values can wait until the next cut. A held module loop can keep repeating older output while you change controls upstream.</p>
 <h2 id="17-publisher-issuing-offline-trials">17. Publisher: issuing offline trials</h2>
+<p>For normal issuance on macOS Mojave 10.14 Intel, use <strong>GrainsDosage License Generator.app</strong>. Its <a href="https://github.com/danielmelegari/GrainsDosageGTRv2/blob/work/mockup-purple-skin/docs/license-generator.md">publisher guide</a> covers one-time setup of the existing RSA private key in Keychain, the persistent SQLite register, 14-day trials, and permanent licenses for up to three devices. It exports only <code>GrainsDosage-Trial-Key.txt</code> or <code>GrainsDosage-Permanent-Key.txt</code>. Reissuing a trial for the same machine retains the original dates. Windows registration accepts either TXT and shows whether the license is trial or permanent. Signed GDDEV2 trials and Windows permanent codes require the matching updated plugin build.</p>
+<p>The command-line alternative below is for existing Windows publisher workflows; it does not automatically update the native generator’s ledger. Keep one authoritative issuance history.</p>
 <p>Customers need the signed license, not the private signing key. On the private issuing computer, install Python and <code>cryptography</code>, then use the existing private key matching the public key included in this build:</p>
 <pre><code class="language-text">python tools/issue_trial_license.py issue --key /private/path/publisher-private.pem --request GrainsDosage-machine-request.json --out trial.license
 </code></pre>

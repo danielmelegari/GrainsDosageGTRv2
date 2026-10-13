@@ -15,6 +15,39 @@ int main() {
   assert(parseLicense(text, license));
   license.signature[10] ^= 1;
   assert(!signatureValid(license));
+  // A fresh in-memory test key verifies the new permanent payload through CNG.
+  // No production/test private key is persisted or packaged.
+  {
+    Algorithm rsa;CryptoKey signing;
+    assert(BCryptOpenAlgorithmProvider(&rsa.value,BCRYPT_RSA_ALGORITHM,nullptr,0)>=0);
+    assert(BCryptGenerateKeyPair(rsa.value,&signing.value,2048,0)>=0);
+    assert(BCryptFinalizeKeyPair(signing.value,0)>=0);
+    ULONG size=0;
+    assert(BCryptExportKey(signing.value,nullptr,BCRYPT_RSAPUBLIC_BLOB,nullptr,0,&size,0)>=0);
+    std::vector<BYTE> pub(size);
+    assert(BCryptExportKey(signing.value,nullptr,BCRYPT_RSAPUBLIC_BLOB,pub.data(),ULONG(pub.size()),&size,0)>=0);
+    const std::string payload="GRAINS-PERMANENT-1\n"+machineId()+"\n"+std::string(32,'a')+"\n3\n";
+    std::array<BYTE,32> hash{};assert(sha256(payload,hash));
+    BCRYPT_PKCS1_PADDING_INFO padding{BCRYPT_SHA256_ALGORITHM};std::vector<BYTE> signature(256);
+    assert(BCryptSignHash(signing.value,&padding,hash.data(),ULONG(hash.size()),signature.data(),ULONG(signature.size()),&size,BCRYPT_PAD_PKCS1)>=0);
+    std::string signedText=payload;const char* digits="0123456789abcdef";
+    for(auto b:signature){signedText+=digits[b>>4];signedText+=digits[b&15];}signedText+='\n';
+    License permanent;assert(parseLicense(signedText,permanent));assert(permanent.permanent);
+    assert(signatureValid(permanent,pub.data(),ULONG(pub.size())));
+    assert(verifyLicenseText(signedText,permanent,machineId(),wallTime(),true,pub.data(),ULONG(pub.size())));
+    assert(!verifyLicenseText(signedText,permanent,std::string(64,'f'),wallTime(),true,pub.data(),ULONG(pub.size())));
+    auto altered=signedText;altered[25]^=1;assert(!verifyLicenseText(altered,permanent,machineId(),wallTime(),true,pub.data(),ULONG(pub.size())));
+    const Tick issued=wallTime();
+    const std::string trialPayload="GRAINS-TRIAL-1\n"+machineId()+"\n"+std::to_string(issued)+"\n"+std::to_string(issued+duration)+"\n";
+    assert(sha256(trialPayload,hash));assert(BCryptSignHash(signing.value,&padding,hash.data(),ULONG(hash.size()),signature.data(),ULONG(signature.size()),&size,BCRYPT_PAD_PKCS1)>=0);
+    std::string trialText=trialPayload;for(auto b:signature){trialText+=digits[b>>4];trialText+=digits[b&15];}trialText+='\n';
+    License signedTrial;
+    assert(verifyLicenseText(trialText,signedTrial,machineId(),issued,true,pub.data(),ULONG(pub.size())));
+    assert(verifyLicenseText(trialText,signedTrial,machineId(),issued+7200*second,true,pub.data(),ULONG(pub.size())));
+    assert(!verifyLicenseText(trialText,signedTrial,machineId(),issued+duration,true,pub.data(),ULONG(pub.size())));
+    assert(!verifyLicenseText(trialText,signedTrial,machineId(),issued-1,true,pub.data(),ULONG(pub.size())));
+    permanent.payload[7]^=1;assert(!signatureValid(permanent,pub.data(),ULONG(pub.size())));
+  }
   assert(machineIdValid(machineId()));
   assert(machineId() == machineId());
   assert(!readLicense(L"tests/trial_test.license", license, false)); // Wrong machine.

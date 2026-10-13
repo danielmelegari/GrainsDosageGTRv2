@@ -21,13 +21,14 @@ int main(int argc, char** argv) {
   std::wstring status=L"No valid license is installed for this computer.";
   if(readLicense(installedPath,installed,false)){
     const auto now=wallTime();
-    status=(now<installed.start?L"Trial has not started.":now>=installed.end?L"Trial has expired.":L"Trial is within its signed 14-day period.");
-    status+=L"\nStarts: "+date(installed.start)+L"\nExpires: "+date(installed.end);
+    if(installed.permanent)status=L"Permanent license installed for this computer. License ID: GDL2-"+std::wstring(installed.licenseId.begin(),installed.licenseId.end());
+    else {status=(now<installed.start?L"Trial has not started.":now>=installed.end?L"Trial has expired.":L"Trial is within its signed 14-day period.");
+    status+=L"\nStarts: "+date(installed.start)+L"\nExpires: "+date(installed.end);}
   }
   if(argc==2&&std::string(argv[1])=="--status"){std::wcout<<status<<L'\n';return 0;}
   const std::wstring prompt=status+L"\n\n"+
     L"Choose Yes to save a machine registration request on your Desktop. Send that file to the publisher.\n\n"
-    L"Choose No to install the signed trial.license file you received from the publisher.\n\n"
+    L"Choose No to install the signed TXT license file you received from the publisher.\n\n"
     L"The trial lasts 14 calendar days from its signed start, with no one-hour session limit.";
   const int choice = MessageBoxW(nullptr, prompt.c_str(),
     L"GrainsDosage Offline Trial Registration", MB_YESNOCANCEL | MB_ICONINFORMATION);
@@ -48,14 +49,14 @@ int main(int argc, char** argv) {
   wchar_t path[32768]{};
   OPENFILENAMEW dialog{};
   dialog.lStructSize = sizeof(dialog);
-  dialog.lpstrFilter = L"Trial licenses (*.license)\0*.license\0\0";
+  dialog.lpstrFilter = L"GrainsDosage licenses (*.txt;*.license)\0*.txt;*.license\0\0";
   dialog.lpstrFile = path;
   dialog.nMaxFile = 32768;
   dialog.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST;
   if (!GetOpenFileNameW(&dialog)) return 0;
   License license;
   // A future-dated signed license can be installed before its start date.
-  if (!readLicense(path, license, false) || wallTime() >= license.end) {
+  if (!readLicense(path, license, false) || (!license.permanent && wallTime() >= license.end)) {
     MessageBoxW(nullptr, L"License is invalid, expired, or registered to another computer.", L"GrainsDosage", MB_OK | MB_ICONERROR);
     return 1;
   }
@@ -64,7 +65,7 @@ int main(int argc, char** argv) {
   const auto destination = directory + L"\\trial.license";
   // Allow choosing the already installed file without overwriting itself.
   if (std::filesystem::path(path) != std::filesystem::path(destination) && !CopyFileW(path, destination.c_str(), FALSE)) return 1;
-  const auto message = L"License installed for this computer.\n\nStarts: " + date(license.start) +
+  const std::wstring message = license.permanent ? L"Permanent license installed for this computer. Reload the plugin in your DAW." : L"License installed for this computer.\n\nStarts: " + date(license.start) +
     L"\nExpires: " + date(license.end) + L"\n\nReload the plugin in your DAW.";
   MessageBoxW(nullptr, message.c_str(), L"GrainsDosage", MB_OK | MB_ICONINFORMATION);
   return 0;

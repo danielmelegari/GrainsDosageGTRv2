@@ -8,7 +8,7 @@ namespace qg {
 // sustained edges and longer musical transients are deliberately left alone.
 class InputDeclick {
  struct Channel {std::array<double,128> raw{},work{};double slope=0.,previous=0.;};
- std::array<Channel,2> channels_{};int write_=0;double blend_=0.,slew_=1./480.;
+ std::array<Channel,2> channels_{};std::array<double,2> dry_{};int write_=0;double blend_=0.,slew_=1./480.;
  static int index(int n){return n&127;}
  double repair(Channel& c,int at,double sensitivity){
   const double before=c.work[index(at-1)],prior=c.work[index(at-2)];
@@ -32,11 +32,12 @@ class InputDeclick {
  }
 public:
  static constexpr unsigned latency=32;
- void prepare(double rate,bool enabled){channels_={};write_=0;blend_=enabled?1.:0.;slew_=1./std::max(1.,rate*.01);}
+ void prepare(double rate,bool enabled){channels_={};dry_={};write_=0;blend_=enabled?1.:0.;slew_=1./std::max(1.,rate*.01);}
+ double dry(unsigned channel)const{return dry_[channel];}
  void process(double& l,double& r,bool enabled,double sensitivity,bool bypass=false){
   sensitivity=std::clamp(sensitivity,0.,1.);double input[2]={l,r},output[2]{};
   blend_+=std::clamp((enabled?1.:0.)-blend_,-slew_,slew_);
-  for(int ch=0;ch<2;++ch){auto& c=channels_[ch];c.raw[write_]=c.work[write_]=input[ch];int at=index(write_-int(latency));double dry=c.raw[at],clean=repair(c,at,sensitivity);output[ch]=bypass?dry:dry+blend_*(clean-dry);}
+  for(int ch=0;ch<2;++ch){auto& c=channels_[ch];c.raw[write_]=c.work[write_]=input[ch];int at=index(write_-int(latency));double dry=c.raw[at];dry_[ch]=dry;double clean=bypass?dry:repair(c,at,sensitivity);output[ch]=bypass?dry:dry+blend_*(clean-dry);}
   write_=index(write_+1);l=output[0];r=output[1];
  }
 };

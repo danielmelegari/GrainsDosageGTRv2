@@ -6,15 +6,20 @@ one edition at a time. Trial and Licensed replace each other; do not keep rename
 duplicates installed. The existing development builds remain unrestricted for
 internal testing and must not be distributed as commercial builds.
 
-Trial starts when the plugin window is first opened, not when the DAW scans it.
-It lasts 14 calendar days on the current macOS user account. The start and last
-seen time are stored in Keychain, outside presets, plugin bundles and projects.
-Reopening, updating or reinstalling the plugin does not reset that record.
+Trial requires a publisher-signed, machine-bound activation. Send the complete
+GDDEV2 code to the publisher and paste the GDS2 code from GrainsDosage-Trial-Key.txt.
+It lasts 14 calendar days from its signed UTC start (first issuance in the native
+generator), regardless of DAW use. The last seen time is protected in Keychain;
+the signed interval cannot be extended by reinstalling or deleting local state.
+An unsigned first-open record from older versions no longer authorizes a trial.
 Significant clock rollback disables the trial until the clock is corrected.
 After expiry the header says TRIAL EXPIRED and processing fades to dry over
 20 milliseconds. The interface and saved settings remain available. A background
-check enforces expiration even with the editor closed (within 15 seconds).
-No Keychain, filesystem or signature operations occur on the audio thread.
+check enforces expiration even with the editor closed (within one second).
+No Keychain, filesystem or signature operations occur on the audio thread. The
+verified activation is cached; protected trial storage is refreshed every 30 seconds
+while a lightweight background clock check runs each second. Transient storage
+errors are retried without extending the signed expiry.
 
 Licensed requires a valid device activation before enabling processing. A valid
 activation also permanently unlocks Trial. Activation is offline and shared by
@@ -53,7 +58,7 @@ bypass the three-device policy. Exchange any previously delivered GDS1 serial fo
 one new GDL2 license and device activations. Keep the original customer record to
 avoid creating multiple replacement licenses. Previously shipped binaries cannot
 be remotely upgraded or revoked and will still accept the old serials.
-The existing signing key is retained; no trial record, project or preset changes.
+The existing signing key is retained; projects and presets are unchanged.
 
 ## Publisher: issuing activations
 
@@ -79,12 +84,13 @@ The ledger defaults to `licenses.sqlite` beside the private key. Send only the
 activation text file to the customer. For their second and third computers, reuse
 the SAME license ID with the new Device Code. A fourth device is refused.
 If exporting the activation file fails, retry that same device with a valid new
-output filename; the reserved slot is retained safely. No payment/email service
-or Windows commercial licensing is included.
+output filename; the reserved slot is retained safely. No payment/email service is included. The native generator also issues machine-bound
+Windows permanent licenses for the updated Windows trial build.
 
-Trial remains 14 calendar days from the first editor opening, stored in Keychain
-outside the plugin and presets. This offline trial is not tamper-proof against
-Keychain deletion, binary modification or restoration of a system backup.
+Use [GrainsDosage License Generator.app](license-generator.md) on Mojave Intel for
+normal trial/permanent issuance with one-time Keychain setup and the same SQLite
+ledger. Offline protection cannot prevent binary modification, cloned hardware
+identity or restoration of a complete system backup.
 
 ## Editable module graphics
 
