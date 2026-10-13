@@ -10,6 +10,14 @@ La build automatica è firmata ad hoc, senza certificato Developer ID o notarizz
 
 Il workflow verifica architettura Intel e deployment minimo 10.14, compila con controlli sulle API e testa firme e registro. L’esecuzione su un Mac fisico Mojave resta un controllo distinto dall’esecuzione del runner macOS moderno.
 
+## Build abbinate alla chiave del produttore — 1.1.1 / plugin 0.13.3
+
+Questa build usa la chiave pubblica ricevuta in `GrainsDosage-Public-Key.json`, impronta SHA-256 `f41e04335d43d1c44322072831bd83266500da8a04cf98d0fa3f0f28b75d5dca`.
+
+Se hai già creato quella chiave sul Mac, **non crearne un'altra e non importare un PEM**. Installa il generatore **1.1.1 sullo stesso Mac**, apri **Configurazione iniziale… → Nuovo registro (prima emissione)** e poi genera Trial o Permanent normalmente. La chiave nel Portachiavi viene riconosciuta automaticamente. Se un registro è già configurato, usalo senza ricrearlo. I destinatari devono installare i plugin **0.13.3 o successivi abbinati a questa chiave**.
+
+Le vecchie chiavi pubbliche restano nei verificatori per accettare i codici già firmati, inclusi i GDS2 permanenti, senza modificare identità del plugin o sessioni. Il generatore firma soltanto con la nuova chiave abbinata. Le build precedenti non possono riconoscere le nuove firme. Nessuna chiave privata è stata ricevuta o aggiunta al repository.
+
 ## Prima volta senza PEM — versione 1.1
 
 Il pacchetto non contiene una chiave privata. Se non hai mai avuto il PEM del produttore:

@@ -3,6 +3,7 @@
 #include "license_test_key.h"
 #else
 #include "license_public_key.h"
+#include "license_legacy_public_key.h"
 #endif
 #import <Foundation/Foundation.h>
 #import <Security/Security.h>
@@ -87,10 +88,15 @@ bool verify(NSString* serial,int64_t* trialStart=nullptr,int64_t* trialEnd=nullp
  }else return false;
  if(device.length!=64||[device rangeOfCharacterFromSet:invalid].location!=NSNotFound)return false;
  const auto local=deviceCode();if(local.empty()||local!="GDDEV2-"+std::string(device.UTF8String))return false;
- NSData* keyData=[NSData dataWithBytes:publicKey length:sizeof(publicKey)];
  NSDictionary* attrs=@{(__bridge id)kSecAttrKeyType:(__bridge id)kSecAttrKeyTypeRSA,(__bridge id)kSecAttrKeyClass:(__bridge id)kSecAttrKeyClassPublic,(__bridge id)kSecAttrKeySizeInBits:@2048};
- SecKeyRef key=SecKeyCreateWithData((__bridge CFDataRef)keyData,(__bridge CFDictionaryRef)attrs,nullptr);if(!key)return false;
- bool ok=SecKeyVerifySignature(key,kSecKeyAlgorithmRSASignatureMessagePKCS1v15SHA256,(__bridge CFDataRef)payload,(__bridge CFDataRef)signature,nullptr);CFRelease(key);if(ok){if(trialStart)*trialStart=start;if(trialEnd)*trialEnd=end;}return ok;
+ auto verifies=[&](const unsigned char* bytes,size_t size){
+  NSData* keyData=[NSData dataWithBytes:bytes length:size];
+  SecKeyRef key=SecKeyCreateWithData((__bridge CFDataRef)keyData,(__bridge CFDictionaryRef)attrs,nullptr);if(!key)return false;
+  bool valid=SecKeyVerifySignature(key,kSecKeyAlgorithmRSASignatureMessagePKCS1v15SHA256,(__bridge CFDataRef)payload,(__bridge CFDataRef)signature,nullptr);CFRelease(key);return valid;
+ };
+ // Both trusted keys require the same signed payload, identity and time checks.
+ bool ok=verifies(publicKey,sizeof(publicKey))||verifies(legacyPublicKey,sizeof(legacyPublicKey));
+ if(ok){if(trialStart)*trialStart=start;if(trialEnd)*trialEnd=end;}return ok;
 }
 class Manager {
  std::mutex mutex;std::condition_variable wake;bool stopping=false;std::thread worker;

@@ -50,7 +50,14 @@ using namespace grains::issuer;
   [self button:@"Esporta chiave pubblica" action:@selector(exportPublic:) frame:NSMakeRect(365,86,210,32)];
   self.status=[self label:@"" frame:NSMakeRect(30,18,700,60) size:12];self.status.maximumNumberOfLines=3;self.status.lineBreakMode=NSLineBreakByWordWrapping;
   [self changeMode:nil];[self.window center];[self.window makeKeyAndOrderFront:nil];[NSApp activateIgnoringOtherApps:YES];
-  try{NSString* path=ledgerPath();self.status.stringValue=path?@"Configurato. Il registro conserva i dispositivi e le date trial già emesse.":@"Prima configurazione: importa la tua chiave oppure creala su questo Mac. Non serve possedere già un PEM.";}catch(const std::exception& e){[self error:@(e.what())];}
+  try{
+    NSString* path=ledgerPath();
+    SecKeyRef ref=loadKey();std::unique_ptr<std::remove_pointer_t<SecKeyRef>,decltype(&CFRelease)> key(ref,&CFRelease);
+    self.status.stringValue=path?@"Configurato. Il registro conserva i dispositivi e le date trial già emesse.":
+      matches(ref)?@"La tua chiave è riconosciuta. Premi Genera oppure Configurazione iniziale per configurare il registro. Non creare un’altra chiave.":
+      ref?@"Chiave già salvata: esporta solo il file pubblico e installa le build abbinate. Non creare un’altra chiave.":
+      @"Prima configurazione: importa la tua chiave oppure creala su questo Mac. Non serve possedere già un PEM.";
+  }catch(const std::exception& e){[self error:@(e.what())];}
 }
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication*)sender{(void)sender;return YES;}
 - (void)controlTextDidChange:(NSNotification*)note{if(note.object==self.customer)self.license.stringValue=@"";}
@@ -113,7 +120,10 @@ using namespace grains::issuer;
 - (void)generateLicense:(id)sender {
   (void)sender;self.output.string=@"";
   try{
-    NSString* path=ledgerPath();if(!path)throw std::runtime_error("Apri Configurazione iniziale: importa il PEM oppure crea la tua chiave su questo Mac. Se l’hai già creata, invia il file pubblico e installa le build abbinate prima di emettere licenze.");
+    NSString* path=ledgerPath();
+    // A paired first-time publisher can complete the ledger setup directly
+    // from Generate, instead of seeing the old circular import/create message.
+    if(!path){[self setup:nil];path=ledgerPath();if(!path)return;}
     SecKeyRef ref=loadKey();std::unique_ptr<std::remove_pointer_t<SecKeyRef>,decltype(&CFRelease)> key(ref,&CFRelease);if(!ref)throw std::runtime_error("Chiave assente nel Portachiavi. Ripristinare il backup della chiave originale.");
     NSString* machine=[self.machine.string stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
     // Windows registration requests can be pasted in full as JSON, too.

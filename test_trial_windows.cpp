@@ -35,14 +35,21 @@ int main() {
     License permanent;assert(parseLicense(signedText,permanent));assert(permanent.permanent);
     assert(signatureValid(permanent,pub.data(),ULONG(pub.size())));
     assert(verifyLicenseText(signedText,permanent,machineId(),wallTime(),true,pub.data(),ULONG(pub.size())));
+    // Simulate a retired signing key: current key fails, retained key succeeds.
+    assert(verifyLicenseText(signedText,permanent,machineId(),wallTime(),true,trialPublicKey,sizeof(trialPublicKey),pub.data(),ULONG(pub.size())));
+    assert(!verifyLicenseText(signedText,permanent,machineId(),wallTime(),true,trialPublicKey,sizeof(trialPublicKey),nullptr,0));
+    assert(!verifyLicenseText(signedText,permanent,std::string(64,'f'),wallTime(),true,trialPublicKey,sizeof(trialPublicKey),pub.data(),ULONG(pub.size())));
     assert(!verifyLicenseText(signedText,permanent,std::string(64,'f'),wallTime(),true,pub.data(),ULONG(pub.size())));
     auto altered=signedText;altered[25]^=1;assert(!verifyLicenseText(altered,permanent,machineId(),wallTime(),true,pub.data(),ULONG(pub.size())));
+    assert(!verifyLicenseText(altered,permanent,machineId(),wallTime(),true,trialPublicKey,sizeof(trialPublicKey),pub.data(),ULONG(pub.size())));
     const Tick issued=wallTime();
     const std::string trialPayload="GRAINS-TRIAL-1\n"+machineId()+"\n"+std::to_string(issued)+"\n"+std::to_string(issued+duration)+"\n";
     assert(sha256(trialPayload,hash));assert(BCryptSignHash(signing.value,&padding,hash.data(),ULONG(hash.size()),signature.data(),ULONG(signature.size()),&size,BCRYPT_PAD_PKCS1)>=0);
     std::string trialText=trialPayload;for(auto b:signature){trialText+=digits[b>>4];trialText+=digits[b&15];}trialText+='\n';
     License signedTrial;
     assert(verifyLicenseText(trialText,signedTrial,machineId(),issued,true,pub.data(),ULONG(pub.size())));
+    assert(verifyLicenseText(trialText,signedTrial,machineId(),issued,true,trialPublicKey,sizeof(trialPublicKey),pub.data(),ULONG(pub.size())));
+    assert(!verifyLicenseText(trialText,signedTrial,machineId(),issued+duration,true,trialPublicKey,sizeof(trialPublicKey),pub.data(),ULONG(pub.size())));
     assert(verifyLicenseText(trialText,signedTrial,machineId(),issued+7200*second,true,pub.data(),ULONG(pub.size())));
     assert(!verifyLicenseText(trialText,signedTrial,machineId(),issued+duration,true,pub.data(),ULONG(pub.size())));
     assert(!verifyLicenseText(trialText,signedTrial,machineId(),issued-1,true,pub.data(),ULONG(pub.size())));

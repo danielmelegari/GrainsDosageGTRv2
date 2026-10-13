@@ -5,6 +5,7 @@
 #error "Configure the publisher public key before building licensed trial targets"
 #endif
 #include GRAINS_TRIAL_PUBLIC_KEY_HEADER
+#include "trial_legacy_public_key.h"
 #include <bcrypt.h>
 #include <filesystem>
 #include <fstream>
@@ -73,10 +74,13 @@ inline std::wstring licenseDirectory() {
 }
 inline bool verifyLicenseText(const std::string& text, License& license,
                               const std::string& expectedMachine, Tick now, bool checkTime=true,
-                              const BYTE* key=trialPublicKey,ULONG keySize=sizeof(trialPublicKey)) {
+                              const BYTE* key=trialPublicKey,ULONG keySize=sizeof(trialPublicKey),
+                              const BYTE* previousKey=legacyTrialPublicKey,ULONG previousKeySize=sizeof(legacyTrialPublicKey)) {
   License parsed;
   if(!machineIdValid(expectedMachine)||!parseLicense(text,parsed)||
-     !signatureValid(parsed,key,keySize)||parsed.machine!=expectedMachine)return false;
+     parsed.machine!=expectedMachine)return false;
+  if(!signatureValid(parsed,key,keySize)&&
+     !(previousKey&&previousKeySize&&signatureValid(parsed,previousKey,previousKeySize)))return false;
   if(checkTime&&!parsed.permanent&&(now<parsed.start||now>=parsed.end))return false;
   license=std::move(parsed);return true;
 }
