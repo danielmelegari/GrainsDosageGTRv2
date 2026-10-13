@@ -10,10 +10,24 @@ La build automatica è firmata ad hoc, senza certificato Developer ID o notarizz
 
 Il workflow verifica architettura Intel e deployment minimo 10.14, compila con controlli sulle API e testa firme e registro. L’esecuzione su un Mac fisico Mojave resta un controllo distinto dall’esecuzione del runner macOS moderno.
 
-## Configurazione iniziale sicura — una sola volta
+## Prima volta senza PEM — versione 1.1
+
+Il pacchetto non contiene una chiave privata. Se non hai mai avuto il PEM del produttore:
+
+1. Apri **Configurazione iniziale… → Crea la mia chiave su questo Mac**. L’app crea una chiave RSA-2048 usando macOS e la conserva nel Portachiavi login. Non serve il Terminale. Una chiave già presente non viene sostituita.
+2. Salva **GrainsDosage-Public-Key.json**. Questo file contiene esclusivamente la chiave **pubblica** e la sua impronta SHA-256: è il solo file da inviare a chi prepara le build.
+3. Nel menu dell’app scegli **Backup chiave privata cifrato…**. Salva il PEM protetto da password su un supporto sicuro e conserva la password separatamente. **Non inviare questo PEM in chat, a GitHub o ai clienti.** È un backup facoltativo del produttore, distinto dai TXT consegnati ai clienti.
+4. Invia il JSON pubblico per ottenere plugin e generatore abbinati. **La creazione della chiave non aggiorna le build esistenti.** Questa versione blocca la firma finché la chiave nel Portachiavi non corrisponde alla chiave pubblica compilata nell’app. Non installare la chiave pubblica ricevuta dal cliente e non disattivare questo controllo.
+5. Installa il generatore abbinato **sullo stesso Mac**, riapri **Configurazione iniziale…** e scegli **Nuovo registro (prima emissione)**. La chiave creata al punto 1 viene riutilizzata automaticamente: non devi cercare o selezionare un PEM. Installa anche i plugin abbinati prima di distribuire i nuovi codici.
+
+Se annulli il salvataggio del JSON, premi **Esporta chiave pubblica** per riprovare. Non generare un’altra chiave. Il Portachiavi mantiene la stessa chiave dopo la chiusura dell’app. Le licenze generate in seguito possono essere Trial o Permanent, per Windows o macOS: usano tutte la stessa chiave del produttore e sono legate alla Machine ID del destinatario.
+
+La nuova chiave non è un recupero della precedente. Chi prepara l’aggiornamento deve conservare la vecchia chiave pubblica come chiave di verifica delle licenze permanenti già emesse; i plugin precedenti non riconoscono le firme nuove. Se hai già una chiave privata o un registro configurato, la creazione automatica è bloccata: usa il percorso di importazione/ripristino descritto sotto.
+
+## Configurazione con PEM originale — una sola volta
 
 1. Conservare un backup sicuro della **chiave privata RSA originale già usata dal plugin** e del **registro SQLite originale**. Non inviare questi file ai clienti e non caricarli su GitHub, negli artifact o in questa chat.
-2. Aprire **Configurazione iniziale…** e selezionare il PEM originale. Per un PEM cifrato, macOS può chiedere la password. L’app confronta la chiave pubblica derivata con quella già incorporata nel plugin: se non corrisponde, si ferma. Non genera una nuova coppia e non sostituisce la chiave esistente.
+2. Aprire **Configurazione iniziale… → Importa PEM esistente…** e selezionare il PEM originale. Per un PEM cifrato, macOS può chiedere la password. L’app confronta la chiave pubblica derivata con quella già incorporata nel plugin: se non corrisponde, si ferma. L’importazione non genera una nuova coppia e non sostituisce la chiave esistente.
 3. Scegliere **Usa registro esistente…** se sono già state emesse licenze con `license-issuer.py`. Viene usato direttamente quel file SQLite, preservando License ID e dispositivi. Non viene creata una copia indipendente.
 4. Scegliere **Nuovo registro (prima emissione)** soltanto se non esistono precedenti registrazioni. Il nuovo registro risiede in `~/Library/Application Support/GrainsDosage License Generator/licenses.sqlite`, con permessi riservati al proprietario.
 5. La chiave viene salvata nel **Portachiavi login** del Mac con etichetta **GrainsDosage Publisher — RSA signing**. Il percorso del registro viene conservato nello stesso Portachiavi. Durante l’uso normale non si seleziona più il PEM. Il Portachiavi può richiedere lo sblocco o l’autorizzazione all’app, soprattutto dopo un aggiornamento dell’app.

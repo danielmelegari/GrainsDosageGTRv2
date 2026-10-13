@@ -15,8 +15,29 @@ int main(int argc,char** argv){@autoreleasepool{
  assert(SecKeychainCreate(keychainPath.c_str(),sizeof(password)-1,password,false,nullptr,&temporary)==errSecSuccess);
  assert(SecKeychainSetDefault(temporary)==errSecSuccess);
  const void* entry=temporary;CFArrayRef list=CFArrayCreate(nullptr,&entry,1,&kCFTypeArrayCallBacks);assert(SecKeychainSetSearchList(list)==errSecSuccess);CFRelease(list);
+ // First-time publishers have no PEM. A fresh key persists without replacing an
+ // existing key; only public material is enrolled and old builds cannot sign it.
+ SecKeyRef created=createPublisherKey();assert(created);assert(!matches(created));assert(freshKey(created));
+ NSData* enrollment=publicEnrollment(created);NSDictionary* request=[NSJSONSerialization JSONObjectWithData:enrollment options:0 error:nil];
+ assert(request.count==4);assert([request[@"format"] isEqualToString:@"GrainsDosage-Public-Key-v1"]);
+ assert([request[@"sha256"] isEqualToString:keyFingerprint(created)]);
+ assert([[[NSData alloc] initWithBase64EncodedString:request[@"public_key_pkcs1_der_base64"] options:0] isEqualToData:publicData(created)]);
+ assert([enrollment writeToFile:@((root+"/enrollment.json").c_str()) atomically:YES]);
+ NSData* backup=encryptedBackup(created,CFSTR("temporary-backup-test-only"));
+ assert([backup writeToFile:@((root+"/enrollment-backup.pem").c_str()) atomically:YES]);
+ SecKeyRef reloaded=loadKey();assert(reloaded);assert([publicData(reloaded) isEqualToData:publicData(created)]);CFRelease(reloaded);
+ bool creationRejected=false;try{SecKeyRef unexpected=createPublisherKey();CFRelease(unexpected);}catch(...){creationRejected=true;}assert(creationRejected);
+ bool signingRejected=false;try{signPayload(created,"must not sign for unmatched build",true);}catch(...){signingRejected=true;}assert(signingRejected);
+ // Simulate completing the one-time setup: the first-issuance permission ends.
+ finishEnrollment();assert(!freshKey(created));CFRelease(created);
+ assert(SecItemDelete((__bridge CFDictionaryRef)keyQuery())==errSecSuccess);
+ std::cout<<"PASS: first-time key creation, persistent reload, public-only enrollment, encrypted backup, no key replacement and unmatched-build rejection\n";
  storeKey(key);SecKeyRef restored=loadKey();assert(matches(restored));assert(!signPayload(restored,"test persistence",true).empty());CFRelease(restored);
  storeLedgerPath(@((root+"/generator.sqlite").c_str()));assert([ledgerPath() isEqualToString:@((root+"/generator.sqlite").c_str())]);
+ // Losing the private key must never silently create a replacement for an
+ // already configured publisher ledger.
+ assert(SecItemDelete((__bridge CFDictionaryRef)keyQuery())==errSecSuccess);
+ bool configuredRejected=false;try{SecKeyRef unexpected=createPublisherKey();CFRelease(unexpected);}catch(...){configuredRejected=true;}assert(configuredRejected);assert(!loadKey());storeKey(key);
  Ledger db(root+"/generator.sqlite",fingerprint(),true);Grant g;const std::string device="GDDEV2-"+std::string(64,'a'),id="GDL2-0123456789abcdef0123456789abcdef";
  const auto signMac=[&](const Grant& grant){return signPayload(key,grant.payload,true);};
  write(root+"/serial",db.issue(false,device,"Test customer","",id,1700000000,signMac,g));

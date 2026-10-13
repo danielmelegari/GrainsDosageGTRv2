@@ -436,7 +436,7 @@ Check module On, module Mix and master Mix. For an LFO, check its On, Depth, des
 
 ## 17. Publisher: issuing offline trials
 
-For normal issuance on macOS Mojave 10.14 Intel, use **GrainsDosage License Generator.app**. Its [publisher guide](docs/license-generator.md) covers one-time setup of the existing RSA private key in Keychain, the persistent SQLite register, 14-day trials, and permanent licenses for up to three devices. It exports only `GrainsDosage-Trial-Key.txt` or `GrainsDosage-Permanent-Key.txt`. Reissuing a trial for the same machine retains the original dates. Windows registration accepts either TXT and shows whether the license is trial or permanent. Signed GDDEV2 trials and Windows permanent codes require the matching updated plugin build.
+For normal issuance on macOS Mojave 10.14 Intel, use **GrainsDosage License Generator.app**. Its [publisher guide](docs/license-generator.md) covers importing an existing RSA private key or creating one on the publisher’s Mac, pairing its public key with updated builds, the persistent SQLite register, 14-day trials, and permanent licenses for up to three devices. It exports only `GrainsDosage-Trial-Key.txt` or `GrainsDosage-Permanent-Key.txt`. Reissuing a trial for the same machine retains the original dates. Windows registration accepts either TXT and shows whether the license is trial or permanent. Signed GDDEV2 trials and Windows permanent codes require the matching updated plugin build.
 
 The command-line alternative below is for existing Windows publisher workflows; it does not automatically update the native generator’s ledger. Keep one authoritative issuance history.
 

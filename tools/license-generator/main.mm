@@ -13,6 +13,8 @@ using namespace grains::issuer;
 @property(strong) NSTextView* output;
 @property(strong) NSTextField* status;
 @property(strong) NSButton* generate;
+- (void)exportPublic:(id)sender;
+- (void)backupPrivate:(id)sender;
 @end
 @implementation Generator
 - (NSTextField*)label:(NSString*)text frame:(NSRect)frame size:(CGFloat)size {
@@ -43,11 +45,12 @@ using namespace grains::issuer;
   [self label:@"Codice completo — selezionabile e copiabile anche dal TXT salvato" frame:NSMakeRect(30,247,690,22) size:12];
   self.output=[self textArea:NSMakeRect(30,126,700,117) editable:NO];
   [self button:@"Copia codice" action:@selector(copyCode:) frame:NSMakeRect(580,86,155,32)];
-  [self button:@"Configurazione iniziale…" action:@selector(setup:) frame:NSMakeRect(24,86,218,32)];
-  [self button:@"Mostra registro" action:@selector(showLedger:) frame:NSMakeRect(250,86,155,32)];
+  [self button:@"Configurazione iniziale…" action:@selector(setup:) frame:NSMakeRect(24,86,198,32)];
+  [self button:@"Mostra registro" action:@selector(showLedger:) frame:NSMakeRect(225,86,135,32)];
+  [self button:@"Esporta chiave pubblica" action:@selector(exportPublic:) frame:NSMakeRect(365,86,210,32)];
   self.status=[self label:@"" frame:NSMakeRect(30,18,700,60) size:12];self.status.maximumNumberOfLines=3;self.status.lineBreakMode=NSLineBreakByWordWrapping;
   [self changeMode:nil];[self.window center];[self.window makeKeyAndOrderFront:nil];[NSApp activateIgnoringOtherApps:YES];
-  try{NSString* path=ledgerPath();self.status.stringValue=path?@"Configurato. Il registro conserva i dispositivi e le date trial già emesse.":@"Prima dell’uso: configurare la chiave privata esistente e il registro del produttore.";}catch(const std::exception& e){[self error:@(e.what())];}
+  try{NSString* path=ledgerPath();self.status.stringValue=path?@"Configurato. Il registro conserva i dispositivi e le date trial già emesse.":@"Prima configurazione: importa la tua chiave oppure creala su questo Mac. Non serve possedere già un PEM.";}catch(const std::exception& e){[self error:@(e.what())];}
 }
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication*)sender{(void)sender;return YES;}
 - (void)controlTextDidChange:(NSNotification*)note{if(note.object==self.customer)self.license.stringValue=@"";}
@@ -55,33 +58,62 @@ using namespace grains::issuer;
 - (void)pasteMachine:(id)sender{(void)sender;NSString* s=[[NSPasteboard generalPasteboard] stringForType:NSPasteboardTypeString];if(s)self.machine.string=s;}
 - (void)copyCode:(id)sender{(void)sender;if(!self.output.string.length)return;NSPasteboard* p=[NSPasteboard generalPasteboard];[p clearContents];[p setString:self.output.string forType:NSPasteboardTypeString];}
 - (void)showLedger:(id)sender{(void)sender;try{NSString* path=ledgerPath();if(path)[[NSWorkspace sharedWorkspace] activateFileViewerSelectingURLs:@[[NSURL fileURLWithPath:path]]];else [self error:@"Configurare prima il registro."];}catch(const std::exception& e){[self error:@(e.what())];}}
+- (void)exportPublic:(id)sender {
+  (void)sender;try{
+    SecKeyRef ref=loadKey();std::unique_ptr<std::remove_pointer_t<SecKeyRef>,decltype(&CFRelease)> key(ref,&CFRelease);
+    if(!ref)throw std::runtime_error("Premere Configurazione iniziale e creare o importare la chiave.");
+    NSSavePanel* panel=[NSSavePanel savePanel];panel.title=@"Esporta SOLO la chiave pubblica";panel.nameFieldStringValue=@"GrainsDosage-Public-Key.json";
+    panel.message=@"Questo file pubblico può essere inviato per aggiornare plugin e generatore. Non contiene la chiave privata. Le build precedenti non accetteranno le licenze della nuova chiave.";
+    if([panel runModal]!=NSModalResponseOK)return;
+    if(![publicEnrollment(ref) writeToURL:panel.URL options:NSDataWritingAtomic error:nil])throw std::runtime_error("Salvataggio della chiave pubblica fallito. Riprovare senza creare un'altra chiave.");
+    self.status.stringValue=@"Invia GrainsDosage-Public-Key.json per le build abbinate. Conserva questa chiave nel Portachiavi: non rigenerarla. Dopo l’aggiornamento, riapri Configurazione iniziale.";
+  }catch(const std::exception& e){[self error:@(e.what())];}
+}
+- (void)backupPrivate:(id)sender {
+  (void)sender;try{
+    SecKeyRef ref=loadKey();std::unique_ptr<std::remove_pointer_t<SecKeyRef>,decltype(&CFRelease)> key(ref,&CFRelease);
+    if(!ref)throw std::runtime_error("Creare o importare prima la chiave.");
+    NSSavePanel* panel=[NSSavePanel savePanel];panel.title=@"Backup PRIVATO cifrato — non inviare";panel.nameFieldStringValue=@"GrainsDosage-Private-Key-Backup.pem";
+    panel.message=@"Salva su un supporto sicuro. Non caricare questo PEM in chat o su GitHub e non inviarlo ai clienti. macOS chiederà una password per cifrarlo.";
+    if([panel runModal]!=NSModalResponseOK)return;
+    NSData* backup=encryptedBackup(ref);
+    if(![backup writeToURL:panel.URL options:NSDataWritingAtomic error:nil])throw std::runtime_error("Backup non salvato. La chiave rimane nel Portachiavi.");
+    if(chmod(panel.URL.path.fileSystemRepresentation,0600)!=0)throw std::runtime_error("Backup salvato, ma impossibile impostare i permessi. Spostarlo in un archivio privato.");
+    self.status.stringValue=@"Backup PEM cifrato salvato. Conserva la password separatamente. Condividi esclusivamente il file Public-Key.json.";
+  }catch(const std::exception& e){[self error:@(e.what())];}
+}
 - (void)setup:(id)sender {
   (void)sender;
   try{
     if(ledgerPath()){[self error:@"Configurazione già presente. La chiave non viene sostituita. Se il registro manca, ripristinare il backup nel percorso originale (Mostra registro). Conservare un solo registro autorevole."];return;}
     SecKeyRef existing=loadKey();std::unique_ptr<std::remove_pointer_t<SecKeyRef>,decltype(&CFRelease)> key(existing,&CFRelease);
     if(!existing){
-      NSOpenPanel* panel=[NSOpenPanel openPanel];panel.title=@"Configurazione UNA TANTUM — chiave privata RSA originale";panel.message=@"Selezionare il PEM già usato dal plugin. La chiave sarà conservata nel Portachiavi di questo Mac; non verrà copiata nell’app.";panel.canChooseDirectories=NO;panel.allowsMultipleSelection=NO;
+      NSAlert* start=[NSAlert new];start.messageText=@"Configura la tua chiave di firma";start.informativeText=@"Se non hai mai avuto la chiave privata, puoi crearla su questo Mac. Verrà conservata nel Portachiavi. Poi invia SOLO il file pubblico per ricevere plugin e generatore abbinati: le build attuali non conoscono la nuova chiave. Se hai già un PEM originale, importalo.";
+      [start addButtonWithTitle:@"Crea la mia chiave su questo Mac"];[start addButtonWithTitle:@"Importa PEM esistente…"];[start addButtonWithTitle:@"Annulla"];
+      NSModalResponse first=[start runModal];if(first==NSAlertThirdButtonReturn)return;
+      if(first==NSAlertFirstButtonReturn){key.reset(createPublisherKey());[self exportPublic:nil];return;}
+      NSOpenPanel* panel=[NSOpenPanel openPanel];panel.title=@"Importa la chiave privata RSA originale";panel.message=@"Seleziona il PEM del produttore corrispondente alla chiave pubblica incorporata nel plugin. Il PEM non si trova nel plugin o nel pacchetto scaricato. Verrà importato nel Portachiavi una sola volta.";panel.canChooseDirectories=NO;panel.allowsMultipleSelection=NO;
       if([panel runModal]!=NSModalResponseOK)return;
       NSNumber* size=nil;[panel.URL getResourceValue:&size forKey:NSURLFileSizeKey error:nil];if(size.unsignedLongLongValue>65536)throw std::runtime_error("File chiave troppo grande.");
       NSData* data=[NSData dataWithContentsOfURL:panel.URL];if(!data)throw std::runtime_error("Impossibile leggere la chiave privata.");key.reset(importKey(data));
     }
-    if(!matches(key.get()))throw std::runtime_error("La chiave nel Portachiavi non corrisponde al plugin.");
-    NSAlert* choice=[NSAlert new];choice.messageText=@"Registro delle licenze";choice.informativeText=@"Se sono già state emesse licenze, usare il registro SQLite originale per conservare il limite di 3 dispositivi. Usare Nuovo registro SOLO se non esistono emissioni precedenti.";[choice addButtonWithTitle:@"Usa registro esistente…"];if(!existing)[choice addButtonWithTitle:@"Nuovo registro (prima emissione)"];[choice addButtonWithTitle:@"Annulla"];
-    NSModalResponse response=[choice runModal];BOOL create=!existing&&response==NSAlertSecondButtonReturn;if(response!=NSAlertFirstButtonReturn&&!create)return;
+    if(!matches(key.get())){[self error:@"La chiave è già custodita nel Portachiavi. Per emettere licenze servono le build abbinate alla sua chiave pubblica. Esporta e invia SOLO GrainsDosage-Public-Key.json; non creare un’altra chiave."];[self exportPublic:nil];return;}
+    const bool firstIssuance=!existing||freshKey(key.get());
+    NSAlert* choice=[NSAlert new];choice.messageText=@"Registro delle licenze";choice.informativeText=@"Se sono già state emesse licenze, usare il registro SQLite originale per conservare il limite di 3 dispositivi. Usare Nuovo registro SOLO se non esistono emissioni precedenti.";[choice addButtonWithTitle:@"Usa registro esistente…"];if(firstIssuance)[choice addButtonWithTitle:@"Nuovo registro (prima emissione)"];[choice addButtonWithTitle:@"Annulla"];
+    NSModalResponse response=[choice runModal];BOOL create=firstIssuance&&response==NSAlertSecondButtonReturn;if(response!=NSAlertFirstButtonReturn&&!create)return;
     NSString* path=nil;
     if(create){NSString* root=[NSHomeDirectory() stringByAppendingPathComponent:@"Library/Application Support/GrainsDosage License Generator"];NSError* error=nil;if(![[NSFileManager defaultManager] createDirectoryAtPath:root withIntermediateDirectories:YES attributes:@{NSFilePosixPermissions:@0700} error:&error])throw std::runtime_error("Impossibile creare la cartella del registro.");path=[root stringByAppendingPathComponent:@"licenses.sqlite"];if([[NSFileManager defaultManager] fileExistsAtPath:path])throw std::runtime_error("Un registro esiste già. Scegliere Usa registro esistente; non verrà sovrascritto.");}
     else{NSOpenPanel* p=[NSOpenPanel openPanel];p.title=@"Seleziona il registro SQLite originale";p.canChooseDirectories=NO;p.allowsMultipleSelection=NO;if([p runModal]!=NSModalResponseOK)return;path=p.URL.path;}
     {Ledger db(path.fileSystemRepresentation,fingerprint(),create);}
     if(chmod(path.fileSystemRepresentation,0600)!=0)throw std::runtime_error("Impossibile proteggere i permessi del registro.");
-    if(!existing)storeKey(key.get());storeLedgerPath(path);
+    if(!existing)storeKey(key.get());storeLedgerPath(path);finishEnrollment();
     self.status.stringValue=@"Configurazione completata. Chiave nel Portachiavi; registro persistente. Eseguire backup sicuri di entrambi.";
   }catch(const std::exception& e){[self error:@(e.what())];}
 }
 - (void)generateLicense:(id)sender {
   (void)sender;self.output.string=@"";
   try{
-    NSString* path=ledgerPath();if(!path)throw std::runtime_error("Eseguire la configurazione iniziale una sola volta.");
+    NSString* path=ledgerPath();if(!path)throw std::runtime_error("Apri Configurazione iniziale: importa il PEM oppure crea la tua chiave su questo Mac. Se l’hai già creata, invia il file pubblico e installa le build abbinate prima di emettere licenze.");
     SecKeyRef ref=loadKey();std::unique_ptr<std::remove_pointer_t<SecKeyRef>,decltype(&CFRelease)> key(ref,&CFRelease);if(!ref)throw std::runtime_error("Chiave assente nel Portachiavi. Ripristinare il backup della chiave originale.");
     NSString* machine=[self.machine.string stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
     // Windows registration requests can be pasted in full as JSON, too.
@@ -107,4 +139,4 @@ using namespace grains::issuer;
 int main(int argc,const char** argv){(void)argc;(void)argv;umask(0077);@autoreleasepool{[NSApplication sharedApplication];[NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
   NSMenu* menu=[NSMenu new];NSMenuItem* root=[NSMenuItem new];[menu addItem:root];NSMenu* app=[NSMenu new];[app addItemWithTitle:@"Esci da GrainsDosage License Generator" action:@selector(terminate:) keyEquivalent:@"q"];root.submenu=app;
   NSMenuItem* editRoot=[NSMenuItem new];[menu addItem:editRoot];NSMenu* edit=[[NSMenu alloc] initWithTitle:@"Modifica"];[edit addItemWithTitle:@"Taglia" action:@selector(cut:) keyEquivalent:@"x"];[edit addItemWithTitle:@"Copia" action:@selector(copy:) keyEquivalent:@"c"];[edit addItemWithTitle:@"Incolla" action:@selector(paste:) keyEquivalent:@"v"];[edit addItemWithTitle:@"Seleziona tutto" action:@selector(selectAll:) keyEquivalent:@"a"];editRoot.submenu=edit;NSApp.mainMenu=menu;
-  Generator* delegate=[Generator new];NSApp.delegate=delegate;[NSApp run];}return 0;}
+  Generator* delegate=[Generator new];NSMenuItem* backup=[app insertItemWithTitle:@"Backup chiave privata cifrato…" action:@selector(backupPrivate:) keyEquivalent:@"" atIndex:0];backup.target=delegate;NSApp.delegate=delegate;[NSApp run];}return 0;}

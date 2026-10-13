@@ -24,8 +24,17 @@ clang++ -std=c++17 -fobjc-arc -mmacosx-version-min=10.14 -DGRAINS_GENERATOR_TEST
   -I"$temp_dir" tools/license-generator/test_crypto.mm -framework Foundation -framework Security -lsqlite3 -o "$temp_dir/generator-test"
 "$temp_dir/generator-test" "$temp_dir"
 python3 - "$temp_dir" <<'PYVERIFY'
-import base64, pathlib, subprocess, sys
+import base64, hashlib, json, pathlib, subprocess, sys
 p=pathlib.Path(sys.argv[1])
+# Independently decrypt the disposable test backup and verify the enrollment
+# contains precisely its public key. No production private key enters CI.
+request=json.loads((p/'enrollment.json').read_text())
+assert set(request)=={'format','algorithm','public_key_pkcs1_der_base64','sha256'}
+enrolled=base64.b64decode(request['public_key_pkcs1_der_base64'],validate=True)
+assert hashlib.sha256(enrolled).hexdigest()==request['sha256']
+derived=subprocess.check_output(['openssl','rsa','-in',str(p/'enrollment-backup.pem'),'-passin','pass:temporary-backup-test-only','-RSAPublicKey_out','-outform','DER'],stderr=subprocess.DEVNULL)
+assert derived==enrolled
+print('PASS: encrypted backup restores the exact enrolled public key')
 subprocess.run(['openssl','pkey','-in',str(p/'private.pem'),'-pubout','-out',str(p/'public.pem')],check=True,stdout=subprocess.DEVNULL)
 for name in ('serial','signed-trial','windows-trial','windows-permanent'):
     code=(p/name).read_text().strip()
