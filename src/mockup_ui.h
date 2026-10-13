@@ -9,6 +9,9 @@
 #include <string>
 #include <vector>
 #include <chrono>
+#ifndef GRAINS_PLUGIN_VERSION
+#define GRAINS_PLUGIN_VERSION "dev"
+#endif
 namespace aztec { namespace mockup {
 constexpr double contentWidth=1083,rackInset=0,width=1083,height=1050,bodyTop=202;
 struct Rect {double x,y,w,h;bool contains(double px,double py)const{return px>=x&&py>=y&&px<x+w&&py<y+h;}};
@@ -187,6 +190,7 @@ inline void render(Painter& p,const Value& value,const Display& display,const st
  if(live&&motion)motion->update(value,drag,insertion);
  auto button=[&](Rect r,const std::string& s){pill(p,r);p.text(s,r,14,white,true);};
  if(fixed){p.box({0,0,width,height},{25,18,33},{25,18,33},0);if(p.image){p.image(Backplate,{0,0,width,120},{0,0,1083,120});p.image(Backplate,{0,120,50,height-120},{0,120,50,1300});p.image(Backplate,{1033,120,50,height-120},{1033,120,50,1300});}p.box({51,122,981,75},{24,25,31},{11,12,16},5);for(int i=0;i<3;++i)pageButton(p,i,i==state.page);button(preset,presetName);button(previous,"<");button(next,">");button(load,"LOAD");button(save,"SAVE");p.text("INPUT DE-CLICKER",{835,40,172,20},13,white,true);}
+ if(fixed)p.text("v" GRAINS_PLUGIN_VERSION,{300,75,85,16},10,muted,true);
  if(p.clip)p.clip({51,bodyTop,982,height-bodyTop});
  auto pos=[&](Rect r){return state.position(r);};auto title=[&](Rect r,const std::string& s){if(fixed)p.text(s,{r.x+32,r.y+17,r.w-230,25},20,white,false);};
  Value drawnValue=value;std::array<double,5> tops{};for(int i=0;i<5;++i)tops[i]=moduleRect(i,value,state).y;
