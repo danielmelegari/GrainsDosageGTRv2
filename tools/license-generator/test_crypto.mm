@@ -41,6 +41,36 @@ int main(int argc,char** argv){@autoreleasepool{
  assert(SecItemDelete((__bridge CFDictionaryRef)keyQuery())==errSecSuccess);
  std::cout<<"PASS: first-time key creation, persistent reload, public-only enrollment, encrypted backup, no key replacement and unmatched-build rejection\n";
  storeKey(key);SecKeyRef restored=loadKey();assert(matches(restored));assert(!signPayload(restored,"test persistence",true).empty());
+ // A simulated OS denial enters recovery, but ACL changes and the subsequent
+ // RSA challenge use the real isolated Keychain. Interactive approval after an
+ // ad-hoc app update still needs a physical Mac test.
+ SecAccessRef beforeAccess=nullptr;assert(SecKeychainItemCopyAccess((SecKeychainItemRef)restored,&beforeAccess)==errSecSuccess);
+ CFArrayRef beforeACLs=nullptr;assert(SecAccessCopyACLList(beforeAccess,&beforeACLs)==errSecSuccess);
+ testSigningDenials=1;authorizeSigning(restored);assert(testSigningDenials==0);
+ SecAccessRef afterAccess=nullptr;assert(SecKeychainItemCopyAccess((SecKeychainItemRef)restored,&afterAccess)==errSecSuccess);
+ CFArrayRef afterACLs=nullptr;assert(SecAccessCopyACLList(afterAccess,&afterACLs)==errSecSuccess);
+ assert(CFArrayGetCount(afterACLs)==CFArrayGetCount(beforeACLs)+1);
+ bool signingGrant=false;
+ for(CFIndex i=0;i<CFArrayGetCount(afterACLs);++i){
+  auto acl=(SecACLRef)CFArrayGetValueAtIndex(afterACLs,i);CFArrayRef apps=nullptr;CFStringRef label=nullptr;SecKeychainPromptSelector prompt=0;
+  // Partition/owner entries need not have the simple application-list form.
+  OSStatus contents=SecACLCopyContents(acl,&apps,&label,&prompt);
+  if(contents!=errSecSuccess){if(apps)CFRelease(apps);if(label)CFRelease(label);continue;}
+  if(label&&CFEqual(label,CFSTR("GrainsDosage Publisher — autorizzazione firma"))){
+   assert(apps&&CFArrayGetCount(apps)==1); // Never NULL (allow every app).
+   CFArrayRef rights=SecACLCopyAuthorizations(acl);assert(rights&&CFArrayGetCount(rights)==1);
+   assert(CFEqual(CFArrayGetValueAtIndex(rights,0),kSecACLAuthorizationSign));CFRelease(rights);signingGrant=true;
+  }
+  if(apps)CFRelease(apps);if(label)CFRelease(label);
+ }
+ assert(signingGrant);assert([publicData(restored) isEqualToData:expectedPublic()]);assert(!ledgerPath());
+ CFRelease(beforeACLs);CFRelease(afterACLs);CFRelease(beforeAccess);CFRelease(afterAccess);
+ // Even when the permission update succeeds, a denied verification must not
+ // be reported as recovered. No license is produced by the recovery action.
+ testSigningDenials=2;bool stillDenied=false;
+ try{authorizeSigning(restored);}catch(const KeychainError& e){stillDenied=e.code==errSecAuthFailed;}
+ assert(stillDenied&&testSigningDenials==0);
+ std::cout<<"PASS: explicit signing-only authorization preserves key, leaves ledger untouched and reports continued denial\n";
  testNoPublicCopy=true;
  for(bool legacySigning:{false,true}){
   testLegacySigning=legacySigning;

@@ -10,15 +10,30 @@ La build automatica è firmata ad hoc, senza certificato Developer ID o notarizz
 
 Il workflow verifica architettura Intel e deployment minimo 10.14, compila con controlli sulle API e testa firme e registro. L’esecuzione su un Mac fisico Mojave resta un controllo distinto dall’esecuzione del runner macOS moderno.
 
-## Build abbinate alla chiave del produttore — 1.1.3 / plugin 0.13.5
+## Build abbinate alla chiave del produttore — 1.1.4 / plugin 0.13.5
 
 Questa build usa la chiave pubblica ricevuta in `GrainsDosage-Public-Key.json`, impronta SHA-256 `f41e04335d43d1c44322072831bd83266500da8a04cf98d0fa3f0f28b75d5dca`.
 
-Se hai già creato quella chiave sul Mac, **non crearne un'altra e non importare un PEM**. Installa il generatore **1.1.3 sullo stesso Mac**, apri **Configurazione iniziale… → Nuovo registro (prima emissione)** e poi genera Trial o Permanent normalmente. La chiave nel Portachiavi viene riconosciuta automaticamente. Se un registro è già configurato, usalo senza ricrearlo. I destinatari devono installare i plugin **0.13.3 o successivi abbinati a questa chiave**.
+Se hai già creato quella chiave sul Mac, **non crearne un'altra e non importare un PEM**. Installa il generatore **1.1.4 sullo stesso Mac**, apri **Configurazione iniziale… → Nuovo registro (prima emissione)** e poi genera Trial o Permanent normalmente. La chiave nel Portachiavi viene riconosciuta automaticamente. Se un registro è già configurato, usalo senza ricrearlo. I destinatari devono installare i plugin **0.13.3 o successivi abbinati a questa chiave**.
 
 La versione 1.1.2 corregge il caso in cui macOS restituisce la chiave privata dal Portachiavi ma non permette di copiarne la parte pubblica con `SecKeyCopyPublicKey`. Prima questo caso veniva indicato erroneamente come chiave diversa oppure «Chiave pubblica non disponibile». Ora l’app firma una prova casuale e la verifica con la chiave pubblica abbinata prima di riconoscerla/esportarla; verifica anche ogni licenza con quella stessa chiave pubblica. Non estrae né ricostruisce la chiave privata. Se macOS chiede l’accesso al Portachiavi per la nuova app, autorizzalo. Un accesso negato viene segnalato come errore di firma, senza invitare a creare un’altra chiave. Dalla versione 1.1.3, il numero è visibile sia nel titolo della finestra sia sotto il nome GrainsDosage. Il generatore 1.1.3 mantiene la stessa chiave abbinata ed è compatibile con i plugin 0.13.3, 0.13.4 e 0.13.5.
 
 Le vecchie chiavi pubbliche restano nei verificatori per accettare i codici già firmati, inclusi i GDS2 permanenti, senza modificare identità del plugin o sessioni. Il generatore firma soltanto con la nuova chiave abbinata. Le build precedenti non possono riconoscere le nuove firme. Nessuna chiave privata è stata ricevuta o aggiunta al repository.
+
+## Errore −25293 durante Genera — versione 1.1.4
+
+Questo errore indica che macOS ha negato l’accesso per la firma. Dopo un aggiornamento di un’app firmata ad hoc può essere necessaria una nuova autorizzazione; il solo codice errore non dimostra quale permesso o stato del Portachiavi abbia causato il blocco.
+
+1. Chiudere le copie precedenti e aprire **GrainsDosage License Generator 1.1.4** dalla cartella Applicazioni, sul Mac che conserva la chiave.
+2. Nel messaggio di errore scegliere **Autorizza firma…**, oppure usare lo stesso comando nel menu dell’app.
+3. Se macOS lo richiede, inserire la password del Portachiavi nella finestra di sistema. La keygen non riceve né conserva quella password.
+4. Attendere **Firma verificata con la tua chiave**, poi ripetere Genera. L’autorizzazione non emette una licenza e non avvia i 14 giorni.
+
+Il comando sblocca il Portachiavi che contiene la chiave. Se la firma continua a essere negata, richiede al sistema di aggiungere un permesso di sola firma per questa esatta app, conservando gli altri permessi. La riuscita viene mostrata soltanto dopo una firma reale verificata con la chiave pubblica del plugin. Non sostituisce o esporta la chiave, non modifica il registro e non autorizza tutte le applicazioni.
+
+Se il sistema continua a negare l’operazione, la keygen mostra l’operazione fallita e il codice. Chiudere l’app e riavviare il Mac può risolvere un’identità dell’app rimasta in cache dopo la sostituzione. Verificare anche **Accesso Portachiavi → login → GrainsDosage Publisher — RSA signing → Controllo accessi** e aggiungere la copia attuale dell’app. Conservare la chiave originale. Questa procedura non aggira i controlli macOS: permessi di sistema, firma dell’app o restrizioni del Portachiavi possono richiedere un intervento locale.
+
+I test automatici usano un Portachiavi temporaneo, errori di autorizzazione simulati e firme RSA reali; controllano che il nuovo permesso riguardi solo la firma, che la chiave rimanga identica e che un errore persistente non venga dichiarato risolto. Il prompt interattivo e il recupero della chiave del produttore dopo un aggiornamento devono ancora essere verificati sul Mac Mojave reale.
 
 ## Prima volta senza PEM — versione 1.1
 

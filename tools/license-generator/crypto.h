@@ -11,7 +11,14 @@
 #endif
 #include <stdexcept>
 #include <string>
+#include <memory>
 namespace grains::issuer {
+class KeychainError : public std::runtime_error {
+public:
+  CFIndex code;
+  KeychainError(const char* operation,CFIndex value):std::runtime_error(std::string(operation)+" (codice "+std::to_string(value)+"). Usa Autorizza firma nel menu dell’app. Non creare una nuova chiave."),code(value){}
+  bool authorizationRequired() const {return code==errSecAuthFailed||code==errSecInteractionNotAllowed||code==errSecInteractionRequired;}
+};
 inline NSData* expectedPublic(){return [NSData dataWithBytes:aztec::license::publicKey length:sizeof(aztec::license::publicKey)];}
 inline std::string hexData(NSData* data){const auto* bytes=(const unsigned char*)data.bytes;std::string s;const char* h="0123456789abcdef";for(NSUInteger i=0;i<data.length;++i){s+=h[bytes[i]>>4];s+=h[bytes[i]&15];}return s;}
 inline std::string fingerprint(){unsigned char digest[CC_SHA256_DIGEST_LENGTH];NSData* data=expectedPublic();CC_SHA256(data.bytes,CC_LONG(data.length),digest);return hexData([NSData dataWithBytes:digest length:sizeof(digest)]);}
@@ -20,9 +27,13 @@ inline std::string fingerprint(){unsigned char digest[CC_SHA256_DIGEST_LENGTH];N
 // half, and the older signing API, on current CI hosts as well as on Mojave.
 inline bool testNoPublicCopy=false;
 inline bool testLegacySigning=false;
+inline int testSigningDenials=0;
 #endif
 inline NSData* signMessage(SecKeyRef key,NSData* message){
   if(!key)throw std::runtime_error("Chiave privata assente nel Portachiavi.");
+#ifdef GRAINS_GENERATOR_TEST
+  if(testSigningDenials>0){--testSigningDenials;throw KeychainError("Test autorizzazione firma negata",errSecAuthFailed);}
+#endif
   bool modern=SecKeyIsAlgorithmSupported(key,kSecKeyOperationTypeSign,kSecKeyAlgorithmRSASignatureMessagePKCS1v15SHA256);
 #ifdef GRAINS_GENERATOR_TEST
   if(testLegacySigning)modern=false;
@@ -32,7 +43,7 @@ inline NSData* signMessage(SecKeyRef key,NSData* message){
     CFDataRef result=SecKeyCreateSignature(key,kSecKeyAlgorithmRSASignatureMessagePKCS1v15SHA256,(__bridge CFDataRef)message,&error);
     if(result){if(error)CFRelease(error);return CFBridgingRelease(result);}
     const auto code=error?CFErrorGetCode(error):0;if(error)CFRelease(error);
-    throw std::runtime_error("Firma negata o non disponibile nel Portachiavi (codice "+std::to_string(code)+"). Sblocca il Portachiavi login e autorizza questa app. Non creare una nuova chiave.");
+    throw KeychainError("Firma negata o non disponibile nel Portachiavi",code);
   }
   // Legacy macOS Keychain references can also be used through the Security
   // signing transform. This enforces the same ACL and never exports private data.
@@ -48,7 +59,7 @@ inline NSData* signMessage(SecKeyRef key,NSData* message){
     if(error)CFRelease(error);return CFBridgingRelease(result);
   }
   if(result)CFRelease(result);const auto code=error?CFErrorGetCode(error):0;if(error)CFRelease(error);
-  throw std::runtime_error("Firma RSA nel Portachiavi fallita (codice "+std::to_string(code)+"). Sblocca il Portachiavi login e autorizza questa app. Non creare una nuova chiave.");
+  throw KeychainError("Firma RSA nel Portachiavi fallita",code);
 }
 inline bool verifiesExpected(NSData* message,NSData* signature){
   if(!signature||signature.length!=256)return false;
@@ -87,7 +98,41 @@ inline bool matches(SecKeyRef key){
 }
 inline NSData* tag(){return [@"com.grainsdosage.publisher.rsa.v1" dataUsingEncoding:NSUTF8StringEncoding];}
 inline NSDictionary* keyQuery(){return @{(__bridge id)kSecClass:(__bridge id)kSecClassKey,(__bridge id)kSecAttrKeyClass:(__bridge id)kSecAttrKeyClassPrivate,(__bridge id)kSecAttrKeyType:(__bridge id)kSecAttrKeyTypeRSA,(__bridge id)kSecAttrApplicationTag:tag()};}
-inline SecKeyRef loadKey(){NSMutableDictionary* q=[keyQuery() mutableCopy];q[(__bridge id)kSecReturnRef]=@YES;CFTypeRef ref=nullptr;OSStatus r=SecItemCopyMatching((__bridge CFDictionaryRef)q,&ref);if(r==errSecItemNotFound)return nullptr;if(r!=errSecSuccess)throw std::runtime_error("Impossibile accedere alla chiave nel Portachiavi. Sbloccare il Portachiavi login.");return (SecKeyRef)ref;}
+inline SecKeyRef loadKey(){NSMutableDictionary* q=[keyQuery() mutableCopy];q[(__bridge id)kSecReturnRef]=@YES;CFTypeRef ref=nullptr;OSStatus r=SecItemCopyMatching((__bridge CFDictionaryRef)q,&ref);if(r==errSecItemNotFound)return nullptr;if(r!=errSecSuccess)throw KeychainError("Lettura chiave nel Portachiavi fallita",r);return (SecKeyRef)ref;}
+
+template<class T> using OwnedCF=std::unique_ptr<std::remove_pointer_t<T>,decltype(&CFRelease)>;
+inline void checkKeychain(OSStatus status,const char* operation){if(status!=errSecSuccess)throw KeychainError(operation,status);}
+// Explicit user action only. The OS owns the password dialog. Add a signing-only
+// grant for this exact app; preserve owner, export, partition and other ACLs.
+// Never reset the keychain, export the key, or install an allow-all ACL.
+inline void authorizeSigning(SecKeyRef key){
+  if(!key)throw std::runtime_error("Chiave privata assente. Ripristinare il backup originale.");
+  NSData* publicKey=copiedPublicData(key);
+  if(publicKey&&![publicKey isEqualToData:expectedPublic()])throw std::runtime_error("La chiave non corrisponde alla build. Nessun permesso modificato.");
+  SecKeychainRef chain=nullptr;
+  checkKeychain(SecKeychainItemCopyKeychain((SecKeychainItemRef)key,&chain),"Individuazione Portachiavi della chiave fallita");
+  OwnedCF<SecKeychainRef> ownedChain(chain,&CFRelease);
+  checkKeychain(SecKeychainUnlock(chain,0,nullptr,false),"Sblocco Portachiavi fallito");
+  // An ordinary unlock/approval may suffice. Do not change ACLs unnecessarily.
+  try{if(provesExpected(key))return;throw std::runtime_error("La firma non corrisponde alla chiave pubblica della build.");}
+  catch(const KeychainError& e){if(!e.authorizationRequired())throw;}
+  SecAccessRef access=nullptr;
+  checkKeychain(SecKeychainItemCopyAccess((SecKeychainItemRef)key,&access),"Lettura permessi della chiave fallita");
+  OwnedCF<SecAccessRef> ownedAccess(access,&CFRelease);
+  SecTrustedApplicationRef application=nullptr;
+  checkKeychain(SecTrustedApplicationCreateFromPath(nullptr,&application),"Identificazione di questa app fallita");
+  OwnedCF<SecTrustedApplicationRef> ownedApplication(application,&CFRelease);
+  const void* value=application;
+  OwnedCF<CFArrayRef> applications(CFArrayCreate(nullptr,&value,1,&kCFTypeArrayCallBacks),&CFRelease);
+  if(!applications)throw std::bad_alloc(); // NULL would mean trusting every app.
+  SecACLRef acl=nullptr;
+  checkKeychain(SecACLCreateWithSimpleContents(access,applications.get(),CFSTR("GrainsDosage Publisher — autorizzazione firma"),kSecKeychainPromptRequirePassphase,&acl),"Preparazione autorizzazione fallita");
+  OwnedCF<SecACLRef> ownedACL(acl,&CFRelease);
+  checkKeychain(SecACLUpdateAuthorizations(acl,(__bridge CFArrayRef)@[(__bridge id)kSecACLAuthorizationSign]),"Configurazione permesso di firma fallita");
+  checkKeychain(SecKeychainItemSetAccess((SecKeychainItemRef)key,access),"Autorizzazione di questa app negata");
+  // Success means a real signature verifies, not merely that an ACL was saved.
+  if(!provesExpected(key))throw std::runtime_error("La firma non corrisponde alla chiave pubblica della build.");
+}
 inline SecKeyRef importKey(NSData* pem,bool securePrompt=true){
   SecExternalFormat format=kSecFormatUnknown;SecExternalItemType type=kSecItemTypePrivateKey;
   SecItemImportExportKeyParameters params={};params.version=SEC_KEY_IMPORT_EXPORT_PARAMS_VERSION;

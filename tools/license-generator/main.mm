@@ -15,6 +15,7 @@ using namespace grains::issuer;
 @property(strong) NSButton* generate;
 - (void)exportPublic:(id)sender;
 - (void)backupPrivate:(id)sender;
+- (void)authorizeKey:(id)sender;
 @end
 @implementation Generator
 - (NSTextField*)label:(NSString*)text frame:(NSRect)frame size:(CGFloat)size {
@@ -29,6 +30,26 @@ using namespace grains::issuer;
   scroll.documentView=text;[self.window.contentView addSubview:scroll];return text;
 }
 - (void)error:(NSString*)message {NSAlert* alert=[NSAlert new];alert.messageText=@"GrainsDosage License Generator";alert.informativeText=message;[alert runModal];self.status.stringValue=message;}
+- (void)handleException:(const std::exception&)exception {
+  const auto* keychain=dynamic_cast<const KeychainError*>(&exception);
+  if(!keychain||!keychain->authorizationRequired()){[self error:@(exception.what())];return;}
+  self.status.stringValue=@(exception.what());
+  NSAlert* alert=[NSAlert new];alert.messageText=@"Autorizza la firma delle licenze";
+  alert.informativeText=[NSString stringWithFormat:@"%@\n\nmacOS può richiedere la password del Portachiavi. L’autorizzazione riguarda questa app e la chiave esistente. Dopo la verifica potrai riprovare Genera.",@(exception.what())];
+  [alert addButtonWithTitle:@"Autorizza firma…"];[alert addButtonWithTitle:@"Annulla"];
+  if([alert runModal]==NSAlertFirstButtonReturn)[self authorizeKey:nil];
+}
+- (void)authorizeKey:(id)sender {
+  (void)sender;[NSApp activateIgnoringOtherApps:YES];
+  try{
+    checkKeychain(SecKeychainSetUserInteractionAllowed(true),"Attivazione finestra di autorizzazione fallita");
+    SecKeyRef ref=loadKey();OwnedCF<SecKeyRef> key(ref,&CFRelease);
+    authorizeSigning(ref);
+    self.status.stringValue=@"Firma verificata con la tua chiave. Premi Genera Trial 14 Giorni oppure Genera Licenza Permanente.";
+  }catch(const std::exception& e){
+    [self error:[NSString stringWithFormat:@"%@\n\nSe il blocco persiste: chiudi l’app, verifica di usare la copia in Applicazioni e riavvia il Mac. In Accesso Portachiavi → login → GrainsDosage Publisher — RSA signing → Controllo accessi, autorizza questa copia del generatore. Conserva la chiave esistente.",@(e.what())]];
+  }
+}
 - (void)applicationDidFinishLaunching:(NSNotification*)notification {
   (void)notification;self.window=[[NSWindow alloc] initWithContentRect:NSMakeRect(0,0,760,730) styleMask:NSWindowStyleMaskTitled|NSWindowStyleMaskClosable|NSWindowStyleMaskMiniaturizable backing:NSBackingStoreBuffered defer:NO];self.window.title=[NSString stringWithFormat:@"GrainsDosage License Generator %@",[NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"]?:@""];
   [self label:@"GrainsDosage" frame:NSMakeRect(28,673,470,35) size:28];
@@ -57,14 +78,14 @@ using namespace grains::issuer;
       matches(ref)?@"La tua chiave è riconosciuta. Premi Genera oppure Configurazione iniziale per configurare il registro. Non creare un’altra chiave.":
       ref?@"Chiave già salvata: esporta solo il file pubblico e installa le build abbinate. Non creare un’altra chiave.":
       @"Prima configurazione: importa la tua chiave oppure creala su questo Mac. Non serve possedere già un PEM.";
-  }catch(const std::exception& e){[self error:@(e.what())];}
+  }catch(const std::exception& e){[self handleException:e];}
 }
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication*)sender{(void)sender;return YES;}
 - (void)controlTextDidChange:(NSNotification*)note{if(note.object==self.customer)self.license.stringValue=@"";}
 - (void)changeMode:(id)sender{(void)sender;BOOL permanent=self.mode.selectedSegment==1;self.customer.enabled=permanent;self.license.enabled=permanent;self.generate.title=permanent?@"Genera Licenza Permanente":@"Genera Trial 14 Giorni";self.output.string=@"";}
 - (void)pasteMachine:(id)sender{(void)sender;NSString* s=[[NSPasteboard generalPasteboard] stringForType:NSPasteboardTypeString];if(s)self.machine.string=s;}
 - (void)copyCode:(id)sender{(void)sender;if(!self.output.string.length)return;NSPasteboard* p=[NSPasteboard generalPasteboard];[p clearContents];[p setString:self.output.string forType:NSPasteboardTypeString];}
-- (void)showLedger:(id)sender{(void)sender;try{NSString* path=ledgerPath();if(path)[[NSWorkspace sharedWorkspace] activateFileViewerSelectingURLs:@[[NSURL fileURLWithPath:path]]];else [self error:@"Configurare prima il registro."];}catch(const std::exception& e){[self error:@(e.what())];}}
+- (void)showLedger:(id)sender{(void)sender;try{NSString* path=ledgerPath();if(path)[[NSWorkspace sharedWorkspace] activateFileViewerSelectingURLs:@[[NSURL fileURLWithPath:path]]];else [self error:@"Configurare prima il registro."];}catch(const std::exception& e){[self handleException:e];}}
 - (void)exportPublic:(id)sender {
   (void)sender;try{
     SecKeyRef ref=loadKey();std::unique_ptr<std::remove_pointer_t<SecKeyRef>,decltype(&CFRelease)> key(ref,&CFRelease);
@@ -74,7 +95,7 @@ using namespace grains::issuer;
     if([panel runModal]!=NSModalResponseOK)return;
     if(![publicEnrollment(ref) writeToURL:panel.URL options:NSDataWritingAtomic error:nil])throw std::runtime_error("Salvataggio della chiave pubblica fallito. Riprovare senza creare un'altra chiave.");
     self.status.stringValue=@"Invia GrainsDosage-Public-Key.json per le build abbinate. Conserva questa chiave nel Portachiavi: non rigenerarla. Dopo l’aggiornamento, riapri Configurazione iniziale.";
-  }catch(const std::exception& e){[self error:@(e.what())];}
+  }catch(const std::exception& e){[self handleException:e];}
 }
 - (void)backupPrivate:(id)sender {
   (void)sender;try{
@@ -87,7 +108,7 @@ using namespace grains::issuer;
     if(![backup writeToURL:panel.URL options:NSDataWritingAtomic error:nil])throw std::runtime_error("Backup non salvato. La chiave rimane nel Portachiavi.");
     if(chmod(panel.URL.path.fileSystemRepresentation,0600)!=0)throw std::runtime_error("Backup salvato, ma impossibile impostare i permessi. Spostarlo in un archivio privato.");
     self.status.stringValue=@"Backup PEM cifrato salvato. Conserva la password separatamente. Condividi esclusivamente il file Public-Key.json.";
-  }catch(const std::exception& e){[self error:@(e.what())];}
+  }catch(const std::exception& e){[self handleException:e];}
 }
 - (void)setup:(id)sender {
   (void)sender;
@@ -115,7 +136,7 @@ using namespace grains::issuer;
     if(chmod(path.fileSystemRepresentation,0600)!=0)throw std::runtime_error("Impossibile proteggere i permessi del registro.");
     if(!existing)storeKey(key.get());storeLedgerPath(path);finishEnrollment();
     self.status.stringValue=@"Configurazione completata. Chiave nel Portachiavi; registro persistente. Eseguire backup sicuri di entrambi.";
-  }catch(const std::exception& e){[self error:@(e.what())];}
+  }catch(const std::exception& e){[self handleException:e];}
 }
 - (void)generateLicense:(id)sender {
   (void)sender;self.output.string=@"";
@@ -143,10 +164,10 @@ using namespace grains::issuer;
     self.output.string=text;
     if(trial){NSDateFormatter* f=[NSDateFormatter new];f.dateFormat=@"yyyy-MM-dd HH:mm:ss 'UTC'";f.timeZone=[NSTimeZone timeZoneForSecondsFromGMT:0];self.status.stringValue=[NSString stringWithFormat:@"Salvato %@\nInizio: %@ · Scadenza: %@. Riemettere il codice non rinnova il trial.",filename,[f stringFromDate:[NSDate dateWithTimeIntervalSince1970:grant.start]],[f stringFromDate:[NSDate dateWithTimeIntervalSince1970:grant.end]]];}
     else{self.license.stringValue=@(grant.license.c_str());self.status.stringValue=[NSString stringWithFormat:@"Salvato %@\n%@ · %d/3 dispositivi registrati.",filename,self.license.stringValue,grant.devices];}
-  }catch(const std::exception& e){[self error:@(e.what())];}
+  }catch(const std::exception& e){[self handleException:e];}
 }
 @end
 int main(int argc,const char** argv){(void)argc;(void)argv;umask(0077);@autoreleasepool{[NSApplication sharedApplication];[NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
   NSMenu* menu=[NSMenu new];NSMenuItem* root=[NSMenuItem new];[menu addItem:root];NSMenu* app=[NSMenu new];[app addItemWithTitle:@"Esci da GrainsDosage License Generator" action:@selector(terminate:) keyEquivalent:@"q"];root.submenu=app;
   NSMenuItem* editRoot=[NSMenuItem new];[menu addItem:editRoot];NSMenu* edit=[[NSMenu alloc] initWithTitle:@"Modifica"];[edit addItemWithTitle:@"Taglia" action:@selector(cut:) keyEquivalent:@"x"];[edit addItemWithTitle:@"Copia" action:@selector(copy:) keyEquivalent:@"c"];[edit addItemWithTitle:@"Incolla" action:@selector(paste:) keyEquivalent:@"v"];[edit addItemWithTitle:@"Seleziona tutto" action:@selector(selectAll:) keyEquivalent:@"a"];editRoot.submenu=edit;NSApp.mainMenu=menu;
-  Generator* delegate=[Generator new];NSMenuItem* backup=[app insertItemWithTitle:@"Backup chiave privata cifrato…" action:@selector(backupPrivate:) keyEquivalent:@"" atIndex:0];backup.target=delegate;NSApp.delegate=delegate;[NSApp run];}return 0;}
+  Generator* delegate=[Generator new];NSMenuItem* authorize=[app insertItemWithTitle:@"Autorizza firma…" action:@selector(authorizeKey:) keyEquivalent:@"" atIndex:0];authorize.target=delegate;NSMenuItem* backup=[app insertItemWithTitle:@"Backup chiave privata cifrato…" action:@selector(backupPrivate:) keyEquivalent:@"" atIndex:0];backup.target=delegate;NSApp.delegate=delegate;[NSApp run];}return 0;}
