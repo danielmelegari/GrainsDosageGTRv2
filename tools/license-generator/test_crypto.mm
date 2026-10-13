@@ -28,11 +28,35 @@ int main(int argc,char** argv){@autoreleasepool{
  SecKeyRef reloaded=loadKey();assert(reloaded);assert([publicData(reloaded) isEqualToData:publicData(created)]);CFRelease(reloaded);
  bool creationRejected=false;try{SecKeyRef unexpected=createPublisherKey();CFRelease(unexpected);}catch(...){creationRejected=true;}assert(creationRejected);
  bool signingRejected=false;try{signPayload(created,"must not sign for unmatched build",true);}catch(...){signingRejected=true;}assert(signingRejected);
+ testNoPublicCopy=true;
+ for(bool legacySigning:{false,true}){
+  testLegacySigning=legacySigning;
+  assert(!matches(created));
+  bool exportRejected=false;try{publicEnrollment(created);}catch(...){exportRejected=true;}assert(exportRejected);
+  bool signatureRejected=false;try{signPayload(created,"wrong persisted key",true);}catch(...){signatureRejected=true;}assert(signatureRejected);
+ }
+ testNoPublicCopy=false;testLegacySigning=false;
  // Simulate completing the one-time setup: the first-issuance permission ends.
  finishEnrollment();assert(!freshKey(created));CFRelease(created);
  assert(SecItemDelete((__bridge CFDictionaryRef)keyQuery())==errSecSuccess);
  std::cout<<"PASS: first-time key creation, persistent reload, public-only enrollment, encrypted backup, no key replacement and unmatched-build rejection\n";
- storeKey(key);SecKeyRef restored=loadKey();assert(matches(restored));assert(!signPayload(restored,"test persistence",true).empty());CFRelease(restored);
+ storeKey(key);SecKeyRef restored=loadKey();assert(matches(restored));assert(!signPayload(restored,"test persistence",true).empty());
+ testNoPublicCopy=true;
+ for(bool legacySigning:{false,true}){
+  testLegacySigning=legacySigning;
+  assert(matches(restored));assert([publicData(restored) isEqualToData:expectedPublic()]);
+  assert([keyFingerprint(restored) isEqualToString:@(fingerprint().c_str())]);
+  NSDictionary* exported=[NSJSONSerialization JSONObjectWithData:publicEnrollment(restored) options:0 error:nil];
+  assert([exported[@"sha256"] isEqualToString:@(fingerprint().c_str())]);
+  assert(!signPayload(restored,"test persisted key without public copy",true).empty());
+  NSData* message=[@"signed message" dataUsingEncoding:NSUTF8StringEncoding];NSData* signature=signMessage(restored,message);
+  assert(verifiesExpected(message,signature));
+  assert(!verifiesExpected([@"altered message" dataUsingEncoding:NSUTF8StringEncoding],signature));
+ }
+ CFRelease(restored);
+ // Keep the forced legacy/no-public-copy path enabled below: real license
+ // fixtures are independently checked by OpenSSL and both plugin editions.
+ std::cout<<"PASS: missing public-key copy uses a verified challenge; current/legacy signing works and wrong keys/altered messages stay rejected\n";
  storeLedgerPath(@((root+"/generator.sqlite").c_str()));assert([ledgerPath() isEqualToString:@((root+"/generator.sqlite").c_str())]);
  // Losing the private key must never silently create a replacement for an
  // already configured publisher ledger.

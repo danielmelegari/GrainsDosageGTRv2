@@ -1,6 +1,8 @@
 #pragma once
 #import <Foundation/Foundation.h>
 #import <Security/Security.h>
+#import <Security/SecSignVerifyTransform.h>
+#import <Security/SecDigestTransform.h>
 #import <CommonCrypto/CommonDigest.h>
 #ifdef GRAINS_GENERATOR_TEST
 #include "license_test_key.h"
@@ -13,18 +15,75 @@ namespace grains::issuer {
 inline NSData* expectedPublic(){return [NSData dataWithBytes:aztec::license::publicKey length:sizeof(aztec::license::publicKey)];}
 inline std::string hexData(NSData* data){const auto* bytes=(const unsigned char*)data.bytes;std::string s;const char* h="0123456789abcdef";for(NSUInteger i=0;i<data.length;++i){s+=h[bytes[i]>>4];s+=h[bytes[i]&15];}return s;}
 inline std::string fingerprint(){unsigned char digest[CC_SHA256_DIGEST_LENGTH];NSData* data=expectedPublic();CC_SHA256(data.bytes,CC_LONG(data.length),digest);return hexData([NSData dataWithBytes:digest length:sizeof(digest)]);}
-inline NSData* publicData(SecKeyRef key){
-  SecKeyRef pub=key?SecKeyCopyPublicKey(key):nullptr;
-  if(!pub)throw std::runtime_error("Chiave pubblica non disponibile.");
+#ifdef GRAINS_GENERATOR_TEST
+// Exercise a persistent legacy Keychain reference that cannot copy its public
+// half, and the older signing API, on current CI hosts as well as on Mojave.
+inline bool testNoPublicCopy=false;
+inline bool testLegacySigning=false;
+#endif
+inline NSData* signMessage(SecKeyRef key,NSData* message){
+  if(!key)throw std::runtime_error("Chiave privata assente nel Portachiavi.");
+  bool modern=SecKeyIsAlgorithmSupported(key,kSecKeyOperationTypeSign,kSecKeyAlgorithmRSASignatureMessagePKCS1v15SHA256);
+#ifdef GRAINS_GENERATOR_TEST
+  if(testLegacySigning)modern=false;
+#endif
+  if(modern){
+    CFErrorRef error=nullptr;
+    CFDataRef result=SecKeyCreateSignature(key,kSecKeyAlgorithmRSASignatureMessagePKCS1v15SHA256,(__bridge CFDataRef)message,&error);
+    if(result){if(error)CFRelease(error);return CFBridgingRelease(result);}
+    const auto code=error?CFErrorGetCode(error):0;if(error)CFRelease(error);
+    throw std::runtime_error("Firma negata o non disponibile nel Portachiavi (codice "+std::to_string(code)+"). Sblocca il Portachiavi login e autorizza questa app. Non creare una nuova chiave.");
+  }
+  // Legacy macOS Keychain references can also be used through the Security
+  // signing transform. This enforces the same ACL and never exports private data.
+  CFErrorRef error=nullptr;SecTransformRef transform=SecSignTransformCreate(key,&error);
+  bool configured=transform&&
+    SecTransformSetAttribute(transform,kSecTransformInputAttributeName,(__bridge CFDataRef)message,&error)&&
+    SecTransformSetAttribute(transform,kSecInputIsAttributeName,kSecInputIsPlainText,&error)&&
+    SecTransformSetAttribute(transform,kSecDigestTypeAttribute,kSecDigestSHA2,&error)&&
+    SecTransformSetAttribute(transform,kSecDigestLengthAttribute,(__bridge CFNumberRef)@256,&error);
+  CFTypeRef result=configured?SecTransformExecute(transform,&error):nullptr;
+  if(transform)CFRelease(transform);
+  if(result&&CFGetTypeID(result)==CFDataGetTypeID()){
+    if(error)CFRelease(error);return CFBridgingRelease(result);
+  }
+  if(result)CFRelease(result);const auto code=error?CFErrorGetCode(error):0;if(error)CFRelease(error);
+  throw std::runtime_error("Firma RSA nel Portachiavi fallita (codice "+std::to_string(code)+"). Sblocca il Portachiavi login e autorizza questa app. Non creare una nuova chiave.");
+}
+inline bool verifiesExpected(NSData* message,NSData* signature){
+  if(!signature||signature.length!=256)return false;
+  NSDictionary* attrs=@{(__bridge id)kSecAttrKeyType:(__bridge id)kSecAttrKeyTypeRSA,(__bridge id)kSecAttrKeyClass:(__bridge id)kSecAttrKeyClassPublic,(__bridge id)kSecAttrKeySizeInBits:@2048};
+  SecKeyRef pub=SecKeyCreateWithData((__bridge CFDataRef)expectedPublic(),(__bridge CFDictionaryRef)attrs,nullptr);
+  if(!pub)throw std::runtime_error("Chiave pubblica della build non valida.");
+  bool valid=SecKeyVerifySignature(pub,kSecKeyAlgorithmRSASignatureMessagePKCS1v15SHA256,(__bridge CFDataRef)message,(__bridge CFDataRef)signature,nullptr);CFRelease(pub);return valid;
+}
+inline bool provesExpected(SecKeyRef key){
+  if(!key)return false;
+  unsigned char nonce[32];
+  if(SecRandomCopyBytes(kSecRandomDefault,sizeof(nonce),nonce)!=errSecSuccess)throw std::runtime_error("Impossibile creare la prova crittografica della chiave.");
+  NSMutableData* challenge=[[@"GrainsDosage publisher key proof v1:" dataUsingEncoding:NSUTF8StringEncoding] mutableCopy];
+  [challenge appendBytes:nonce length:sizeof(nonce)];
+  return verifiesExpected(challenge,signMessage(key,challenge));
+}
+inline NSData* copiedPublicData(SecKeyRef key){
+#ifdef GRAINS_GENERATOR_TEST
+  if(testNoPublicCopy)return nil;
+#endif
+  SecKeyRef pub=key?SecKeyCopyPublicKey(key):nullptr;if(!pub)return nil;
   CFDataRef der=SecKeyCopyExternalRepresentation(pub,nullptr);CFRelease(pub);
-  if(!der)throw std::runtime_error("Esportazione della chiave pubblica fallita.");
-  return CFBridgingRelease(der);
+  return der?CFBridgingRelease(der):nil;
+}
+inline NSData* publicData(SecKeyRef key){
+  NSData* data=copiedPublicData(key);if(data)return data;
+  // CopyPublicKey can fail for persistent legacy Keychain references. Export
+  // the compiled public key ONLY after proving possession of its private half.
+  if(provesExpected(key))return expectedPublic();
+  throw std::runtime_error("La chiave nel Portachiavi non verifica con la chiave pubblica di questa build. Nessuna chiave è stata modificata.");
 }
 inline NSString* keyFingerprint(SecKeyRef key){NSData* data=publicData(key);unsigned char digest[CC_SHA256_DIGEST_LENGTH];CC_SHA256(data.bytes,CC_LONG(data.length),digest);return @(hexData([NSData dataWithBytes:digest length:sizeof(digest)]).c_str());}
 inline bool matches(SecKeyRef key){
-  if(!key)return false;SecKeyRef pub=SecKeyCopyPublicKey(key);if(!pub)return false;
-  CFDataRef der=SecKeyCopyExternalRepresentation(pub,nullptr);CFRelease(pub);
-  bool equal=der&&[(__bridge NSData*)der isEqualToData:expectedPublic()];if(der)CFRelease(der);return equal;
+  if(!key)return false;NSData* data=copiedPublicData(key);
+  return data?[data isEqualToData:expectedPublic()]:provesExpected(key);
 }
 inline NSData* tag(){return [@"com.grainsdosage.publisher.rsa.v1" dataUsingEncoding:NSUTF8StringEncoding];}
 inline NSDictionary* keyQuery(){return @{(__bridge id)kSecClass:(__bridge id)kSecClassKey,(__bridge id)kSecAttrKeyClass:(__bridge id)kSecAttrKeyClassPrivate,(__bridge id)kSecAttrKeyType:(__bridge id)kSecAttrKeyTypeRSA,(__bridge id)kSecAttrApplicationTag:tag()};}
@@ -93,13 +152,11 @@ inline NSData* encryptedBackup(SecKeyRef key,CFStringRef testPassphrase=nullptr)
   return CFBridgingRelease(out);
 }
 inline std::string signPayload(SecKeyRef key,const std::string& payload,bool mac){
-  if(!matches(key))throw std::runtime_error("La chiave non corrisponde al plugin.");
-  NSData* data=[NSData dataWithBytes:payload.data() length:payload.size()];CFErrorRef error=nullptr;
-  CFDataRef signature=SecKeyCreateSignature(key,kSecKeyAlgorithmRSASignatureMessagePKCS1v15SHA256,(__bridge CFDataRef)data,&error);
-  if(!signature){if(error)CFRelease(error);throw std::runtime_error("Firma RSA negata o fallita. Controllare il Portachiavi.");}
-  NSData* sig=CFBridgingRelease(signature);SecKeyRef pub=SecKeyCopyPublicKey(key);
-  bool verified=pub&&SecKeyVerifySignature(pub,kSecKeyAlgorithmRSASignatureMessagePKCS1v15SHA256,(__bridge CFDataRef)data,(__bridge CFDataRef)sig,nullptr);if(pub)CFRelease(pub);
-  if(!verified||sig.length!=256)throw std::runtime_error("Verifica della firma fallita: nessun codice esportato.");
+  NSData* data=[NSData dataWithBytes:payload.data() length:payload.size()];
+  NSData* sig=signMessage(key,data);
+  // Verify against the pinned publisher public key directly. A copied public
+  // half from the private Keychain reference is neither needed nor trusted here.
+  if(!verifiesExpected(data,sig))throw std::runtime_error("Verifica della firma con la chiave pubblica del plugin fallita: nessun codice esportato.");
   if(mac)return "GDS2."+std::string([data base64EncodedStringWithOptions:0].UTF8String)+"."+std::string([sig base64EncodedStringWithOptions:0].UTF8String)+"\n";
   return payload+hexData(sig)+"\n";
 }
