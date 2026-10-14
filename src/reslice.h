@@ -21,24 +21,32 @@ class Reslice {
  std::array<std::vector<float>,2> buffer_,combBuffer_;size_t mask_=0,combMask_=0,combWrite_=0,combValid_=0;
  ResliceSettings s_;double sr_=48000.;int64_t write_=0;
  double lastBeat_=0.,nextCut_=0.,tempo_=0.,spb_=24000.,bar_=4.,start_=0.,span_=0.,cursor_=0.,speed_=1.,mix_=0.;
- double invBar_=.25,beatJump_=4./24000.,mixStep_=1./144.,invFade_=1./144.;
- double phraseStart_=0.,phraseEnd_=0.,elapsed_=0.,cutSamples_=1.,cutDuty_=1.,gain_[2]{1,1};
+ double invBar_=.25,beatJump_=4./24000.,mixStep_=1./144.;
+ double audibleSamples_=0.,envelopeRate_=0.,seamRate_=0.;
+ double phraseStart_=0.,phraseEnd_=0.,repeatBeats_=0.,elapsed_=0.,cutSamples_=1.,cutDuty_=1.,gain_[2]{1,1};
  double crusherPhase_=1.,crusherRate_=1.,quantize_=0.,held_[2]{},delay_=480.,feedback_=.5;
- bool reverse_=false,playing_=false,active_=false,pending_=true;int step_=0,fade_=0,fadeSize_=144,mixFade_=144,repeatsLeft_=0;
- std::array<int,16> pattern_{};double lastWet_[2]{},from_[2]{};uint32_t rng_=1;uint64_t events_=0;
+ bool phraseFill_=false,inFill_=false,reverse_=false,playing_=false,active_=false,pending_=true;int step_=0,fadeSize_=144,mixFade_=144,repeatsLeft_=0;
+ std::array<int,16> pattern_{};uint32_t rng_=1;uint64_t events_=0;
  double random(){rng_^=rng_<<13;rng_^=rng_>>17;rng_^=rng_<<5;return (rng_&0xffffff)/16777216.;}
  double between(double a,double b){if(a>b)std::swap(a,b);return a==b?a:a+random()*(b-a);}
  int integer(int a,int b){if(a>b)std::swap(a,b);return a==b?a:a+std::min(b-a,int(random()*(b-a+1)));}
  static size_t capacity(double samples){size_t n=1;while(n<size_t(samples))n<<=1;return n;}
- void crossfade(){for(int ch=0;ch<2;++ch)from_[ch]=lastWet_[ch];fade_=fadeSize_;}
+ void updateEnvelope(){
+  audibleSamples_=cutSamples_*cutDuty_;
+  const double ramp=std::min(double(fadeSize_),audibleSamples_*.125);
+  envelopeRate_=ramp>0.?1./ramp:0.;
+  const double seam=std::min(double(fadeSize_)*speed_,std::max(0.,span_-2)*.125);
+  seamRate_=seam>0.?1./seam:0.;
+ }
  void choose(double beat){
   const double bar=bar_;double barPhase=beat-std::floor(beat/bar)*bar;
   if(phraseEnd_<=phraseStart_||beat+1e-7>=phraseEnd_||beat<phraseStart_){
    int hi=std::clamp(int(std::round(s_.phraseBeats/bar)),1,8),lo=s_.minPhraseBeats>0?std::clamp(int(std::round(s_.minPhraseBeats/bar)),1,8):hi;
    phraseStart_=std::floor((beat+1e-8)/bar)*bar;phraseEnd_=phraseStart_+integer(lo,hi)*bar;
+   phraseFill_=random()<std::clamp(s_.fill,0.,1.);
   }
   const double phrase=phraseEnd_-phraseStart_,phase=beat-phraseStart_;
-  bool fill=phraseEnd_-beat<=1.+1e-7&&random()<std::clamp(s_.fill,0.,1.);
+  bool fill=phraseEnd_-beat<=std::min(1.,bar)+1e-7&&phraseFill_;
   double variation=std::clamp(s_.variation,0.,1.),duration=.5;int mode=std::clamp(s_.algorithm,0,2);
   if(mode==0){
    duration=fill?(random()<.5?.0625:.125):(random()<variation?.25:(random()<.65?.5:1.));
@@ -55,15 +63,19 @@ class Reslice {
    if(fill&&random()<std::clamp(s_.activity,0.,1.))duration=std::min(duration,random()<.5?.0625:.125);
   }
   duration*=8./std::clamp(s_.subdivision,1,32);
+  const bool enterFill=fill&&!inFill_;inFill_=fill;
+  if(enterFill)repeatsLeft_=0;
+  const bool anchor=barPhase<1e-7,forced=repeatsLeft_>0;
+  const bool repeat=events_>0&&!anchor&&!enterFill&&(forced||random()<std::clamp(s_.repeat,0.,1.));
+  if(mode==0&&repeat&&repeatBeats_>0.)duration=repeatBeats_;
+  if(forced)--repeatsLeft_;else repeatsLeft_=mode==0?integer(std::clamp(s_.minRepeats,0,16),std::clamp(s_.maxRepeats,0,16)):0;
+  if(anchor&&forced)repeatsLeft_=0;
   duration=std::max(1e-7,std::min(std::max(1./192.,duration),bar-barPhase));nextCut_=beat+duration;
-  cutSamples_=duration*spb_;elapsed_=0;cutDuty_=std::clamp(fill?s_.fillDuty:s_.duty,0.,1.);
+  repeatBeats_=duration;cutSamples_=duration*spb_;elapsed_=0;cutDuty_=std::clamp(fill?s_.fillDuty:s_.duty,0.,1.);
   double history=std::min({double(write_-2),std::clamp(s_.beats,2.,16.)*spb_,double(buffer_[0].size())-4});
   double requestedSpan=std::max(32.,cutSamples_);speed_=1.;
   if(mode==1){if(random()<variation){constexpr double ratios[]={.5,.75,1.,1.5,2.};speed_=ratios[integer(0,4)];}speed_*=std::exp2((std::clamp(s_.warpSpeed,0.,1.)-.5)*4.);}
   speed_*=std::exp2(between(std::clamp(s_.minPitch,-2400.,2400.),std::clamp(s_.maxPitch,-2400.,2400.))/1200.);
-  const bool forced=repeatsLeft_>0;bool repeat=events_>0&&(forced||random()<std::clamp(s_.repeat,0.,1.));
-  if(forced)--repeatsLeft_;else repeatsLeft_=mode==0?integer(std::clamp(s_.minRepeats,0,16),std::clamp(s_.maxRepeats,0,16)):0;
-  bool anchor=barPhase<1e-7;
   if(!repeat||anchor||span_<32||start_<double(write_-2)-history){
    span_=std::min(requestedSpan,history);double depth=std::max(0.,history-span_);if(mode==0)depth*=std::clamp(s_.area,0.,1.);
    double back=(mode==0&&anchor)?std::max(0.,std::min(depth,bar*spb_-span_)):random()*depth*variation;
@@ -73,20 +85,20 @@ class Reslice {
   double pan=between(std::clamp(s_.minPan,-1.,1.),std::clamp(s_.maxPan,-1.,1.));gain_[0]=amp*(pan>0?1.-pan:1.);gain_[1]=amp*(pan<0?1.+pan:1.);
   if(s_.crusher){int bits=integer(std::clamp(s_.minBits,1,32),std::clamp(s_.maxBits,1,32));quantize_=bits==32?0.:std::exp2(bits-1.);crusherRate_=std::clamp(between(s_.minFreq,s_.maxFreq)/sr_,100./sr_,1.);crusherPhase_=1.;}
   if(s_.comb)delay_=std::clamp(between(s_.minDelay,s_.maxDelay)*sr_*.001,1.,double(combMask_));
-  cursor_=0;reverse_=random()<std::clamp(s_.reverse,0.,1.);crossfade();++events_;
+  cursor_=0;reverse_=random()<std::clamp(s_.reverse,0.,1.);updateEnvelope();++events_;
   pattern_[step_]=int(std::clamp((double(write_-2)-start_)/std::max(1.,history),0.,.999)*16);
  }
 public:
  void prepare(double sr){sr_=std::max(8000.,sr);size_t n=capacity(sr_*48.+64),cn=capacity(sr_*.1+4);mask_=n-1;combMask_=cn-1;
   for(auto& b:buffer_)b.assign(n,0.f);for(auto& b:combBuffer_)b.assign(cn,0.f);
-  mixFade_=std::max(8,int(sr_*.003));fadeSize_=int(sr_*std::clamp(s_.fadeMs,0.,50.)*.001);mixStep_=1./mixFade_;invFade_=fadeSize_?1./fadeSize_:0.;lastWet_[0]=lastWet_[1]=from_[0]=from_[1]=0;mix_=0;tempo_=0;reset();}
- void reset(){write_=0;pending_=true;active_=false;span_=cursor_=0;events_=0;rng_=s_.seed?s_.seed:1;pattern_.fill(0);fade_=0;phraseStart_=phraseEnd_=0;combValid_=combWrite_=0;repeatsLeft_=0;}
+  mixFade_=std::max(8,int(sr_*.003));fadeSize_=int(sr_*std::clamp(s_.fadeMs,0.,50.)*.001);mixStep_=1./mixFade_;mix_=0;tempo_=0;reset();}
+ void reset(){write_=0;pending_=true;active_=false;span_=cursor_=0;events_=0;rng_=s_.seed?s_.seed:1;pattern_.fill(0);phraseStart_=phraseEnd_=repeatBeats_=0;phraseFill_=inFill_=false;combValid_=combWrite_=0;repeatsLeft_=0;}
  void set(const ResliceSettings& s){
   if(s.algorithm!=s_.algorithm)repeatsLeft_=0;
   if(s.algorithm!=s_.algorithm||s.seed!=s_.seed||s.phraseBeats!=s_.phraseBeats||s.minPhraseBeats!=s_.minPhraseBeats||s.barBeats!=s_.barBeats){pending_=true;rng_=s.seed?s.seed:1;phraseStart_=phraseEnd_=0;}
   if(s.enabled&&!s_.enabled)pending_=true;
   if(s.crusher!=s_.crusher||s.comb!=s_.comb){pending_=true;combValid_=0;}
-  if(s.fadeMs!=s_.fadeMs){fadeSize_=int(sr_*std::clamp(s.fadeMs,0.,50.)*.001);fade_=std::min(fade_,fadeSize_);invFade_=fadeSize_?1./fadeSize_:0.;}
+  if(s.fadeMs!=s_.fadeMs){fadeSize_=int(sr_*std::clamp(s.fadeMs,0.,50.)*.001);updateEnvelope();}
   bar_=std::clamp(s.barBeats,.25,32.);invBar_=1./bar_;feedback_=std::clamp(s.combFeedback,0.,.95);s_=s;
  }
  int source(int i)const{return pattern_[std::clamp(i,0,15)];}
@@ -104,21 +116,27 @@ public:
   double position=start_+(reverse_?span_-2-std::min(cursor_,span_-2):std::min(cursor_,span_-2));
   int64_t absolute=int64_t(std::floor(position));size_t a=size_t(absolute)&mask_,b=(a+1)&mask_;double fraction=position-absolute;
   bool valid=span_>2&&absolute>=0&&absolute>=write_-int64_t(buffer_[0].size())&&absolute+1<write_;
-  double gate=elapsed_<cutSamples_*cutDuty_?1.:0.;if(gate&&fadeSize_>0&&elapsed_>cutSamples_*cutDuty_-fadeSize_)gate=std::max(0.,(cutSamples_*cutDuty_-elapsed_)*invFade_);
+  double gate=elapsed_<audibleSamples_?1.:0.;
+  if(gate&&envelopeRate_>0.){
+   double edge=std::clamp(std::min(elapsed_,audibleSamples_-elapsed_)*envelopeRate_,0.,1.);
+   gate=edge*edge*(3.-2.*edge);
+  }
   bool capture=false;if(s_.crusher){crusherPhase_+=crusherRate_;if(crusherPhase_>=1.){crusherPhase_-=std::floor(crusherPhase_);capture=true;}}
   size_t d0=0,d1=0;double df=0;if(s_.comb){d0=(combWrite_-size_t(delay_))&combMask_;d1=(d0-1)&combMask_;df=delay_-std::floor(delay_);}
-  double blend=fade_&&fadeSize_?1.-double(fade_)*invFade_:1.;blend=blend*blend*(3.-2*blend);
+  // Pitch/reverse playback can wrap before the scheduled cut ends. Taper
+  // both sides of that seam using the read position, shared by L/R.
+  double seam=1.;
+  if(seamRate_>0.){double edge=std::clamp(std::min(cursor_,span_-2-cursor_)*seamRate_,0.,1.);seam=edge*edge*(3.-2.*edge);}
   for(int ch=0;ch<2;++ch){
-   double wet=valid?(buffer_[ch][a]+(buffer_[ch][b]-buffer_[ch][a])*fraction)*gain_[ch]*gate:0.;
+   double wet=valid?(buffer_[ch][a]+(buffer_[ch][b]-buffer_[ch][a])*fraction)*gain_[ch]*gate*seam:0.;
    if(s_.crusher){if(capture)held_[ch]=quantize_?std::round(std::clamp(wet,-1.,1.)*quantize_)/quantize_:wet;wet=held_[ch];}
    if(s_.comb){double delayed=combValid_>size_t(delay_)+1?combBuffer_[ch][d0]+(combBuffer_[ch][d1]-combBuffer_[ch][d0])*df:0.;
     double v=s_.combType?(1.-feedback_)*wet+feedback_*delayed:(wet+feedback_*delayed)/(1.+feedback_);
     double store=s_.combType?v:wet;combBuffer_[ch][combWrite_]=float(std::abs(store)<1e-20?0.:store);wet=v;}
-   if(fade_)wet=from_[ch]+blend*(wet-from_[ch]);lastWet_[ch]=wet;
    double out=input[ch]+mix_*(wet-input[ch]);if(ch==0)l=float(out);else r=float(out);
   }
   if(s_.comb){combWrite_=(combWrite_+1)&combMask_;combValid_=std::min(combValid_+1,combMask_);}
-  ++elapsed_;if(fade_)--fade_;if(next&&span_>2){cursor_+=speed_;if(cursor_>=span_-2){cursor_=std::fmod(cursor_,span_-2);crossfade();}}
+  ++elapsed_;if(next&&span_>2){cursor_+=speed_;if(cursor_>=span_-2){cursor_=std::fmod(cursor_,span_-2);}}
  }
  int step()const{return step_;}bool active()const{return active_;}
  uint64_t events()const{return events_;}double nextCut()const{return nextCut_;}double speed()const{return speed_;}bool reversed()const{return reverse_;}

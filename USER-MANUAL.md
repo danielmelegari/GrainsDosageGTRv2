@@ -1,6 +1,6 @@
 # GrainsDosage — complete user manual
 
-**Windows VST3 · purple three-page edition · 0.13.5**\
+**Windows VST3 · purple three-page edition · 0.13.7**\
 Applies to the updated `work/mockup-purple-skin` branch. The pages are **Modules**, **Modulation**, and **Morph**. This manual describes the current generative Reslice, not the retired Preslicer or the old Reslice step editor. Shared sound controls also apply to the macOS build; installation and registration below describe Windows.
 
 ## Contents
@@ -174,7 +174,7 @@ All **sound and capture controls in this section**, including On and module Loop
 | **Min Phrase** | Minimum generated phrase: 1–8 host bars. Keep it no higher than Max Phrase for predictable setup. |
 | **Subdiv** | 1–32; higher settings shorten the generated cut durations. |
 | **Seed** | 1–65,535; selects the deterministic random sequence. Identical input, transport and settings are needed for repeatable results. |
-| **Fade** | 0–50 ms transition shaping at cuts. Increase to soften edges. |
+| **Fade** | 0–50 ms shaping at cut and loop edges. Ramps shorten automatically for rapid rolls to preserve their body. |
 | **Duty** | 0–100% audible portion of ordinary cuts. |
 | **Fill Duty** | 0–100% audible portion of fill cuts. |
 | **Repeat Chance** | 0–100% probability of reusing a cut. |
@@ -191,7 +191,7 @@ The engine chooses values between each minimum/maximum pair at cut events. Match
 
 ### CutDSG
 
-CutDSG focuses on repeated cuts, stutters and movement through the source history.
+CutDSG focuses on repeated cuts, stutters and movement through the source history. Repetitions retain their rhythmic duration until a bar boundary or phrase-ending fill. Fill Chance chooses whether each phrase receives an ending fill. Version 0.13.7 changes the RESLICE sound while preserving saved controls, automation and project compatibility.
 
 | Control | Function |
 |---|---|

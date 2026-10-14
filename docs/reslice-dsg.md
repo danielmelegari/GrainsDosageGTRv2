@@ -40,8 +40,7 @@ the source; crusher holds and comb tails can continue past that gate. Mode-speci
 controls affect their named algorithm only; Activity belongs to PushDSG.
 
 Cut decisions follow host quarter-note position, tempo and time signature, with
-bar-boundary alignment. Reads stay within recorded history. Fade controls cut/loop
-crossfades; bypass uses a separate short ramp and settles to the original signal.
+bar-boundary alignment. Reads stay within recorded history. Fade controls duration-limited cut and loop-edge envelopes; bypass uses a separate short ramp and settles to the original signal.
 Brief startup history is required before cutting begins. There is no Manual mode.
 
 The prepared history covers the maximum 16-quarter-note window at 20 BPM.
@@ -81,3 +80,31 @@ Five passes, median process CPU, 48 kHz stereo, 256-sample blocks; one core = 10
 | PushDSG + crusher/comb | N/A | 0.155% |
 
 Reslice source-monitor changes do not wake the GUI when its source display is scrolled offscreen. GUI refresh frequency is unchanged; the expanded controls use the existing cached static scene. Native host profiling on the target Intel/Mojave machine remains necessary to assess total plugin/GUI cost.
+
+## 0.13.7 — repeat continuity and cut envelopes
+
+Review of the supplied Livecut archive identified phrase/block organization as
+an important behavioral distinction. The archive is GPL-2.0-or-later; none of its
+source, pattern tables or implementation was imported into GrainsDosage. These
+changes are independent edits to the existing DSG engine, not a Livecut port.
+
+CutDSG repeats now retain the selected rhythmic duration until a bar boundary or
+the start of a phrase-ending fill. FILL CHANCE is sampled once per phrase, so a
+selected ending remains a fill instead of alternating randomly between normal
+and fill cuts. New phrases and bar anchors continue to follow the host clock.
+
+The old transition held one output sample while blending into the next slice.
+The new envelope tapers both ends of each audible cut, with a separate taper at
+pitched/reversed read-loop seams. Each ramp is limited to one eighth of its
+available duration: a 50 ms setting cannot consume an entire short roll. Envelope
+rates are cached at cut/control changes; the audio loop allocates no memory.
+Crusher/comb process the enveloped cuts and retain their normal held samples/tails.
+
+All parameter IDs, preset formats, modulation/morph destinations and plugin IDs
+are unchanged. Existing projects load their original settings, but enabled
+RESLICE renders differently by design. No bit-identical Livecut sound or subjective
+sound-quality improvement is claimed without a listening comparison.
+
+Regression checks cover stable repeat intervals, usable rapid-roll level at
+8/48 kHz, bounded seam jumps on a constant signal, stereo coherence, all controls,
+transport/tempo changes, non-4/4 timing and no allocations in processing.

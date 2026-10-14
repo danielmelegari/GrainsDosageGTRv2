@@ -21,6 +21,24 @@ int main(){
   for(int i=0;i<24000;++i){double tempo=i<12000?137:190;beat+=tempo/(60*sr);if(i==10000)beat=-.5;if(i%4000==0){s.algorithm=(i/4000)%3;s.combType=(i/4000)%2;s.seed=1+i;s.beats=i%8000?2:16;e.set(s);}float l=.2f,r=-.2f;e.process(l,r,beat,tempo,i<20000);assert(std::isfinite(l)&&std::abs(l)<=.26&&std::abs(l+r)<1e-6);}guard=false;assert(e.allocatedBytes()==memory&&!e.active());
  }
  assert(allocations==0);
+ // Forced repeats keep a stable rhythmic cell until the bar resolves. The
+ // old engine reselected the duration of each repetition independently.
+ {qg::Reslice e;e.prepare(8000);qg::ResliceSettings s;s.enabled=true;s.repeat=1;s.minRepeats=s.maxRepeats=8;s.variation=1;s.fill=0;e.set(s);
+  uint64_t event=0;double previousEnd=0,cell=0;int checked=0;
+  for(int i=0;i<96000;++i){float l=.2f,r=.2f;double beat=i/4000.;e.process(l,r,beat,120);
+   if(e.events()!=event){double start=event?previousEnd:beat,duration=e.nextCut()-start;
+    if(event&&std::fmod(start,4.)>1e-6&&std::fmod(e.nextCut(),4.)>1e-6){assert(std::abs(duration-cell)<1e-6);++checked;}
+    cell=duration;previousEnd=e.nextCut();event=e.events();
+   }
+  }assert(checked>10);
+ }
+ // Rapid rolls must retain a useful body with a long FADE setting. Constant
+ // input exposes attenuation and held-sample tails without source transients.
+ for(double sr:{8000.,48000.}){qg::Reslice e;e.prepare(sr);qg::ResliceSettings s;s.enabled=true;s.subdivision=32;s.stutter=1;s.fill=1;s.fadeMs=50;s.reverse=0;s.variation=1;s.seed=23;e.set(s);
+  double mean=0,jump=0;float previous=0;int count=0;
+  for(int i=0;i<int(sr*4);++i){float l=.25f,r=l;e.process(l,r,i*3./sr,180);if(i>sr){mean+=l;++count;jump=std::max(jump,double(std::abs(l-previous)));}previous=l;}
+  assert(mean/count>.12);assert(jump<.16);
+ }
  // Respect non-4/4 bar boundaries using the host's quarter-note metre.
  for(double bar:{3.,3.5,5.})for(int mode=0;mode<3;++mode){qg::Reslice e;e.prepare(8000);qg::ResliceSettings s;s.enabled=true;s.algorithm=mode;s.barBeats=bar;s.phraseBeats=bar*2;e.set(s);for(int i=0;i<48000;++i){double beat=i/4000.;float l=.2f,r=.2f;e.process(l,r,beat,120);if(e.active())assert(e.nextCut()<=(std::floor((beat+1e-8)/bar)+1)*bar+1e-6);}}
  // No dependency on obsolete per-step on/off values.
