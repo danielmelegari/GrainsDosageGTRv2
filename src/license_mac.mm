@@ -15,6 +15,7 @@
 #include <cstdlib>
 #include <condition_variable>
 #include <mutex>
+#include <memory>
 #include <thread>
 #include <unistd.h>
 
@@ -38,6 +39,7 @@ std::string deviceCode(){
 namespace {
 #ifdef GRAINS_LICENSE_TEST
 std::atomic<int64_t> testClock{0};
+std::atomic<int> testNeedsAuthorization{0};
 #endif
 int64_t now(){
 #ifdef GRAINS_LICENSE_TEST
@@ -51,9 +53,9 @@ NSString* service(){
  return @"com.danielmelegari.grainsdosage.trial.v1";
 #endif
 }
-NSMutableDictionary* query(bool signedTrial=false){return [@{(__bridge id)kSecClass:(__bridge id)kSecClassGenericPassword,
+NSMutableDictionary* query(bool signedTrial=false,bool interactive=false){return [@{(__bridge id)kSecClass:(__bridge id)kSecClassGenericPassword,
  (__bridge id)kSecAttrService:service(),
- (__bridge id)kSecAttrAccount:signedTrial?@"signed-trial":@"first-open",(__bridge id)kSecUseAuthenticationUI:(__bridge id)kSecUseAuthenticationUIFail} mutableCopy];}
+ (__bridge id)kSecAttrAccount:signedTrial?@"signed-trial":@"first-open",(__bridge id)kSecUseAuthenticationUI:(__bridge id)(interactive?kSecUseAuthenticationUIAllow:kSecUseAuthenticationUIFail)} mutableCopy];}
 NSString* serialPath(){NSString* root=[NSHomeDirectory() stringByAppendingPathComponent:@"Library/Application Support/GrainsDosage/Licensing"];
 
 #ifdef GRAINS_LICENSE_TEST
@@ -103,17 +105,26 @@ class Manager {
  State state=State::Ready;int64_t first=0,last=0;bool licensed=false;
  int64_t signedStart=0,cachedStart=0,cachedEnd=0;bool cachedValid=false,protectedOK=false;
  std::chrono::steady_clock::time_point signedDeadline{},lastStorage{};
+ std::atomic<OSStatus> storageCode{errSecSuccess};std::string storageOperation;
  std::atomic<State> viewState{State::Ready};std::atomic<int64_t> starts{0};
  void publish(State s){state=s;starts.store(first);viewState.store(s);allowed.store(s==State::Licensed||s==State::Trial,std::memory_order_release);}
- bool loadTrial(bool signedTrial=false){auto q=query(signedTrial);q[(__bridge id)kSecReturnData]=@YES;CFTypeRef out=nullptr;
-  OSStatus result=SecItemCopyMatching((__bridge CFDictionaryRef)q,&out);
+ void storageError(OSStatus code,const char* operation){storageCode.store(code);storageOperation=operation;publish(State::StorageError);}
+ bool loadTrial(bool signedTrial=false,bool interactive=false){auto q=query(signedTrial,interactive);q[(__bridge id)kSecReturnData]=@YES;CFTypeRef out=nullptr;
+  OSStatus result;
+#ifdef GRAINS_LICENSE_TEST
+  // Model a saved item requiring host authorization after relaunch. The allowed
+  // path still reads the real test Keychain; no test state authorizes a license.
+  if(testNeedsAuthorization.load()==2||(testNeedsAuthorization.load()==1&&!interactive))result=errSecInteractionNotAllowed;
+  else
+#endif
+  result=SecItemCopyMatching((__bridge CFDictionaryRef)q,&out);
   if(result==errSecItemNotFound){first=last=0;return true;}
-  if(result!=errSecSuccess){publish(State::StorageError);return false;}
+  if(result!=errSecSuccess){if(out)CFRelease(out);storageError(result,"read");return false;}
   NSData* data=CFBridgingRelease(out);NSString* text=[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
   NSArray* fields=[text componentsSeparatedByString:@":"];
-  if(fields.count!=2){publish(State::StorageError);return false;}
+  if(fields.count!=2){storageError(errSecDecode,"decode");return false;}
   first=[fields[0] longLongValue];last=[fields[1] longLongValue];
-  if(first<=0||last<first){publish(State::StorageError);return false;}return true;
+  if(first<=0||last<first){storageError(errSecDecode,"decode");return false;}return true;
  }
  NSData* record(int64_t start,int64_t seen){return [[NSString stringWithFormat:@"%lld:%lld",(long long)start,(long long)seen] dataUsingEncoding:NSUTF8StringEncoding];}
  void loadSerial(){
@@ -121,7 +132,7 @@ class Manager {
   cachedValid=serial&&verify([serial stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]],&cachedStart,&cachedEnd);
   protectedOK=false;lastStorage={};
  }
- void refresh(){
+ void refresh(bool interactive=false){
   const int64_t start=cachedStart,end=cachedEnd;const bool valid=cachedValid;
   licensed=valid&&!start;
   if(licensed){publish(State::Licensed);return;}
@@ -133,13 +144,17 @@ class Manager {
    if(std::chrono::steady_clock::now()>=signedDeadline){publish(State::Expired);return;}
    if(std::chrono::steady_clock::now()-lastStorage<std::chrono::seconds(30)){if(protectedOK)publish(State::Trial);return;}
    lastStorage=std::chrono::steady_clock::now();protectedOK=false;
-   if(!loadTrial(true))return;
+   if(!loadTrial(true,interactive))return;
    first=start;last=std::max(last,start);
    State next=evaluate(first,last,current);
-   if(next==State::Trial){auto q=query(true);NSData* data=record(first,std::max(last,current));
+   if(next==State::Trial){auto q=query(true,interactive);NSData* data=record(first,std::max(last,current));
     OSStatus result=SecItemUpdate((__bridge CFDictionaryRef)q,(__bridge CFDictionaryRef)@{(__bridge id)kSecValueData:data});
-    if(result==errSecItemNotFound){q[(__bridge id)kSecValueData]=data;result=SecItemAdd((__bridge CFDictionaryRef)q,nullptr);if(result==errSecDuplicateItem)result=SecItemUpdate((__bridge CFDictionaryRef)query(true),(__bridge CFDictionaryRef)@{(__bridge id)kSecValueData:data});}
-    if(result!=errSecSuccess){publish(State::StorageError);return;}last=std::max(last,current);
+    if(result==errSecItemNotFound){q[(__bridge id)kSecValueData]=data;result=SecItemAdd((__bridge CFDictionaryRef)q,nullptr);if(result==errSecDuplicateItem)result=SecItemUpdate((__bridge CFDictionaryRef)query(true,interactive),(__bridge CFDictionaryRef)@{(__bridge id)kSecValueData:data});}
+    if(result!=errSecSuccess){storageError(result,"save");return;}last=std::max(last,current);
+#ifdef GRAINS_LICENSE_TEST
+    if(interactive)testNeedsAuthorization.store(0);
+#endif
+    storageCode.store(errSecSuccess);
    }
    protectedOK=next==State::Trial;publish(next);return;
   }
@@ -157,7 +172,7 @@ public:
   case State::Trial:return "14 DAYS LICENSE ACTIVE - "+std::to_string(std::max<int64_t>(1,(starts.load()+trialSeconds-now()+86399)/86400))+" DAYS LEFT";
   case State::Expired:return "TRIAL EXPIRED";
   case State::ClockError:return "CHECK SYSTEM CLOCK";
-  case State::StorageError:return "LICENSE STORAGE ERROR";
+  case State::StorageError:return "LICENSE STORAGE ERROR ("+std::to_string(storageCode.load())+")";
   default:return "ACTIVATE LICENSE";}}
  bool activateSerial(const std::string& input,std::string& error){std::lock_guard<std::mutex> lock(mutex);@autoreleasepool{
   NSString* serial=[[NSString stringWithUTF8String:input.c_str()] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
@@ -168,11 +183,29 @@ public:
   if(start&&(now()<start||now()>=end)){error="This signed trial has not started or has expired.";return false;}
   if(start&&licensed){error="This Mac already has a permanent license.";return false;}
   if(![serial writeToFile:serialPath() atomically:YES encoding:NSUTF8StringEncoding error:nil]){error="Cannot save the license in Application Support.";return false;}
-  loadSerial();refresh();if(state!=State::Licensed&&state!=State::Trial){error="License saved, but protected trial state is unavailable or the system clock is invalid.";return false;}return true;}}
+  // Only this explicit UI action may authorize Keychain access. Startup,
+  // scanning and timer refreshes remain noninteractive and off the audio thread.
+  loadSerial();refresh(true);
+  if(state==State::StorageError){
+   const auto code=storageCode.load();CFStringRef detail=SecCopyErrorMessageString(code,nullptr);
+   NSString* description=CFBridgingRelease(detail);
+   error="License signature is valid, but macOS could not "+storageOperation+" the protected trial state (Keychain code "+std::to_string(code)+"). ";
+   if(description)error+=std::string(description.UTF8String)+" ";
+   error+="Unlock the login Keychain, click Activate again and authorize your DAW when macOS asks (Always Allow to remember it). Keep the existing license and trial state.";return false;
+  }
+  if(state==State::ClockError){error="The system clock is earlier than the protected trial history. Correct the Mac date and time, then retry activation.";return false;}
+  if(state==State::Expired){error="This signed trial has expired. Reopening or reactivating cannot extend its dates.";return false;}
+  if(state!=State::Licensed&&state!=State::Trial){error="The saved license could not be validated.";return false;}return true;}}
 };
+#ifdef GRAINS_LICENSE_TEST
+std::unique_ptr<Manager>& testManager(){static std::unique_ptr<Manager> instance;return instance;}
+Manager& manager(){auto& instance=testManager();if(!instance)instance=std::make_unique<Manager>();return *instance;}
+#else
 Manager& manager(){static Manager instance;return instance;}
+#endif
 }
 #ifdef GRAINS_LICENSE_TEST
+void testRestart(int needsAuthorization){testManager().reset();testNeedsAuthorization.store(needsAuthorization);(void)manager();}
 void testTime(int64_t t){testClock.store(t);}
 void testRecord(int64_t start,int64_t seen,bool signedTrial=false){auto q=query(signedTrial);SecItemDelete((__bridge CFDictionaryRef)q);q[(__bridge id)kSecValueData]=[[NSString stringWithFormat:@"%lld:%lld",(long long)start,(long long)seen] dataUsingEncoding:NSUTF8StringEncoding];SecItemAdd((__bridge CFDictionaryRef)q,nullptr);}
 void testCleanup(){SecItemDelete((__bridge CFDictionaryRef)query());SecItemDelete((__bridge CFDictionaryRef)query(true));[[NSFileManager defaultManager] removeItemAtPath:serialPath() error:nil];}

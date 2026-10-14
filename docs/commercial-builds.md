@@ -26,6 +26,14 @@ For explicitly activation-free distribution, the separate **GrainsDosage — Ful
 
 The prior Windows code returned early and cleared every audio output when its per-instance trial guard was blocked. The guard could also retain a failed initial authorization until the plugin was recreated, and older versions latched maintenance storage failures. The shared licensing manager now activates immediately, retries transient protected-storage failures, keeps the signed end fixed, and controls the same dry crossfade as macOS. On Mac, the previous verifier only recognized permanent GDS2 payloads; signed GDDEV2 trials now have an explicit validated payload and protected lifecycle. No one-hour expiry rule was found in the source. These changes and simulated two-hour tests address identified paths; a customer's specific hour-long Cubase failure still needs a real project reproduction to attribute conclusively.
 
+## macOS 0.13.6 — trial storage authorization after reopening a DAW
+
+The previous macOS activation path used `kSecUseAuthenticationUIFail` for every Keychain operation, including explicit activation. A saved trial could therefore become blocked after restarting the host if its protected record required authorization, and pasting the valid code again could not present the system prompt. Version 0.13.6 permits authorization UI only when the user clicks Activate. Startup, scanning and background checks remain noninteractive. Signature, Machine ID, signed expiry and stored clock-rollback checks still apply; the record is not reset or replaced to get past an access error.
+
+Install plugin 0.13.6 and reactivate using the existing TXT. If macOS asks, authorize the DAW to access the GrainsDosage trial item; choose Always Allow to remember the host. The generator remains 1.1.4 and does not need to issue a new code. Storage errors now report the actual Keychain operation/code, separately from clock rollback and expiration, so a remaining failure can be diagnosed without guessing.
+
+Native tests reconstruct the licensing manager with persisted records and simulate a new authorization requirement or a persistent denial. They verify recovery through explicit activation, continued denial, invalid-signature rejection and preservation of clock-rollback evidence. They do not reproduce the customer's Cubase identity/Keychain ACL on a physical Mojave Mac. That reopen/authorization scenario remains a required local validation.
+
 ## Automated checks
 
 - Full DSP/state regression suite plus actual VST3 `process()` tests in 32/64-bit format: valid authorization produces processed audio, expiry fades to dry, reactivation restores processing, and dry latency remains unchanged.
