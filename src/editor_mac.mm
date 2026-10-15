@@ -317,7 +317,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
       if(!image)image=[[NSImage alloc] initWithContentsOfFile:bundled];
       if(image)editableModuleSkins[@(stage)]=image;
     }
-    self.toolTip=@"Drag knobs vertically; Double-click enters a value; Shift-click restores its default. Scroll each page. Drag module headers vertically to change audio order. Option-scroll edits a knob.";
+    self.toolTip=@"Drag knobs vertically; Double-click knobs/faders to reset; double-click a value readout to type; Shift-click restores its default. Scroll each page. Drag module headers vertically to change audio order. Option-scroll edits a knob.";
     timer=[NSTimer timerWithTimeInterval:1./30. target:self selector:@selector(tick:) userInfo:nil repeats:YES];
     timer.tolerance=.003;
     [[NSRunLoop mainRunLoop] addTimer:timer forMode:NSRunLoopCommonModes];
@@ -696,7 +696,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   for(const auto& c:controls)if((p.y>=mockup::bodyTop||c.id==kInputDeclick||c.id==kDeclickSensitivity)&&NSPointInRect(p,c.rect)){
     auto readout=mockup::valueRect({c.rect.origin.x,c.rect.origin.y,c.rect.size.width,c.rect.size.height},mockup::Kind(c.kind),c.id,c.label);
     if(event.modifierFlags&NSEventModifierFlagShift){owner->edit(c.id,owner->info(c.id).defaultNormalizedValue);[self setNeedsDisplay:YES];return;}
-    if(event.clickCount>=2){[self editValue:c.id];return;}
+    if(event.clickCount>=2){if(!readout.contains(p.x,p.y)&&(c.kind==aztec::Knob||c.kind==aztec::Slider||c.kind==aztec::VSlider||c.kind==aztec::Pan)){owner->edit(c.id,owner->info(c.id).defaultNormalizedValue);[self setNeedsDisplay:YES];}else [self editValue:c.id];return;}
     if(readout.contains(p.x,p.y))return;
     if(c.kind==aztec::PanMode)owner->edit(c.id,std::clamp(int((p.x-c.rect.origin.x)/(c.rect.size.width/3.)),0,2)/2.);
     else if(c.kind==aztec::Pad||c.kind==aztec::Toggle)owner->edit(c.id,owner->value(c.id)>=.5?0.:1.);

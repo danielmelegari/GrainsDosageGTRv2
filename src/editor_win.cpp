@@ -419,7 +419,7 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
     auto xy=rackState.position(mockup::xy);if(rackState.page==2&&y>=mockup::bodyTop&&hit(xy)){if(GetKeyState(VK_SHIFT)&0x8000){edit(kXYX,info(kXYX).defaultNormalizedValue);edit(kXYY,info(kXYY).defaultNormalizedValue);return;}dragXY=true;controller->beginEdit(kXYX);controller->beginEdit(kXYY);auto v=mockup::xyValue(xy,x,y);change(kXYX,v.first);change(kXYY,v.second);SetCapture(window);return;}
     for(const auto& c:controls)if((y>=mockup::bodyTop||c.id==kInputDeclick||c.id==kDeclickSensitivity)&&inside(x,y,c.x,c.y,c.w,c.h)){
       if(GetKeyState(VK_SHIFT)&0x8000){edit(c.id,info(c.id).defaultNormalizedValue);return;}
-      if(dbl){editValue(c.id);return;}
+      if(dbl){bool readout=mockup::valueRect({c.x,c.y,c.w,c.h},mockup::Kind(c.kind),c.id,c.label).contains(x,y);if(!readout&&(c.kind==Knob||c.kind==Slider||c.kind==VSlider||c.kind==Pan))edit(c.id,info(c.id).defaultNormalizedValue);else editValue(c.id);return;}
       if(mockup::valueRect({c.x,c.y,c.w,c.h},mockup::Kind(c.kind),c.id,c.label).contains(x,y))return;
       if(c.kind==PanMode){edit(c.id,std::clamp(int((x-c.x)/(c.w/3)),0,2)/2.);return;}
       if(c.kind==Toggle||c.kind==Pad){edit(c.id,value(c.id)>.5?0:1);return;}

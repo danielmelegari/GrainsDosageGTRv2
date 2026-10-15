@@ -23,7 +23,7 @@ if(state.page==0){
    BODY(kRepeatStep0+selectedRepeat,x+26,y+304,139,31,Toggle,"STEP ON");BODY(kRepeatRate0+selectedRepeat,x+187,y+304,233,31,Select,"DIVISION");BODY(kRepeatPitch0+selectedRepeat,x+456,y+299,240,37,Slider,"STEP PITCH");
   }else if(stage==3){
    BODY(kResliceAlgorithm,x+27,y+66,235,32,Select,"MODE");BODY(kResliceLength,x+274,y+66,201,32,Select,"BUFFER");BODY(kReslicePhrase,x+488,y+66,224,32,Select,"MAX PHRASE");BODY(kResliceMinPhrase,x+731,y+66,207,32,Select,"MIN PHRASE");
-   auto row=[&](double top,std::initializer_list<ParamID> ids,std::initializer_list<const char*> labels,mockup::Kind kind=mockup::Slider){int i=0;auto label=labels.begin();double spacing=920./ids.size();for(auto id:ids){addBody(id,x+27+i*spacing,y+top,spacing-14,kind==mockup::Knob?104:56,kind,*label);++i;++label;}};
+   auto row=[&](double top,std::initializer_list<ParamID> ids,std::initializer_list<const char*> labels,mockup::Kind kind=mockup::Slider){int i=0;auto label=labels.begin();double spacing=920./ids.size();for(auto id:ids){addBody(id,x+27+i*spacing,y+top,id==kResliceMix?128:spacing-14,kind==mockup::Knob?104:56,kind,*label);++i;++label;}};
    row(132,{kResliceSubdivision,kResliceSeed,kResliceFade,kResliceDuty,kResliceFillDuty,kResliceRepeat},{"SUBDIV","SEED","FADE","DUTY","FILL DUTY","REPEAT CHANCE"});
    row(212,{kResliceMinAmp,kResliceMaxAmp,kResliceMinPan,kResliceMaxPan,kResliceMinPitch,kResliceMaxPitch},{"MIN AMP","MAX AMP","MIN PAN","MAX PAN","MIN PITCH","MAX PITCH"});
    const int algorithm=int(std::round(value(kResliceAlgorithm)*2));
@@ -35,7 +35,7 @@ if(state.page==0){
    BODY(kResliceCombOn,x+30,y+452,140,32,Toggle,"COMB");BODY(kResliceCombType,x+30,y+490,245,32,Select,"TYPE");
    const ParamID comb[]={kResliceCombFeedback,kResliceMinDelay,kResliceMaxDelay};const char* combLabels[]={"FEEDBACK","MIN DELAY","MAX DELAY"};for(int i=0;i<3;++i)BODY(comb[i],x+335+i*203,y+452,180,56,Slider,combLabels[i]);
    row(554,{kResliceVariation,kResliceFill,kResliceReverse,kResliceMix},{"VARIATION","FILL CHANCE","REVERSE","MIX"},mockup::Knob);
-   BODY(kMixLock0+3,x+702,y+713,91,25,Toggle,"LOCK");
+   BODY(kMixLock0+3,x+855,y+594,78,25,Toggle,"LOCK");
 
   }else{
    BODY(kGaterGrid,x+27,y+69,175,32,Select,"RATE");BODY(kGaterLengthRnd,x+227,y+69,183,32,Toggle,"LENGTH RND");BODY(kGaterStepRnd,x+436,y+69,180,32,Toggle,"STEP RND");BODY(kGaterLatch,x+643,y+69,150,32,Toggle,"LATCH");
