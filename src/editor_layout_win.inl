@@ -22,6 +22,11 @@ if(state.page==0){
    BODY(kRepeatMix,x+25,y+112,128,105,Knob,"MIX");BODY(kMixLock0+2,x+164,y+158,90,24,Toggle,"LOCK");BODY(kRepeatDuration,x+285,y+137,300,64,Slider,"DURATION");BODY(kRepeatChance,x+623,y+137,300,64,Slider,"CHANCE");
    BODY(kRepeatStep0+selectedRepeat,x+26,y+304,139,31,Toggle,"STEP ON");BODY(kRepeatRate0+selectedRepeat,x+187,y+304,233,31,Select,"DIVISION");BODY(kRepeatPitch0+selectedRepeat,x+456,y+299,240,37,Slider,"STEP PITCH");
   }else if(stage==3){
+   if(!state.resliceAdvanced){
+    const ParamID ids[]={kResliceSubdivision,kResliceSeed,kResliceVariation,kResliceReverse,kResliceMix};
+    const char* labels[]={"SUBDIV","SEED","VARIATIONS","REVERSE","MIX"};
+    for(int i=0;i<5;++i)BODY(ids[i],x+45+i*184,y+65,148,120,Knob,labels[i]);
+   }else{
    BODY(kResliceAlgorithm,x+27,y+66,235,32,Select,"MODE");BODY(kResliceLength,x+274,y+66,201,32,Select,"BUFFER");BODY(kReslicePhrase,x+488,y+66,224,32,Select,"MAX PHRASE");BODY(kResliceMinPhrase,x+731,y+66,207,32,Select,"MIN PHRASE");
    auto row=[&](double top,std::initializer_list<ParamID> ids,std::initializer_list<const char*> labels,mockup::Kind kind=mockup::Slider){int i=0;auto label=labels.begin();double spacing=920./ids.size();for(auto id:ids){addBody(id,x+27+i*spacing,y+top,id==kResliceMix?128:spacing-14,kind==mockup::Knob?104:56,kind,*label);++i;++label;}};
    row(132,{kResliceSubdivision,kResliceSeed,kResliceFade,kResliceDuty,kResliceFillDuty,kResliceRepeat},{"SUBDIV","SEED","FADE","DUTY","FILL DUTY","REPEAT CHANCE"});
@@ -37,6 +42,7 @@ if(state.page==0){
    row(554,{kResliceVariation,kResliceFill,kResliceReverse,kResliceMix},{"VARIATION","FILL CHANCE","REVERSE","MIX"},mockup::Knob);
    BODY(kMixLock0+3,x+855,y+594,78,25,Toggle,"LOCK");
 
+   }
   }else{
    BODY(kGaterGrid,x+27,y+69,175,32,Select,"RATE");BODY(kGaterLengthRnd,x+227,y+69,183,32,Toggle,"LENGTH RND");BODY(kGaterStepRnd,x+436,y+69,180,32,Toggle,"STEP RND");BODY(kGaterLatch,x+643,y+69,150,32,Toggle,"LATCH");
    BODY(kGaterChance,x+27,y+125,211,62,Slider,"CHANCE");BODY(kGaterMinLength,x+260,y+125,211,62,Slider,"MIN LENGTH");BODY(kGaterLength0+selectedGate,x+493,y+125,211,62,Slider,"STEP LENGTH");BODY(kGaterSustain0+selectedGate,x+726,y+125,211,62,Slider,"SUSTAIN");

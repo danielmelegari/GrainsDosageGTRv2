@@ -47,6 +47,6 @@ int main(int argc,char** argv){
   for(int i=0;i<6;++i)if(id==slotTarget(0,i)){const char* dest[]={"FILTER CUTOFF","TRANSPOSE","GRAIN SIZE","GRAIN MIX","PITCH","DENSITY"};return dest[i];}
   return std::to_string(int(v*100))+"%";
  };
- mockup::RackState rack;rack.page=std::clamp(tab,0,2);rack.scroll[rack.page]=argc>2?std::atof(argv[2]):0;if(argc>5&&rack.page==0)rack.scroll[0]=std::clamp(mockup::moduleRect(std::atoi(argv[5]),[&](ParamID id){return state[id];},rack).y-220.,0.,mockup::maxScroll(rack));int clipId=0;p.clip=[&](mockup::Rect r){std::cout<<"<defs><clipPath id='clip"<<++clipId<<"'><rect x='"<<r.x<<"' y='"<<r.y<<"' width='"<<r.w<<"' height='"<<r.h<<"'/></clipPath></defs><g clip-path='url(#clip"<<clipId<<")'>";};p.unclip=[](){std::cout<<"</g>";};
+ mockup::RackState rack;rack.resliceAdvanced=argc>7&&std::atoi(argv[7])!=0;rack.page=std::clamp(tab,0,2);rack.scroll[rack.page]=argc>2?std::atof(argv[2]):0;if(argc>5&&rack.page==0)rack.scroll[0]=std::clamp(mockup::moduleRect(std::atoi(argv[5]),[&](ParamID id){return state[id];},rack).y-220.,0.,mockup::maxScroll(rack));int clipId=0;p.clip=[&](mockup::Rect r){std::cout<<"<defs><clipPath id='clip"<<++clipId<<"'><rect x='"<<r.x<<"' y='"<<r.y<<"' width='"<<r.w<<"' height='"<<r.h<<"'/></clipPath></defs><g clip-path='url(#clip"<<clipId<<")'>";};p.unclip=[](){std::cout<<"</g>";};
  mockup::render(p,[&](ParamID id){return state[id];},display,"PRESET..",0,0,0,0,0,nullptr,-1,-1,nullptr,mockup::RenderPass::All,rack);std::cout<<"</svg>";
 }

@@ -422,6 +422,7 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
     auto val=[&](ParamID id){return value(id);};int page=mockup::hitPage(x,y);if(page>=0){rackState.page=page;motion.ready=false;InvalidateRect(window,nullptr,FALSE);return;}
     if(mockup::maxScroll(rackState)>0&&hit(mockup::scrollbar())){dragScroll=true;originY=y;scrollOrigin=rackState.offset();SetCapture(window);return;}
     if(rackState.page==0&&y>=mockup::bodyTop)for(int st:{0,2,3,4})if(hit(mockup::modulePresetRect(st,val,rackState))){modulePresetMenu(st);return;}
+    if(mockup::toggleResliceAdvance(x,y,val,rackState)){motion.ready=false;layout();InvalidateRect(window,nullptr,FALSE);return;}
     int route=mockup::hitRoute(x,y,val,rackState);if(route>=0){dragSlot=route;dropSlot=-1;routeMoved=false;originX=x;originY=y;routingAtDrag=mockup::routeChain(val);chooseTab(routingAtDrag[route]);SetCapture(window);return;}
     int lfo=mockup::hitLfo(x,y,rackState);if(lfo>=0){selectedLfo=lfo;InvalidateRect(window,nullptr,FALSE);return;}
     if(rackState.page==0&&y>=mockup::bodyTop&&hit(mockup::reslicePhraseRect(val,rackState))){reseedReslice(seed,val,[&](ParamID id,double v){edit(id,v);});return;}

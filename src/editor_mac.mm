@@ -675,6 +675,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   int page=mockup::hitPage(p.x,p.y);if(page>=0){rackState.page=page;staticScene=nil;motion.ready=false;[self setNeedsDisplay:YES];return;}
   if(mockup::maxScroll(rackState)>0&&hit(mockup::scrollbar())){dragScroll=true;origin=p;scrollOrigin=rackState.offset();return;}
   if(rackState.page==0&&p.y>=mockup::bodyTop)for(int st:{0,2,3,4})if(hit(mockup::modulePresetRect(st,value,rackState))){[self modulePresetMenu:st event:event];return;}
+  if(mockup::toggleResliceAdvance(p.x,p.y,value,rackState)){staticScene=nil;motion.ready=false;[self layoutControls];[self setNeedsDisplay:YES];return;}
   int route=mockup::hitRoute(p.x,p.y,value,rackState);if(route>=0){dragSlot=route;dropSlot=-1;routeMoved=false;origin=routePointer=p;routingAtDrag=mockup::routeChain(value);[self chooseTab:routingAtDrag[route]];[self setNeedsDisplay:YES];return;}
   int lfoHit=mockup::hitLfo(p.x,p.y,rackState);if(lfoHit>=0){selectedLfo=lfoHit;[self setNeedsDisplay:YES];return;}
   if(rackState.page==0&&p.y>=mockup::bodyTop&&hit(mockup::reslicePhraseRect(value,rackState))){reseedReslice(randomSeed,value,[&](ParamID id,double v){owner->edit(id,v);});[self setNeedsDisplay:YES];return;}

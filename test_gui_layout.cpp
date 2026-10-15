@@ -5,11 +5,11 @@
 #include <set>
 #include <limits>
 using namespace aztec;
-int main(){int count=0;for(int route=0;route<120;++route)for(int page=0;page<3;++page)for(int mode=0;mode<16;++mode){auto p=initialParameters();p[kRoutingOrder]=(route+1)/120.;p[kResliceAlgorithm]=(mode%3)*.5;p[kPanMode]=mode&1;p[kReverbSource]=(mode>>1)&1;p[kReverbModel]=(mode>>2)&1;p[kFilterModel]=(mode&1)?7/18.:0;p[kFilterSeqMode]=(mode>>3)&1;auto value=[&](ParamID id){return p[id];};mockup::RackState s;s.page=page;
+int main(){int count=0;for(bool advanced:{false,true})for(int route=0;route<120;++route)for(int page=0;page<3;++page)for(int mode=0;mode<16;++mode){auto p=initialParameters();p[kRoutingOrder]=(route+1)/120.;p[kResliceAlgorithm]=(mode%3)*.5;p[kPanMode]=mode&1;p[kReverbSource]=(mode>>1)&1;p[kReverbModel]=(mode>>2)&1;p[kFilterModel]=(mode&1)?7/18.:0;p[kFilterSeqMode]=(mode>>3)&1;auto value=[&](ParamID id){return p[id];};mockup::RackState s;s.page=page;s.resliceAdvanced=advanced;
  auto controls=mockup::controls(value,0,mode%4,mode%16,mode%16,mode%16,s);std::set<ParamID> ids;int pads=0;
- for(const auto& c:controls){assert(c.r.x>=54&&c.r.x+c.r.w<=1028&&c.r.w>0&&c.r.h>0);assert(c.id<kCount&&!isMonitor(c.id)&&ids.insert(c.id).second);assert(c.r.y>=0&&c.r.y+c.r.h<=mockup::contentBottom(page));if(c.kind==mockup::Pad)++pads;}
- if(page==0){for(int stage:{0,2,3,4}){auto r=mockup::moduleRect(stage,value,s);assert(ids.count(moduleLoopOn(moduleLoopIndex(stage)))&&ids.count(moduleLoopWindow(moduleLoopIndex(stage))));if(r.y+30>=mockup::bodyTop&&r.y+30<mockup::height){assert(mockup::hitRoute(r.x+378,r.y+28,value,s)==-1);assert(mockup::hitRoute(r.x+510,r.y+28,value,s)==-1);}}for(const auto& spec:resliceControlSpecs){bool cut=spec.id==kResliceMinRepeats||spec.id==kResliceMaxRepeats||spec.id==kResliceStutter||spec.id==kResliceArea;bool warp=spec.id>=kResliceStraight&&spec.id<=kResliceWarpSpeed;bool push=spec.id==kResliceActivity;bool shown=cut?mode%3==0:warp?mode%3==1:push?mode%3==2:true;assert(bool(ids.count(spec.id))==shown);}for(const auto& c:controls)if(c.id>=kResliceSubdivision&&c.kind!=mockup::Toggle&&c.kind!=mockup::Select)assert(c.kind==mockup::Slider);for(auto id:{kResliceVariation,kResliceFill,kResliceReverse,kResliceMix}){auto c=std::find_if(controls.begin(),controls.end(),[&](const auto& v){return v.id==id;});assert(c!=controls.end()&&c->kind==mockup::Knob);}}
- if(page==0){auto lock=std::find_if(controls.begin(),controls.end(),[](const auto& c){return c.id==kMixLock0+3;})->r;auto random=mockup::randomRect(3,value,s);assert(lock.x+lock.w<=random.x||random.x+random.w<=lock.x||lock.y+lock.h<=random.y||random.y+random.h<=lock.y);}
+ for(const auto& c:controls){assert(c.r.x>=54&&c.r.x+c.r.w<=1028&&c.r.w>0&&c.r.h>0);assert(c.id<kCount&&!isMonitor(c.id)&&ids.insert(c.id).second);assert(c.r.y>=0&&c.r.y+c.r.h<=mockup::contentBottom(page,advanced));if(c.kind==mockup::Pad)++pads;}
+ if(page==0){for(int stage:{0,2,3,4}){auto r=mockup::moduleRect(stage,value,s);assert(ids.count(moduleLoopOn(moduleLoopIndex(stage)))&&ids.count(moduleLoopWindow(moduleLoopIndex(stage))));if(r.y+30>=mockup::bodyTop&&r.y+30<mockup::height){assert(mockup::hitRoute(r.x+378,r.y+28,value,s)==-1);assert(mockup::hitRoute(r.x+510,r.y+28,value,s)==-1);}}for(const auto& spec:resliceControlSpecs){bool cut=spec.id==kResliceMinRepeats||spec.id==kResliceMaxRepeats||spec.id==kResliceStutter||spec.id==kResliceArea;bool warp=spec.id>=kResliceStraight&&spec.id<=kResliceWarpSpeed;bool push=spec.id==kResliceActivity;bool shown=cut?mode%3==0:warp?mode%3==1:push?mode%3==2:true;assert(bool(ids.count(spec.id))==(advanced?shown:spec.id==kResliceSubdivision));}for(const auto& c:controls)if(advanced&&c.id>=kResliceSubdivision&&c.kind!=mockup::Toggle&&c.kind!=mockup::Select)assert(c.kind==mockup::Slider);for(auto id:{kResliceVariation,kResliceReverse,kResliceMix}){auto c=std::find_if(controls.begin(),controls.end(),[&](const auto& v){return v.id==id;});assert(c!=controls.end()&&c->kind==mockup::Knob);}}
+ if(page==0&&advanced){auto lock=std::find_if(controls.begin(),controls.end(),[](const auto& c){return c.id==kMixLock0+3;})->r;auto random=mockup::randomRect(3,value,s);assert(lock.x+lock.w<=random.x||random.x+random.w<=lock.x||lock.y+lock.h<=random.y||random.y+random.h<=lock.y);}
  assert(pads==(page==1&&p[kReverbSource]<.5?16:0));
  for(size_t i=0;i<controls.size();++i)for(size_t j=i+1;j<controls.size();++j){auto a=controls[i].r,b=controls[j].r;if(a.x<b.x+b.w&&b.x<a.x+a.w&&a.y<b.y+b.h&&b.y<a.y+a.h){std::cerr<<controls[i].label<<" ("<<controls[i].id<<") overlaps "<<controls[j].label<<" ("<<controls[j].id<<")\n";return 1;}}
  for(double offset:{0.,mockup::maxScroll(s)}){s.scroll[page]=offset;auto scrolled=mockup::controls(value,0,mode%4,mode%16,mode%16,mode%16,s);for(size_t i=0;i<controls.size();++i){bool header=controls[i].id==kInputDeclick||controls[i].id==kDeclickSensitivity;assert(scrolled[i].r.y==controls[i].r.y-(header?0:offset));}if(page==0){auto chain=mockup::routeChain(value);for(int i=0;i<4;++i){auto r=mockup::moduleRect(chain[i],value,s);assert(r.x==54&&r.w==974);if(i)assert(r.y>mockup::moduleRect(chain[i-1],value,s).y);if(r.y>=mockup::bodyTop&&r.y+35<mockup::height)assert(mockup::hitRoute(r.x+80,r.y+30,value,s)==i);}}}
@@ -32,6 +32,24 @@ int main(){int count=0;for(int route=0;route<120;++route)for(int page=0;page<3;+
   assert(mockup::xyValue(pad,1e6,1e6)==std::make_pair(1.,0.));
  }
  // Offscreen Reslice source animation must not wake the enlarged static panel.
- {auto p=initialParameters();auto value=[&](ParamID id){return p[id];};mockup::RackState rack;auto r=mockup::moduleRect(3,value,rack);rack.scroll[0]=r.y-500.;assert(!mockup::monitorVisible(kUiResliceStep,value,rack,0));rack.scroll[0]+=250.;assert(mockup::monitorVisible(kUiResliceStep,value,rack,0));}
+ {auto p=initialParameters();auto value=[&](ParamID id){return p[id];};mockup::RackState rack;rack.resliceAdvanced=true;auto r=mockup::moduleRect(3,value,rack);rack.scroll[0]=r.y-500.;assert(!mockup::monitorVisible(kUiResliceStep,value,rack,0));rack.scroll[0]+=250.;assert(mockup::monitorVisible(kUiResliceStep,value,rack,0));}
+ // The UI toggle changes geometry only, hides advanced hit targets, and clamps scroll.
+ {auto p=initialParameters();const auto before=p;auto value=[&](ParamID id){return p[id];};mockup::RackState rack;
+  assert(!rack.resliceAdvanced);
+  auto r=mockup::moduleRect(3,value,rack);rack.scroll[0]=r.y-250;
+  auto compact=mockup::controls(value,0,0,0,0,0,rack);int knobs=0;
+  r=mockup::moduleRect(3,value,rack);
+  for(const auto& c:compact)if(c.r.y>=r.y&&c.r.y<r.y+r.h&&c.kind==mockup::Knob)++knobs;
+  assert(knobs==5&&r.h==220);
+  assert(mockup::randomRect(3,value,rack).w==0&&mockup::reslicePhraseRect(value,rack).w==0);
+  auto button=mockup::resliceAdvanceRect(value,rack);
+  assert(mockup::hitRoute(button.x+10,button.y+10,value,rack)==-1);
+  assert(mockup::toggleResliceAdvance(button.x+10,button.y+10,value,rack));
+  assert(rack.resliceAdvanced&&mockup::moduleRect(3,value,rack).h==770);
+  button=mockup::resliceAdvanceRect(value,rack);
+  assert(mockup::toggleResliceAdvance(button.x+10,button.y+10,value,rack));
+  assert(!rack.resliceAdvanced&&rack.offset()<=mockup::maxScroll(rack)&&p==before);
+  rack.page=1;assert(!mockup::toggleResliceAdvance(button.x+10,button.y+10,value,rack));
+ }
  std::cout<<"PASS: "<<count<<" page/routing variants, control preservation, non-overlap, fixed header, scroll bounds, square Morph and bounded XY cursor/input at all extremes\n";
 }
