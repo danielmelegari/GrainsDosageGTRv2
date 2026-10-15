@@ -300,7 +300,7 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
     InvalidateRect(window,nullptr,FALSE);
   }
   void modulePresetMenu(int module){
-    HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,1,L"Save module preset…");AppendMenuW(menu,MF_STRING,2,L"Load module preset…");POINT p;GetCursorPos(&p);int choice=TrackPopupMenu(menu,TPM_RETURNCMD,p.x,p.y,0,window,nullptr);DestroyMenu(menu);if(choice)preset(choice==1,module);
+    HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,3,L"Default");AppendMenuW(menu,MF_SEPARATOR,0,nullptr);AppendMenuW(menu,MF_STRING,1,L"Save module preset…");AppendMenuW(menu,MF_STRING,2,L"Load module preset…");POINT p;GetCursorPos(&p);int choice=TrackPopupMenu(menu,TPM_RETURNCMD,p.x,p.y,0,window,nullptr);DestroyMenu(menu);if(choice==3){resetModulePreset(module,[&](ParamID id){return info(id).defaultNormalizedValue;},[&](ParamID id,double v){edit(id,v);});InvalidateRect(window,nullptr,FALSE);}else if(choice)preset(choice==1,module);
   }
   void preset(bool save,int module=-1){
     wchar_t path[MAX_PATH]=L"GrainsDosage.gdspreset";

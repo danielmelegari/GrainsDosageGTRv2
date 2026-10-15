@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(GrainsDosage VERSION 0.13.8 LANGUAGES CXX)
+project(GrainsDosage VERSION 0.13.9 LANGUAGES CXX)
 # Keep the visible GUI version aligned with the built plugin metadata.
 add_compile_definitions(GRAINS_PLUGIN_VERSION="${PROJECT_VERSION}")
 set(GRAINS_EDITION "development" CACHE STRING "development, trial, licensed, or unlocked")

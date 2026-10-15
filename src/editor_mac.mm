@@ -584,9 +584,14 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   [menu addItem:[NSMenuItem separatorItem]];NSMenuItem* open=[[NSMenuItem alloc] initWithTitle:@"Open Preset Folder…" action:@selector(choosePreset:) keyEquivalent:@""];open.target=self;open.tag=-1;open.representedObject=folder;[menu addItem:open];[NSMenu popUpContextMenu:menu withEvent:event forView:self];
 }
 - (void)preset:(BOOL)save { [self preset:save module:-1]; }
-- (void)chooseModulePreset:(NSMenuItem*)item { [self preset:item.tag==1 module:[item.representedObject intValue]]; }
+- (void)chooseModulePreset:(NSMenuItem*)item {
+  if(!owner)return;int module=[item.representedObject intValue];
+  if(item.tag==3){aztec::resetModulePreset(module,[&](aztec::ParamID id){return owner->info(id).defaultNormalizedValue;},[&](aztec::ParamID id,double v){owner->edit(id,v);});[self setNeedsDisplay:YES];}
+  else [self preset:item.tag==1 module:module];
+}
 - (void)modulePresetMenu:(int)module event:(NSEvent*)event {
   NSMenu* menu=[[NSMenu alloc] initWithTitle:@"Module presets"];
+  NSMenuItem* defaults=[[NSMenuItem alloc] initWithTitle:@"Default" action:@selector(chooseModulePreset:) keyEquivalent:@""];defaults.target=self;defaults.tag=3;defaults.representedObject=@(module);[menu addItem:defaults];[menu addItem:[NSMenuItem separatorItem]];
   for(int i=1;i<=2;++i){NSMenuItem* item=[[NSMenuItem alloc] initWithTitle:i==1?@"Save module preset…":@"Load module preset…" action:@selector(chooseModulePreset:) keyEquivalent:@""];item.target=self;item.tag=i;item.representedObject=@(module);[menu addItem:item];}
   [NSMenu popUpContextMenu:menu withEvent:event forView:self];
 }

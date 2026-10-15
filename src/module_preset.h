@@ -14,6 +14,10 @@ inline bool modulePresetParameter(int stage,int id){
  default:return false;
  }
 }
+// Read registered defaults so Default and Shift-click always agree.
+template<class Defaults,class Setter> void resetModulePreset(int stage,Defaults defaults,Setter set){
+ for(int id=0;id<kCount;++id)if(modulePresetParameter(stage,id))set(ParamID(id),defaults(ParamID(id)));
+}
 template<class Getter> std::string encodeModulePreset(int stage,Getter get){
  int count=0;for(int id=0;id<kCount;++id)if(modulePresetParameter(stage,id))++count;
  std::ostringstream out;out.imbue(std::locale::classic());out<<"GrainsDosageModule 1 "<<stage<<' '<<count<<'\n'<<std::setprecision(17);
