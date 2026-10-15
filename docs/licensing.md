@@ -94,25 +94,22 @@ identity or restoration of a complete system backup.
 
 ## Editable module graphics
 
-On first opening, four independent JPG backgrounds are copied into:
+The bundled module backgrounds are PNG files: turquoise Granulizer, red Beat
+Repeater, purple Reslice and amber Gater. Reslice uses an extended taller texture
+matching its 974:770 panel; the other modules use the supplied wide artwork.
+Windows embeds all four images as resources. macOS packages them in Resources.
+Images are decoded once when opening the editor, not reloaded every frame.
+
+On macOS, optional custom PNGs can be placed in:
 
 `~/Library/Application Support/GrainsDosage/Skins/Modules/`
 
-- granulizer.jpg — petrol teal
-- beatrepeater.jpg — bronze
-- reslice.jpg — violet
-- gater.jpg — navy blue
+Use `granulizer.png`, `beatrepeater.png`, `reslice.png` and `gater.png`.
+Existing legacy JPG copies are left untouched and no longer override the new
+bundled PNGs. Missing or invalid custom PNGs fall back to the bundled artwork.
+Close and reopen the editor after changing a custom PNG.
 
-Edit those files in any image editor, retain their exact filenames, save and
-close/reopen the plugin window. Existing user files are never overwritten by
-updates. The supplied images are 2172 × 724 pixels; keep a similar wide aspect
-ratio. Backgrounds are cached when opening the editor, not reloaded each frame.
-Missing or invalid images fall back to bundled artwork; deleting a custom file
-restores the default on the next opening.
-
-JPGs cover the complete module face from its left edge to its right edge, including
-the area beneath the rack screws. There is no separate purple frame. JPGs change
-each panel's colors, texture and decoration. Knobs, readable text,
+Backgrounds cover the full module face beneath the rack screws. Knobs, text,
 meters, buttons, layout and rack screws are separate live UI layers and do not
-move or change shape when you replace a JPG. Do not bake text or controls into
+move or change shape when you replace a PNG. Do not bake text or controls into
 these backgrounds. Edits outside the signed plugin bundle preserve its signature.

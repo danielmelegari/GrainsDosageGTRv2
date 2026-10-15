@@ -168,7 +168,7 @@ inline bool structural(ParamID id){return id==kResliceAlgorithm||id==kPanMode||i
 inline void modulePanel(Painter& p,Rect r,int stage){
  if(!visible(r))return;
  constexpr Rgb colors[]={{19,40,42},{30,27,36},{46,33,22},{36,26,48},{22,32,48}};
- // The JPG owns the entire module face, including the area beneath the screws.
+ // The module artwork owns the entire module face, including the area beneath the screws.
  p.box(r,colors[stage],colors[stage],0);
  if(p.moduleBackground)p.moduleBackground(stage,r);
  // Reuse only the circular metal screw faces, without any purple corner pixels.

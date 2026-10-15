@@ -10,3 +10,8 @@
 
 209 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/assets/approved-rack/backplate.png"
 210 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/assets/approved-rack/controls.png"
+
+211 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/assets/module-skins/granulizer.png"
+212 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/assets/module-skins/beatrepeater.png"
+213 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/assets/module-skins/reslice.png"
+214 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/assets/module-skins/gater.png"

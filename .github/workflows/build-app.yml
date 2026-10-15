@@ -68,8 +68,8 @@ jobs:
       - name: Package skin ZIP
         run: |
           cd assets
-          zip -r ../grainsdosage-module-skins.zip modules sprites 2>/dev/null || \
-            zip -r ../grainsdosage-module-skins.zip modules
+          zip -r ../grainsdosage-module-skins.zip modules sprites module-skins 2>/dev/null || \
+            zip -r ../grainsdosage-module-skins.zip modules module-skins
           cd ..
           echo "ZIP_SIZE=$(du -h grainsdosage-module-skins.zip | cut -f1)" >> $GITHUB_STEP_SUMMARY
 
