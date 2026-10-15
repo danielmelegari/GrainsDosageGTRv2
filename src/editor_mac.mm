@@ -756,7 +756,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
 namespace aztec {
 // No "using namespace qg" here: inside this namespace an unqualified qg would
 // find aztec::qg first (shadowing), so global qg names must stay ::qg-qualified.
-Editor::Editor(EditController* c):controller_(c){controller_->addRef();rect=ViewRect(0,0,int(mockup::width*.70),int(mockup::height*.70));(void)::qg::waveBank();}
+Editor::Editor(EditController* c):controller_(c){controller_->addRef();rect=ViewRect(0,0,int(mockup::width*.90),int(mockup::height*.90));(void)::qg::waveBank();}
 Editor::~Editor(){removed();controller_->release();}
 NSString* Editor::display(ParamID id,double v,bool units) const {
   String128 text{};controller_->getParamStringByValue(id,v,text);
@@ -777,7 +777,7 @@ tresult Editor::attached(void* parent,FIDString type){
   aztec::license::firstOpen();
   static bool skinRestored=false;if(!skinRestored){skinRestored=true;aztec::theme::loadSkinFile(aztec::theme::defaultPath());}
   surface_=[[GrainsSurface alloc] initWithFrame:NSMakeRect(0,0,rect.getWidth(),rect.getHeight())];surface_->owner=this;
-  [(__bridge NSView*)parent addSubview:surface_];[surface_ setNeedsDisplay:YES];return kResultOk;
+  [(__bridge NSView*)parent addSubview:surface_];[surface_ setNeedsDisplay:YES];zoom(.90);return kResultOk;
 }
 tresult Editor::removed(){if(surface_){[surface_ stop];surface_->owner=nullptr;[surface_ removeFromSuperview];surface_=nil;}return CPluginView::removed();}
 tresult Editor::onSize(ViewRect* size){if(!size)return kInvalidArgument;auto result=CPluginView::onSize(size);if(surface_){[surface_ setFrameSize:NSMakeSize(size->getWidth(),size->getHeight())];[surface_ setNeedsDisplay:YES];}return result;}
