@@ -17,6 +17,7 @@
 #include "filter_sequencer.h"
 #include "randomize.h"
 #include "preset_io.h"
+#include "module_preset.h"
 #include "preset_banks.h"
 #include "public.sdk/source/common/pluginview.h"
 #include <algorithm>
@@ -316,7 +317,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
       if(!image)image=[[NSImage alloc] initWithContentsOfFile:bundled];
       if(image)editableModuleSkins[@(stage)]=image;
     }
-    self.toolTip=@"Drag knobs vertically; Shift gives fine control. Double-click resets. Scroll each page. Drag module headers vertically to change audio order. Option-scroll edits a knob.";
+    self.toolTip=@"Drag knobs vertically; Double-click enters a value; Shift-click restores its default. Scroll each page. Drag module headers vertically to change audio order. Option-scroll edits a knob.";
     timer=[NSTimer timerWithTimeInterval:1./30. target:self selector:@selector(tick:) userInfo:nil repeats:YES];
     timer.tolerance=.003;
     [[NSRunLoop mainRunLoop] addTimer:timer forMode:NSRunLoopCommonModes];
@@ -582,14 +583,21 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   }
   [menu addItem:[NSMenuItem separatorItem]];NSMenuItem* open=[[NSMenuItem alloc] initWithTitle:@"Open Preset Folder…" action:@selector(choosePreset:) keyEquivalent:@""];open.target=self;open.tag=-1;open.representedObject=folder;[menu addItem:open];[NSMenu popUpContextMenu:menu withEvent:event forView:self];
 }
-- (void)preset:(BOOL)save {
+- (void)preset:(BOOL)save { [self preset:save module:-1]; }
+- (void)chooseModulePreset:(NSMenuItem*)item { [self preset:item.tag==1 module:[item.representedObject intValue]]; }
+- (void)modulePresetMenu:(int)module event:(NSEvent*)event {
+  NSMenu* menu=[[NSMenu alloc] initWithTitle:@"Module presets"];
+  for(int i=1;i<=2;++i){NSMenuItem* item=[[NSMenuItem alloc] initWithTitle:i==1?@"Save module preset…":@"Load module preset…" action:@selector(chooseModulePreset:) keyEquivalent:@""];item.target=self;item.tag=i;item.representedObject=@(module);[menu addItem:item];}
+  [NSMenu popUpContextMenu:menu withEvent:event forView:self];
+}
+- (void)preset:(BOOL)save module:(int)module {
   if(!owner)return;NSError* error=nil;bool ok=false;
-  if(save){NSSavePanel* panel=[NSSavePanel savePanel];panel.allowedFileTypes=@[@"gdspreset"];panel.nameFieldStringValue=@"GrainsDosage.gdspreset";panel.directoryURL=[self presetFolder];
+  if(save){NSSavePanel* panel=[NSSavePanel savePanel];panel.allowedFileTypes=module<0?@[@"gdspreset"]:@[@"gdmodule"];panel.nameFieldStringValue=module<0?@"GrainsDosage.gdspreset":[[NSString stringWithUTF8String:aztec::mockup::moduleNames[module]] stringByAppendingPathExtension:@"gdmodule"];panel.directoryURL=[self presetFolder];
     if([panel runModal]!=NSModalResponseOK)return;
-    auto text=aztec::encodePreset([&](int id){return owner->value(id);});NSData* data=[NSData dataWithBytes:text.data() length:text.size()];ok=[data writeToURL:panel.URL options:NSDataWritingAtomic error:&error];if(ok)presetName=[panel.URL.lastPathComponent stringByDeletingPathExtension];
-  }else{NSOpenPanel* panel=[NSOpenPanel openPanel];panel.allowedFileTypes=@[@"gdspreset"];panel.allowsMultipleSelection=NO;panel.canChooseDirectories=NO;panel.directoryURL=[self presetFolder];
+    auto get=[&](int id){return owner->value(id);};auto text=module<0?aztec::encodePreset(get):aztec::encodeModulePreset(module,get);NSData* data=[NSData dataWithBytes:text.data() length:text.size()];ok=[data writeToURL:panel.URL options:NSDataWritingAtomic error:&error];if(ok&&module<0)presetName=[panel.URL.lastPathComponent stringByDeletingPathExtension];
+  }else{NSOpenPanel* panel=[NSOpenPanel openPanel];panel.allowedFileTypes=module<0?@[@"gdspreset"]:@[@"gdmodule"];panel.allowsMultipleSelection=NO;panel.canChooseDirectories=NO;panel.directoryURL=[self presetFolder];
     if([panel runModal]!=NSModalResponseOK)return;
-    ok=[self loadPresetURL:panel.URL];
+    if(module<0)ok=[self loadPresetURL:panel.URL];else{NSData* data=[NSData dataWithContentsOfURL:panel.URL];std::array<double,aztec::kCount> values{};ok=data&&data.length&&aztec::decodeModulePreset(std::string((const char*)data.bytes,data.length),module,values);if(ok)for(int id=0;id<aztec::kCount;++id)if(aztec::modulePresetParameter(module,id))owner->edit(id,values[id]);}
   }
   if(!ok){NSAlert* alert=[[NSAlert alloc] init];alert.messageText=save?@"Preset could not be saved":@"Preset could not be loaded";alert.informativeText=error?error.localizedDescription:@"Invalid or incompatible GrainsDosage preset. No settings changed.";[alert runModal];}
   [self setNeedsDisplay:YES];
@@ -632,7 +640,6 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   if(hit(mockup::preset)){[self presetMenu:event];return;}
   if(hit(mockup::load)){[self preset:NO];return;}
   if(hit(mockup::save)){[self preset:YES];return;}
-  if(rackState.page==1&&p.y>=mockup::bodyTop&&hit(rackState.position(mockup::skinMenu))){[self skinMenu:event];return;}
   if(rackState.page==1&&p.y>=mockup::bodyTop&&hit(rackState.position(mockup::zoomMenu))){
     NSMenu* menu=[[NSMenu alloc] initWithTitle:@"UI size"];
     for(int percent:{50,60,70,75,80,90,100}){NSMenuItem* item=[[NSMenuItem alloc] initWithTitle:[NSString stringWithFormat:@"%d%%",percent] action:@selector(chooseZoom:) keyEquivalent:@""];item.target=self;item.tag=percent;[menu addItem:item];}
@@ -641,26 +648,33 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   auto value=[&](ParamID id){return owner->value(id);};
   int page=mockup::hitPage(p.x,p.y);if(page>=0){rackState.page=page;staticScene=nil;motion.ready=false;[self setNeedsDisplay:YES];return;}
   if(mockup::maxScroll(rackState)>0&&hit(mockup::scrollbar())){dragScroll=true;origin=p;scrollOrigin=rackState.offset();return;}
+  if(rackState.page==0&&p.y>=mockup::bodyTop)for(int st:{0,2,3,4})if(hit(mockup::modulePresetRect(st,value,rackState))){[self modulePresetMenu:st event:event];return;}
   int route=mockup::hitRoute(p.x,p.y,value,rackState);if(route>=0){dragSlot=route;dropSlot=-1;routeMoved=false;origin=routePointer=p;routingAtDrag=mockup::routeChain(value);[self chooseTab:routingAtDrag[route]];[self setNeedsDisplay:YES];return;}
   int lfoHit=mockup::hitLfo(p.x,p.y,rackState);if(lfoHit>=0){selectedLfo=lfoHit;[self setNeedsDisplay:YES];return;}
+  if(rackState.page==0&&p.y>=mockup::bodyTop&&hit(mockup::reslicePhraseRect(value,rackState))){reseedReslice(randomSeed,value,[&](ParamID id,double v){owner->edit(id,v);});[self setNeedsDisplay:YES];return;}
   if(rackState.page==0&&p.y>=mockup::bodyTop)for(int t:{0,2,3,4})if(hit(mockup::randomRect(t,value,rackState))){
     if(t<3)randomizeModule(t,selectedRepeat,randomSeed,value,[&](ParamID id,double v){owner->edit(id,v);});else if(t==3)randomizeReslice(randomSeed,value,[&](ParamID id,double v){owner->edit(id,v);});else for(int i=0;i<16;++i){randomSeed=randomSeed*1664525u+1013904223u;owner->edit(kGaterState0+i,(randomSeed>>31)?1.:0.);}
     [self setNeedsDisplay:YES];return;
   }
   int st=-1,step=mockup::hitStep(p.x,p.y,value,rackState,st);if(step>=0){
+    ParamID id=st==2?kRepeatStep0+step:st==3?kResliceStep0+step:kGaterState0+step;
+    if(event.modifierFlags&NSEventModifierFlagShift){owner->edit(id,owner->info(id).defaultNormalizedValue);[self setNeedsDisplay:YES];return;}
+    if(event.clickCount>=2){[self editValue:id];return;}
     if(st==2){selectedRepeat=step;if(event.clickCount>=2)owner->edit(kRepeatStep0+step,value(kRepeatStep0+step)>.5?0.:1.);}
     if(st==3){selectedReslice=step;if(event.clickCount>=2)owner->edit(kResliceStep0+step,value(kResliceStep0+step)>.5?0.:1.);}
-    if(st==4){selectedGate=step;if(event.modifierFlags&NSEventModifierFlagShift){double v=value(kGaterRelease0+step)>.5?0.:1.;owner->edit(kGaterRelease0+step,v);if(v>.5)owner->edit(kGaterState0+step,0.);}else{owner->edit(kGaterRelease0+step,0.);owner->edit(kGaterState0+step,value(kGaterState0+step)>.25?0.:1.);}}
+    if(st==4){selectedGate=step;if(event.modifierFlags&NSEventModifierFlagOption){double v=value(kGaterRelease0+step)>.5?0.:1.;owner->edit(kGaterRelease0+step,v);if(v>.5)owner->edit(kGaterState0+step,0.);}else{owner->edit(kGaterRelease0+step,0.);owner->edit(kGaterState0+step,value(kGaterState0+step)>.25?0.:1.);}}
     [self setNeedsDisplay:YES];return;
   }
   auto xy=rackState.position(mockup::xy);
-  if(rackState.page==2&&p.y>=mockup::bodyTop&&hit(xy)){dragXY=true;owner->begin(kXYX);owner->begin(kXYY);auto v=mockup::xyValue(xy,p.x,p.y);owner->change(kXYX,v.first);owner->change(kXYY,v.second);[self setNeedsDisplay:YES];return;}
+  if(rackState.page==2&&p.y>=mockup::bodyTop&&hit(xy)){if(event.modifierFlags&NSEventModifierFlagShift){owner->edit(kXYX,owner->info(kXYX).defaultNormalizedValue);owner->edit(kXYY,owner->info(kXYY).defaultNormalizedValue);[self setNeedsDisplay:YES];return;}dragXY=true;owner->begin(kXYX);owner->begin(kXYY);auto v=mockup::xyValue(xy,p.x,p.y);owner->change(kXYX,v.first);owner->change(kXYY,v.second);[self setNeedsDisplay:YES];return;}
   for(const auto& c:controls)if((p.y>=mockup::bodyTop||c.id==kInputDeclick||c.id==kDeclickSensitivity)&&NSPointInRect(p,c.rect)){
     auto readout=mockup::valueRect({c.rect.origin.x,c.rect.origin.y,c.rect.size.width,c.rect.size.height},mockup::Kind(c.kind),c.id,c.label);
-    if(readout.contains(p.x,p.y)){[self editValue:c.id];return;}
+    if(event.modifierFlags&NSEventModifierFlagShift){owner->edit(c.id,owner->info(c.id).defaultNormalizedValue);[self setNeedsDisplay:YES];return;}
+    if(event.clickCount>=2){[self editValue:c.id];return;}
+    if(readout.contains(p.x,p.y))return;
     if(c.kind==aztec::PanMode)owner->edit(c.id,std::clamp(int((p.x-c.rect.origin.x)/(c.rect.size.width/3.)),0,2)/2.);
     else if(c.kind==aztec::Pad||c.kind==aztec::Toggle)owner->edit(c.id,owner->value(c.id)>=.5?0.:1.);
-    else if(event.clickCount>=2)owner->edit(c.id,owner->info(c.id).defaultNormalizedValue);
+    else if(c.kind==aztec::Select&&p.x<c.rect.origin.x+c.rect.size.width-24)return;
     else if(c.kind==aztec::Select){
       NSMenu* menu=[[NSMenu alloc] initWithTitle:@"Select"];NSMenu* destination=menu;int n=owner->info(c.id).stepCount;
       for(int i=0;i<=n;++i){

@@ -3,6 +3,7 @@
 #include <windowsx.h>
 #include <commdlg.h>
 #include "preset_io.h"
+#include "module_preset.h"
 #include "preset_banks.h"
 #include <shlobj.h>
 #include <shellapi.h>
@@ -275,11 +276,11 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
     auto name=nextPresetFile(folder,direction,presetName+L".gdspreset");if(name.empty())return;
     if(!loadPresetPath(folder+L"\\"+name))MessageBoxW(window,L"Invalid or incompatible preset. No settings changed.",L"GrainsDosage",MB_OK|MB_ICONERROR);
   }
-  bool loadPresetPath(const std::wstring& path){
+  bool loadPresetPath(const std::wstring& path,int module=-1){
     HANDLE file=CreateFileW(path.c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);if(file==INVALID_HANDLE_VALUE)return false;
     std::array<double,kCount> p{};LARGE_INTEGER size{};bool ok=false;
-    if(GetFileSizeEx(file,&size)&&size.QuadPart>0&&size.QuadPart<=65536){std::string text(size_t(size.QuadPart),'\0');DWORD n=0;ok=ReadFile(file,text.data(),DWORD(text.size()),&n,nullptr)&&n==text.size()&&decodePreset(text,p);}CloseHandle(file);
-    if(ok){for(int i=0;i<kCount;++i)if(presetParameter(i))edit(i,p[i]);setPresetName(path);}return ok;
+    if(GetFileSizeEx(file,&size)&&size.QuadPart>0&&size.QuadPart<=65536){std::string text(size_t(size.QuadPart),'\0');DWORD n=0;ok=ReadFile(file,text.data(),DWORD(text.size()),&n,nullptr)&&n==text.size()&&(module<0?decodePreset(text,p):decodeModulePreset(text,module,p));}CloseHandle(file);
+    if(ok){for(int i=0;i<kCount;++i)if(module<0?presetParameter(i):modulePresetParameter(module,i))edit(i,p[i]);if(module<0)setPresetName(path);}return ok;
   }
   void presetMenu(){
     auto folder=presetFolder();if(folder.empty()){MessageBoxW(window,L"Cannot create or populate the preset folder.",L"GrainsDosage",MB_OK|MB_ICONERROR);return;}
@@ -298,24 +299,28 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
     else if(choice>0&&choice<=int(names.size())&&!loadPresetPath(folder+L"\\"+names[size_t(choice-1)]))MessageBoxW(window,L"Invalid or incompatible preset. No settings changed.",L"GrainsDosage",MB_OK|MB_ICONERROR);
     InvalidateRect(window,nullptr,FALSE);
   }
-  void preset(bool save){
+  void modulePresetMenu(int module){
+    HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,1,L"Save module preset…");AppendMenuW(menu,MF_STRING,2,L"Load module preset…");POINT p;GetCursorPos(&p);int choice=TrackPopupMenu(menu,TPM_RETURNCMD,p.x,p.y,0,window,nullptr);DestroyMenu(menu);if(choice)preset(choice==1,module);
+  }
+  void preset(bool save,int module=-1){
     wchar_t path[MAX_PATH]=L"GrainsDosage.gdspreset";
     OPENFILENAMEW dialog{};dialog.lStructSize=sizeof(dialog);dialog.hwndOwner=window;
     dialog.lpstrFilter=L"GrainsDosage Preset (*.gdspreset)\0*.gdspreset\0\0";dialog.lpstrFile=path;dialog.nMaxFile=MAX_PATH;dialog.lpstrDefExt=L"gdspreset";
+    if(module>=0){lstrcpyW(path,(wide(mockup::moduleNames[module])+L".gdmodule").c_str());dialog.lpstrFilter=L"GrainsDosage Module (*.gdmodule)\0*.gdmodule\0\0";dialog.lpstrDefExt=L"gdmodule";}
     auto folder=presetFolder();dialog.lpstrInitialDir=folder.empty()?nullptr:folder.c_str();
     dialog.Flags=OFN_NOCHANGEDIR|OFN_PATHMUSTEXIST|(save?OFN_OVERWRITEPROMPT:OFN_FILEMUSTEXIST);
     if(!(save?GetSaveFileNameW(&dialog):GetOpenFileNameW(&dialog))){if(CommDlgExtendedError())MessageBoxW(window,L"Could not open the preset dialog.",L"GrainsDosage",MB_OK|MB_ICONERROR);return;}
     bool ok=false;
     if(save){
-      auto data=encodePreset([&](int id){return value(id);});std::wstring full(path);auto slash=full.find_last_of(L"\\/");std::wstring directory=slash==std::wstring::npos?L".":full.substr(0,slash);wchar_t temporary[MAX_PATH]{};
+      auto get=[&](int id){return value(id);};auto data=module<0?encodePreset(get):encodeModulePreset(module,get);std::wstring full(path);auto slash=full.find_last_of(L"\\/");std::wstring directory=slash==std::wstring::npos?L".":full.substr(0,slash);wchar_t temporary[MAX_PATH]{};
       if(GetTempFileNameW(directory.c_str(),L"GDP",0,temporary)){
         HANDLE file=CreateFileW(temporary,GENERIC_WRITE,0,nullptr,TRUNCATE_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);
         if(file!=INVALID_HANDLE_VALUE){DWORD written=0;ok=WriteFile(file,data.data(),DWORD(data.size()),&written,nullptr)&&written==data.size();if(ok)ok=FlushFileBuffers(file)!=0;CloseHandle(file);}
         if(ok)ok=MoveFileExW(temporary,path,MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)!=0;
         if(!ok)DeleteFileW(temporary);
       }
-    }else{ok=loadPresetPath(path);}
-    if(ok){setPresetName(path);InvalidateRect(window,nullptr,FALSE);}
+    }else{ok=loadPresetPath(path,module);}
+    if(ok){if(module<0)setPresetName(path);InvalidateRect(window,nullptr,FALSE);}
     if(!ok)MessageBoxW(window,save?L"Could not save the preset. The existing file was preserved.":L"Invalid, unreadable or incompatible preset. No settings changed.",L"GrainsDosage",MB_OK|MB_ICONERROR);
   }
   int order()const{return std::clamp(int(std::round(value(kModuleOrder)*6)),0,6);}
@@ -385,20 +390,23 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
     if(hit(mockup::preset)){presetMenu();return;}
     if(hit(mockup::load)){preset(false);return;}
     if(hit(mockup::save)){preset(true);return;}
-    if(rackState.page==1&&y>=mockup::bodyTop&&hit(rackState.position(mockup::skinMenu))){skinMenu();return;}
     if(rackState.page==1&&y>=mockup::bodyTop&&hit(rackState.position(mockup::zoomMenu))){HMENU m=CreatePopupMenu();int n=1;for(int size:{50,60,70,75,80,90,100})AppendMenuW(m,MF_STRING,n++,(std::to_wstring(size)+L"%").c_str());POINT p;GetCursorPos(&p);int pick=TrackPopupMenu(m,TPM_RETURNCMD,p.x,p.y,0,window,nullptr);DestroyMenu(m);if(pick&&plugFrame){int sizes[]={50,60,70,75,80,90,100};userZoom=sizes[pick-1]/100.;double f=userZoom*contentScale;ViewRect r(0,0,int(std::round(mockup::width*f)),int(std::round(mockup::height*f)));plugFrame->resizeView(this,&r);}return;}
     auto val=[&](ParamID id){return value(id);};int page=mockup::hitPage(x,y);if(page>=0){rackState.page=page;motion.ready=false;InvalidateRect(window,nullptr,FALSE);return;}
     if(mockup::maxScroll(rackState)>0&&hit(mockup::scrollbar())){dragScroll=true;originY=y;scrollOrigin=rackState.offset();SetCapture(window);return;}
+    if(rackState.page==0&&y>=mockup::bodyTop)for(int st:{0,2,3,4})if(hit(mockup::modulePresetRect(st,val,rackState))){modulePresetMenu(st);return;}
     int route=mockup::hitRoute(x,y,val,rackState);if(route>=0){dragSlot=route;dropSlot=-1;routeMoved=false;originX=x;originY=y;routingAtDrag=mockup::routeChain(val);chooseTab(routingAtDrag[route]);SetCapture(window);return;}
     int lfo=mockup::hitLfo(x,y,rackState);if(lfo>=0){selectedLfo=lfo;InvalidateRect(window,nullptr,FALSE);return;}
+    if(rackState.page==0&&y>=mockup::bodyTop&&hit(mockup::reslicePhraseRect(val,rackState))){reseedReslice(seed,val,[&](ParamID id,double v){edit(id,v);});return;}
     if(rackState.page==0&&y>=mockup::bodyTop)for(int t:{0,2,3,4})if(hit(mockup::randomRect(t,val,rackState))){if(t<3)randomizeModule(t,selectedRepeat,seed,val,[&](ParamID id,double v){edit(id,v);});else if(t==3)randomizeReslice(seed,val,[&](ParamID id,double v){edit(id,v);});else for(int i=0;i<16;++i){seed=seed*1664525u+1013904223u;edit(kGaterState0+i,(seed>>31)?1.:0.);}return;}
-    int st=-1,step=mockup::hitStep(x,y,val,rackState,st);if(step>=0){if(st==2){selectedRepeat=step;if(dbl)edit(kRepeatStep0+step,value(kRepeatStep0+step)>.5?0.:1.);}if(st==3){selectedReslice=step;if(dbl)edit(kResliceStep0+step,value(kResliceStep0+step)>.5?0.:1.);}if(st==4){selectedGate=step;if(GetKeyState(VK_SHIFT)&0x8000){double v=value(kGaterRelease0+step)>.5?0.:1.;edit(kGaterRelease0+step,v);if(v>.5)edit(kGaterState0+step,0.);}else{edit(kGaterRelease0+step,0.);edit(kGaterState0+step,value(kGaterState0+step)>.25?0.:1.);}}InvalidateRect(window,nullptr,FALSE);return;}
-    auto xy=rackState.position(mockup::xy);if(rackState.page==2&&y>=mockup::bodyTop&&hit(xy)){dragXY=true;controller->beginEdit(kXYX);controller->beginEdit(kXYY);auto v=mockup::xyValue(xy,x,y);change(kXYX,v.first);change(kXYY,v.second);SetCapture(window);return;}
+    int st=-1,step=mockup::hitStep(x,y,val,rackState,st);if(step>=0){ParamID id=st==2?kRepeatStep0+step:st==3?kResliceStep0+step:kGaterState0+step;if(GetKeyState(VK_SHIFT)&0x8000){edit(id,info(id).defaultNormalizedValue);return;}if(dbl){editValue(id);return;}if(st==2){selectedRepeat=step;if(dbl)edit(kRepeatStep0+step,value(kRepeatStep0+step)>.5?0.:1.);}if(st==3){selectedReslice=step;if(dbl)edit(kResliceStep0+step,value(kResliceStep0+step)>.5?0.:1.);}if(st==4){selectedGate=step;if(GetKeyState(VK_MENU)&0x8000){double v=value(kGaterRelease0+step)>.5?0.:1.;edit(kGaterRelease0+step,v);if(v>.5)edit(kGaterState0+step,0.);}else{edit(kGaterRelease0+step,0.);edit(kGaterState0+step,value(kGaterState0+step)>.25?0.:1.);}}InvalidateRect(window,nullptr,FALSE);return;}
+    auto xy=rackState.position(mockup::xy);if(rackState.page==2&&y>=mockup::bodyTop&&hit(xy)){if(GetKeyState(VK_SHIFT)&0x8000){edit(kXYX,info(kXYX).defaultNormalizedValue);edit(kXYY,info(kXYY).defaultNormalizedValue);return;}dragXY=true;controller->beginEdit(kXYX);controller->beginEdit(kXYY);auto v=mockup::xyValue(xy,x,y);change(kXYX,v.first);change(kXYY,v.second);SetCapture(window);return;}
     for(const auto& c:controls)if((y>=mockup::bodyTop||c.id==kInputDeclick||c.id==kDeclickSensitivity)&&inside(x,y,c.x,c.y,c.w,c.h)){
-      if(mockup::valueRect({c.x,c.y,c.w,c.h},mockup::Kind(c.kind),c.id,c.label).contains(x,y)){editValue(c.id);return;}
+      if(GetKeyState(VK_SHIFT)&0x8000){edit(c.id,info(c.id).defaultNormalizedValue);return;}
+      if(dbl){editValue(c.id);return;}
+      if(mockup::valueRect({c.x,c.y,c.w,c.h},mockup::Kind(c.kind),c.id,c.label).contains(x,y))return;
       if(c.kind==PanMode){edit(c.id,std::clamp(int((x-c.x)/(c.w/3)),0,2)/2.);return;}
       if(c.kind==Toggle||c.kind==Pad){edit(c.id,value(c.id)>.5?0:1);return;}
-      if(dbl){edit(c.id,info(c.id).defaultNormalizedValue);return;}
+      if(c.kind==Select&&x<c.x+c.w-24)return;
       if(c.kind==Select){HMENU m=CreatePopupMenu();int count=info(c.id).stepCount;for(int i=0;i<=count;++i)if(availableMenuOption(c.id,i))AppendMenuW(m,MF_STRING|(int(std::round(value(c.id)*count))==i?MF_CHECKED:0),i+1,display(c.id,i/double(std::max(1,count))).c_str());POINT p;GetCursorPos(&p);int chosen=TrackPopupMenu(m,TPM_RETURNCMD,p.x,p.y,0,window,nullptr);DestroyMenu(m);if(chosen)edit(c.id,(chosen-1)/double(std::max(1,count)));return;}
       dragID=int(c.id);dragKind=c.kind;dragWidth=c.w;dragHeight=c.h;originX=x;originY=y;dragValue=value(c.id);controller->beginEdit(c.id);SetCapture(window);return;
     }

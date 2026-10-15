@@ -1,6 +1,6 @@
 # GrainsDosage — complete user manual
 
-**Windows VST3 · purple three-page edition · 0.13.7**\
+**Windows VST3 · purple three-page edition · 0.13.8**\
 Applies to the updated `work/mockup-purple-skin` branch. The pages are **Modules**, **Modulation**, and **Morph**. This manual describes the current generative Reslice, not the retired Preslicer or the old Reslice step editor. Shared sound controls also apply to the macOS build; installation and registration below describe Windows.
 
 ## Contents
@@ -79,12 +79,14 @@ The header and the three page tabs stay in place. Each page has its own vertical
 | Adjust a knob | Drag vertically |
 | Adjust a horizontal slider | Drag horizontally |
 | Adjust a vertical slider | Drag vertically |
-| Fine adjustment | Hold **Shift** while dragging |
-| Enter an exact value | Click the numeric readout, or right-click a control |
-| Restore a knob/slider default | Double-click its control area, outside the numeric readout |
-| Choose a discrete option | Click the selector and choose its menu item |
+| Fine adjustment | Begin dragging, then hold **Shift** |
+| Enter an exact value | Double-click a control or its numeric readout (right-click also works) |
+| Restore a knob/slider default | **Shift-click** the control or its readout |
+| Choose a discrete option | Click the right edge of the selector for its menu; double-click its label to type |
 | Change module order | Drag a module's header/handle up or down |
 | Change page | Click Modules, Modulation or Morph |
+
+Click the name of Granulizer, Beat Repeater, Reslice or Gater (▾) to open its **Save module preset… / Load module preset…** menu. These `.gdmodule` files include that module’s controls, loop settings and Mix lock where available. Loading changes only that module; other modules, modulation and routing stay unchanged. Files for another module or invalid files are rejected before any settings change. Full-rack `.gdspreset` files remain supported by the top preset menu. Drag the module number or grip to reorder modules. The Skin button has been removed.
 
 Numeric entry accepts the displayed units where applicable, such as `123 ms`. Values outside the control's range are rejected.
 
@@ -155,7 +157,7 @@ The Beat Repeater captures a rhythmic fragment and plays it repeatedly.
 | **Division** | Repeat division for the selected step. |
 | **Step Pitch** | Selected-step pitch, −48 to +48 semitones. |
 
-Click a step to select it; double-click a step to toggle it. Then adjust the selected step's controls. The available divisions run from 1/1 to 1/128 and include triplet and dotted variants. A repeating texture can also be held using the independent module Loop.
+Click a step to select it; double-click to enter its activity value. Shift-click restores the default. Then adjust the selected step's controls. The available divisions run from 1/1 to 1/128 and include triplet and dotted variants. A repeating texture can also be held using the independent module Loop.
 
 ## 8. Reslice: every control
 
@@ -188,6 +190,10 @@ All **sound and capture controls in this section**, including On and module Loop
 | **Min Pitch / Max Pitch** | −2,400 to +2,400 cents; 1,200 cents is one octave. |
 
 The engine chooses values between each minimum/maximum pair at cut events. Matching the two values gives a fixed setting. Reversed endpoints are handled as a range, but keeping Min below Max is easier to read.
+
+### Randomization
+
+RANDOM changes the RESLICE sound controls, including Mode, crusher/comb and loop settings. MIX changes only when its lock is FREE; a locked MIX stays exactly as set. Module power and the lock itself remain unchanged. NEW PHRASE changes only the seed.
 
 ### CutDSG
 
@@ -262,7 +268,7 @@ The Gater applies a rhythmic amplitude pattern.
 | **Sustain** | Selected step's additional tail, 0–500 ms. |
 | **Latch** | Empty steps preserve the current gate state; Release steps close it. |
 
-Click a step to toggle its activity and select it. **Shift-click** a step to toggle a Release marker. In normal mode, inactive steps close the gate. In Latch mode, use Release markers deliberately; otherwise an open gate may remain open across empty steps. A pattern with no active opening steps can silence the signal. The module's On switch and module Loop are separate.
+Click a step to toggle its activity and select it. **Alt-click** (Option-click on macOS) a step to toggle a Release marker. In normal mode, inactive steps close the gate. In Latch mode, use Release markers deliberately; otherwise an open gate may remain open across empty steps. A pattern with no active opening steps can silence the signal. The module's On switch and module Loop are separate.
 
 ## 10. Modulation
 

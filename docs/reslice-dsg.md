@@ -22,7 +22,7 @@ Controls apply to the original DSG procedures, not the original LiveCut algorith
 | Comb | On/off, feedforward/feedback type, feedback, min/max delay |
 
 Existing BUFFER, REPEAT CHANCE, VARIATION, FILL CHANCE, REVERSE, MIX and its lock
-remain. NEW PHRASE reseeds without randomizing the controls. The compact 770-unit panel uses horizontal sliders except the final Variation /
+remain. RANDOM randomizes all current sound controls, all mode sections, crusher/comb and the module loop. MIX is randomized only when its lock is FREE. Module power and lock state are preserved, and min/max ranges are ordered. NEW PHRASE remains a separate button that reseeds without randomizing the controls. The compact 770-unit panel uses horizontal sliders except the final Variation /
 Fill Chance / Reverse / Mix knob row, and scrolls inside the Modules page; the header and page selectors stay fixed.
 Only the selected algorithm's section is drawn and accepts input: CutDSG shows
 Min/Max Repeats, Stutter and Area; WarpDSG shows Straight, Regular, Ritard and
