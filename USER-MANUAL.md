@@ -1,6 +1,6 @@
 # GrainsDosage — complete user manual
 
-**Windows VST3 · purple three-page edition · 0.13.11**\
+**Windows VST3 · purple three-page edition · 0.13.12**\
 Applies to the updated `work/mockup-purple-skin` branch. The pages are **Modules**, **Modulation**, and **Morph**. This manual describes the current generative Reslice, not the retired Preslicer or the old Reslice step editor. Shared sound controls also apply to the macOS build; installation and registration below describe Windows.
 
 ## Contents
@@ -82,7 +82,7 @@ The header and the three page tabs stay in place. Each page has its own vertical
 | Fine adjustment | Begin dragging, then hold **Shift** |
 | Enter an exact value | Double-click the numeric readout (right-click also works) |
 | Restore a knob/slider default | Double-click the knob/fader body, or Shift-click the control |
-| Choose a discrete option | Click the right edge of the selector for its menu; double-click its label to type |
+| Choose a discrete option | Click anywhere in the selector to open its menu; right-click to type a value |
 | Change module order | Drag a module's header/handle up or down |
 | Change page | Click Modules, Modulation or Morph |
 

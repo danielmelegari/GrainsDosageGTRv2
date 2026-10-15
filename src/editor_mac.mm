@@ -700,7 +700,6 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
     if(readout.contains(p.x,p.y))return;
     if(c.kind==aztec::PanMode)owner->edit(c.id,std::clamp(int((p.x-c.rect.origin.x)/(c.rect.size.width/3.)),0,2)/2.);
     else if(c.kind==aztec::Pad||c.kind==aztec::Toggle)owner->edit(c.id,owner->value(c.id)>=.5?0.:1.);
-    else if(c.kind==aztec::Select&&p.x<c.rect.origin.x+c.rect.size.width-24)return;
     else if(c.kind==aztec::Select){
       NSMenu* menu=[[NSMenu alloc] initWithTitle:@"Select"];NSMenu* destination=menu;int n=owner->info(c.id).stepCount;
       for(int i=0;i<=n;++i){
