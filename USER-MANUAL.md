@@ -1,6 +1,6 @@
 # GrainsDosage — complete user manual
 
-**Windows VST3 · purple three-page edition · 0.13.9**\
+**Windows VST3 · purple three-page edition · 0.13.10**\
 Applies to the updated `work/mockup-purple-skin` branch. The pages are **Modules**, **Modulation**, and **Morph**. This manual describes the current generative Reslice, not the retired Preslicer or the old Reslice step editor. Shared sound controls also apply to the macOS build; installation and registration below describe Windows.
 
 ## Contents
@@ -86,7 +86,7 @@ The header and the three page tabs stay in place. Each page has its own vertical
 | Change module order | Drag a module's header/handle up or down |
 | Change page | Click Modules, Modulation or Morph |
 
-Click the name of Granulizer, Beat Repeater, Reslice or Gater (▾) to open its **Save module preset… / Load module preset…** menu. These `.gdmodule` files include that module’s controls, loop settings and Mix lock where available. Loading changes only that module; other modules, modulation and routing stay unchanged. Files for another module or invalid files are rejected before any settings change. The module menu also includes Default: it immediately restores all registered defaults for that module, including loop, power and applicable Mix lock settings, without changing other modules or routing. Full-rack `.gdspreset` files remain supported by the top preset menu. Drag the module number or grip to reorder modules. The Skin button has been removed.
+Click the name of Granulizer, Beat Repeater, Reslice or Gater (▾) to open its **Save module preset… / Load module preset…** menu. These `.gdmodule` files include that module’s controls, loop settings and Mix lock where available. Loading changes only that module; other modules, modulation and routing stay unchanged. Files for another module or invalid files are rejected before any settings change. Each module has its own Presets/Modules/GRANULIZER, BEAT REPEATER, RESLICE or GATER folder. Save module preset… opens that module’s folder by default. Its .gdmodule files appear alphabetically in the dropdown and load with one click. Use Open module preset folder… to add files; reopen the menu to refresh the list. Load module preset… also accepts files elsewhere. The module menu also includes Default: it immediately restores all registered defaults for that module, including loop, power and applicable Mix lock settings, without changing other modules or routing. Full-rack `.gdspreset` files remain supported by the top preset menu. Drag the module number or grip to reorder modules. The Skin button has been removed.
 
 Numeric entry accepts the displayed units where applicable, such as `123 ms`. Values outside the control's range are rejected.
 

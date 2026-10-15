@@ -583,26 +583,47 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   }
   [menu addItem:[NSMenuItem separatorItem]];NSMenuItem* open=[[NSMenuItem alloc] initWithTitle:@"Open Preset Folder…" action:@selector(choosePreset:) keyEquivalent:@""];open.target=self;open.tag=-1;open.representedObject=folder;[menu addItem:open];[NSMenu popUpContextMenu:menu withEvent:event forView:self];
 }
+- (NSURL*)modulePresetFolder:(int)module {
+  NSURL* root=[self presetFolder];if(!root)return nil;
+  NSURL* folder=[[root URLByAppendingPathComponent:@"Modules" isDirectory:YES] URLByAppendingPathComponent:[NSString stringWithUTF8String:aztec::mockup::moduleNames[module]] isDirectory:YES];NSError* error=nil;
+  if(![[NSFileManager defaultManager] createDirectoryAtURL:folder withIntermediateDirectories:YES attributes:nil error:&error]){NSAlert* alert=[[NSAlert alloc] init];alert.messageText=@"Cannot create the module preset folder";alert.informativeText=error.localizedDescription;[alert runModal];return nil;}return folder;
+}
+- (BOOL)loadModulePresetURL:(NSURL*)url module:(int)module {
+  NSData* data=[NSData dataWithContentsOfURL:url];std::array<double,aztec::kCount> values{};
+  if(!owner||!data||!data.length||!aztec::decodeModulePreset(std::string((const char*)data.bytes,data.length),module,values))return NO;
+  for(int id=0;id<aztec::kCount;++id)if(aztec::modulePresetParameter(module,id))owner->edit(id,values[id]);[self setNeedsDisplay:YES];return YES;
+}
+- (void)chooseModulePresetFile:(NSMenuItem*)item {
+  if(![self loadModulePresetURL:item.representedObject module:(int)item.tag]){NSAlert* alert=[[NSAlert alloc] init];alert.messageText=@"Cannot load this module preset";alert.informativeText=@"Invalid or incompatible module preset. No settings changed.";[alert runModal];}
+}
 - (void)preset:(BOOL)save { [self preset:save module:-1]; }
 - (void)chooseModulePreset:(NSMenuItem*)item {
   if(!owner)return;int module=[item.representedObject intValue];
   if(item.tag==3){aztec::resetModulePreset(module,[&](aztec::ParamID id){return owner->info(id).defaultNormalizedValue;},[&](aztec::ParamID id,double v){owner->edit(id,v);});[self setNeedsDisplay:YES];}
+  else if(item.tag==4){NSURL* folder=[self modulePresetFolder:module];if(folder)[[NSWorkspace sharedWorkspace] openURL:folder];}
   else [self preset:item.tag==1 module:module];
 }
 - (void)modulePresetMenu:(int)module event:(NSEvent*)event {
+  NSURL* folder=[self modulePresetFolder:module];if(!folder)return;
   NSMenu* menu=[[NSMenu alloc] initWithTitle:@"Module presets"];
-  NSMenuItem* defaults=[[NSMenuItem alloc] initWithTitle:@"Default" action:@selector(chooseModulePreset:) keyEquivalent:@""];defaults.target=self;defaults.tag=3;defaults.representedObject=@(module);[menu addItem:defaults];[menu addItem:[NSMenuItem separatorItem]];
+  NSMenuItem* defaults=[[NSMenuItem alloc] initWithTitle:@"Default" action:@selector(chooseModulePreset:) keyEquivalent:@""];defaults.target=self;defaults.tag=3;defaults.representedObject=@(module);[menu addItem:defaults];
+  NSArray<NSURL*>* files=[[NSFileManager defaultManager] contentsOfDirectoryAtURL:folder includingPropertiesForKeys:@[NSURLIsRegularFileKey] options:NSDirectoryEnumerationSkipsHiddenFiles error:nil];
+  files=[files sortedArrayUsingComparator:^NSComparisonResult(NSURL* a,NSURL* b){return [a.lastPathComponent localizedStandardCompare:b.lastPathComponent];}];
+  for(NSURL* url in files){NSNumber* regular=nil;[url getResourceValue:&regular forKey:NSURLIsRegularFileKey error:nil];if(!regular.boolValue||![url.pathExtension.lowercaseString isEqualToString:@"gdmodule"])continue;
+    NSMenuItem* item=[[NSMenuItem alloc] initWithTitle:url.lastPathComponent.stringByDeletingPathExtension action:@selector(chooseModulePresetFile:) keyEquivalent:@""];item.target=self;item.tag=module;item.representedObject=url;[menu addItem:item];}
+  [menu addItem:[NSMenuItem separatorItem]];
   for(int i=1;i<=2;++i){NSMenuItem* item=[[NSMenuItem alloc] initWithTitle:i==1?@"Save module preset…":@"Load module preset…" action:@selector(chooseModulePreset:) keyEquivalent:@""];item.target=self;item.tag=i;item.representedObject=@(module);[menu addItem:item];}
+  NSMenuItem* open=[[NSMenuItem alloc] initWithTitle:@"Open module preset folder…" action:@selector(chooseModulePreset:) keyEquivalent:@""];open.target=self;open.tag=4;open.representedObject=@(module);[menu addItem:open];
   [NSMenu popUpContextMenu:menu withEvent:event forView:self];
 }
 - (void)preset:(BOOL)save module:(int)module {
-  if(!owner)return;NSError* error=nil;bool ok=false;
-  if(save){NSSavePanel* panel=[NSSavePanel savePanel];panel.allowedFileTypes=module<0?@[@"gdspreset"]:@[@"gdmodule"];panel.nameFieldStringValue=module<0?@"GrainsDosage.gdspreset":[[NSString stringWithUTF8String:aztec::mockup::moduleNames[module]] stringByAppendingPathExtension:@"gdmodule"];panel.directoryURL=[self presetFolder];
+  if(!owner)return;NSURL* folder=module<0?[self presetFolder]:[self modulePresetFolder:module];if(!folder)return;NSError* error=nil;bool ok=false;
+  if(save){NSSavePanel* panel=[NSSavePanel savePanel];panel.allowedFileTypes=module<0?@[@"gdspreset"]:@[@"gdmodule"];panel.nameFieldStringValue=module<0?@"GrainsDosage.gdspreset":[[NSString stringWithUTF8String:aztec::mockup::moduleNames[module]] stringByAppendingPathExtension:@"gdmodule"];panel.directoryURL=folder;
     if([panel runModal]!=NSModalResponseOK)return;
     auto get=[&](int id){return owner->value(id);};auto text=module<0?aztec::encodePreset(get):aztec::encodeModulePreset(module,get);NSData* data=[NSData dataWithBytes:text.data() length:text.size()];ok=[data writeToURL:panel.URL options:NSDataWritingAtomic error:&error];if(ok&&module<0)presetName=[panel.URL.lastPathComponent stringByDeletingPathExtension];
-  }else{NSOpenPanel* panel=[NSOpenPanel openPanel];panel.allowedFileTypes=module<0?@[@"gdspreset"]:@[@"gdmodule"];panel.allowsMultipleSelection=NO;panel.canChooseDirectories=NO;panel.directoryURL=[self presetFolder];
+  }else{NSOpenPanel* panel=[NSOpenPanel openPanel];panel.allowedFileTypes=module<0?@[@"gdspreset"]:@[@"gdmodule"];panel.allowsMultipleSelection=NO;panel.canChooseDirectories=NO;panel.directoryURL=folder;
     if([panel runModal]!=NSModalResponseOK)return;
-    if(module<0)ok=[self loadPresetURL:panel.URL];else{NSData* data=[NSData dataWithContentsOfURL:panel.URL];std::array<double,aztec::kCount> values{};ok=data&&data.length&&aztec::decodeModulePreset(std::string((const char*)data.bytes,data.length),module,values);if(ok)for(int id=0;id<aztec::kCount;++id)if(aztec::modulePresetParameter(module,id))owner->edit(id,values[id]);}
+    if(module<0)ok=[self loadPresetURL:panel.URL];else ok=[self loadModulePresetURL:panel.URL module:module];
   }
   if(!ok){NSAlert* alert=[[NSAlert alloc] init];alert.messageText=save?@"Preset could not be saved":@"Preset could not be loaded";alert.informativeText=error?error.localizedDescription:@"Invalid or incompatible GrainsDosage preset. No settings changed.";[alert runModal];}
   [self setNeedsDisplay:YES];

@@ -299,15 +299,32 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
     else if(choice>0&&choice<=int(names.size())&&!loadPresetPath(folder+L"\\"+names[size_t(choice-1)]))MessageBoxW(window,L"Invalid or incompatible preset. No settings changed.",L"GrainsDosage",MB_OK|MB_ICONERROR);
     InvalidateRect(window,nullptr,FALSE);
   }
+  std::wstring modulePresetFolder(int module){
+    auto folder=presetFolder();if(folder.empty())return {};
+    for(const auto& part:{std::wstring(L"Modules"),wide(mockup::moduleNames[module])}){folder+=L"\\"+part;if(!CreateDirectoryW(folder.c_str(),nullptr)&&GetLastError()!=ERROR_ALREADY_EXISTS)return {};}
+    return folder;
+  }
   void modulePresetMenu(int module){
-    HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,3,L"Default");AppendMenuW(menu,MF_SEPARATOR,0,nullptr);AppendMenuW(menu,MF_STRING,1,L"Save module preset…");AppendMenuW(menu,MF_STRING,2,L"Load module preset…");POINT p;GetCursorPos(&p);int choice=TrackPopupMenu(menu,TPM_RETURNCMD,p.x,p.y,0,window,nullptr);DestroyMenu(menu);if(choice==3){resetModulePreset(module,[&](ParamID id){return info(id).defaultNormalizedValue;},[&](ParamID id,double v){edit(id,v);});InvalidateRect(window,nullptr,FALSE);}else if(choice)preset(choice==1,module);
+    auto folder=modulePresetFolder(module);if(folder.empty()){MessageBoxW(window,L"Cannot create the module preset folder.",L"GrainsDosage",MB_OK|MB_ICONERROR);return;}
+    std::vector<std::wstring> names;WIN32_FIND_DATAW data{};HANDLE search=FindFirstFileW((folder+L"\\*.gdmodule").c_str(),&data);
+    if(search!=INVALID_HANDLE_VALUE){do{if(!(data.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY))names.emplace_back(data.cFileName);}while(FindNextFileW(search,&data));FindClose(search);}
+    std::sort(names.begin(),names.end(),[](const auto& a,const auto& b){int result=CompareStringOrdinal(a.c_str(),-1,b.c_str(),-1,TRUE);return result==CSTR_LESS_THAN||(result==CSTR_EQUAL&&a<b);});
+    HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,3,L"Default");
+    for(size_t i=0;i<names.size();++i){auto stem=names[i].substr(0,names[i].find_last_of(L'.'));std::wstring label;for(wchar_t ch:stem){label+=ch;if(ch==L'&')label+=ch;}AppendMenuW(menu,MF_STRING,UINT_PTR(100+i),label.c_str());}
+    AppendMenuW(menu,MF_SEPARATOR,0,nullptr);AppendMenuW(menu,MF_STRING,1,L"Save module preset…");AppendMenuW(menu,MF_STRING,2,L"Load module preset…");AppendMenuW(menu,MF_STRING,4,L"Open module preset folder…");
+    POINT p;GetCursorPos(&p);int choice=TrackPopupMenu(menu,TPM_RETURNCMD,p.x,p.y,0,window,nullptr);DestroyMenu(menu);
+    if(choice==3)resetModulePreset(module,[&](ParamID id){return info(id).defaultNormalizedValue;},[&](ParamID id,double v){edit(id,v);});
+    else if(choice==4)ShellExecuteW(window,L"open",folder.c_str(),nullptr,nullptr,SW_SHOWNORMAL);
+    else if(choice==1||choice==2)preset(choice==1,module);
+    else if(choice>=100&&size_t(choice-100)<names.size()&&!loadPresetPath(folder+L"\\"+names[size_t(choice-100)],module))MessageBoxW(window,L"Invalid or incompatible module preset. No settings changed.",L"GrainsDosage",MB_OK|MB_ICONERROR);
+    InvalidateRect(window,nullptr,FALSE);
   }
   void preset(bool save,int module=-1){
     wchar_t path[MAX_PATH]=L"GrainsDosage.gdspreset";
     OPENFILENAMEW dialog{};dialog.lStructSize=sizeof(dialog);dialog.hwndOwner=window;
     dialog.lpstrFilter=L"GrainsDosage Preset (*.gdspreset)\0*.gdspreset\0\0";dialog.lpstrFile=path;dialog.nMaxFile=MAX_PATH;dialog.lpstrDefExt=L"gdspreset";
     if(module>=0){lstrcpyW(path,(wide(mockup::moduleNames[module])+L".gdmodule").c_str());dialog.lpstrFilter=L"GrainsDosage Module (*.gdmodule)\0*.gdmodule\0\0";dialog.lpstrDefExt=L"gdmodule";}
-    auto folder=presetFolder();dialog.lpstrInitialDir=folder.empty()?nullptr:folder.c_str();
+    auto folder=module<0?presetFolder():modulePresetFolder(module);if(folder.empty()){MessageBoxW(window,L"Cannot create the preset folder.",L"GrainsDosage",MB_OK|MB_ICONERROR);return;}dialog.lpstrInitialDir=folder.c_str();
     dialog.Flags=OFN_NOCHANGEDIR|OFN_PATHMUSTEXIST|(save?OFN_OVERWRITEPROMPT:OFN_FILEMUSTEXIST);
     if(!(save?GetSaveFileNameW(&dialog):GetOpenFileNameW(&dialog))){if(CommDlgExtendedError())MessageBoxW(window,L"Could not open the preset dialog.",L"GrainsDosage",MB_OK|MB_ICONERROR);return;}
     bool ok=false;
