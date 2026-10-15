@@ -14,17 +14,28 @@ void runGuiScenarios(Controller* c,Click click,Drag drag,Scroll scroll,Page actu
  auto page=[&](int p){rectClick(mockup::pageRect(p));rack.page=p;check(actualPage()==p,"Fixed page navigation");};
  auto setScroll=[&](double d){rack.scroll[rack.page]=std::clamp(d,0.,mockup::maxScroll(rack));scroll(rack.offset());};
  auto focus=[&](int stage){page(0);setScroll(0);auto r=mockup::moduleRect(stage,val,rack);setScroll(r.y-220);};
- auto control=[&](ParamID id){for(auto c:mockup::controls(val,0,lfo,0,0,0,rack))if(c.id==id)return c.r;throw std::runtime_error("Control missing from page");};
+ auto control=[&](ParamID id){for(auto c:mockup::controls(val,0,lfo,0,0,0,rack))if(c.id==id)return c.r;throw std::runtime_error("Control missing from page: parameter "+std::to_string(id));};
  auto toggle=[&](ParamID id){auto r=control(id);double before=val(id);rectClick(r);check(val(id)==(before>=.5?0.:1.),"Visible toggle binding");c->setParamNormalized(id,before);};
  for(int stage:{0,2,3,4}){focus(stage);toggle(mockup::stageEnabled[stage]);toggle(moduleLoopOn(moduleLoopIndex(stage)));check(control(moduleLoopWindow(moduleLoopIndex(stage))).w>0,"Per-module loop window selector");}
  focus(0);toggle(kFreeze);toggle(kMixLock0);auto r=control(kSize);c->setParamNormalized(kSize,.25);drag(0,r.x+r.w/2,r.y+r.h/2);drag(1,r.x+r.w/2,r.y+r.h/2-45);drag(2,r.x+r.w/2,r.y+r.h/2-45);check(std::abs(val(kSize)-.5)<.015,"Round knob drag");rectClick(r,-1);check(std::abs(val(kSize)-.25)<1e-6,"Shift click default");c->setParamNormalized(kSize,.8);rectClick(r,2);check(std::abs(val(kSize)-.25)<1e-6,"Double click knob resets without a dialog");
  c->setParamNormalized(kGrainMix,.271);c->setParamNormalized(kMixLock0,0);rectClick(control(kMixLock0));rectClick(mockup::randomRect(0,val,rack));check(val(kGrainMix)==.271,"Mix lock survives Random");rectClick(control(kMixLock0));rectClick(mockup::randomRect(0,val,rack));check(val(kGrainMix)!=.271,"Unlocked mix randomises");
- focus(3);double savedMode=val(kResliceAlgorithm);const ParamID modeSliders[]={kResliceStutter,kResliceStraight,kResliceActivity};
+ focus(3);
+ // Exercise the compact knobs through native input before opening advanced controls.
+ for(auto id:{kResliceSubdivision,kResliceSeed,kResliceVariation,kResliceReverse,kResliceMix}){
+  double saved=val(id);c->setParamNormalized(id,.25);auto knob=control(id);
+  drag(0,knob.x+knob.w/2,knob.y+knob.h/2);drag(1,knob.x+knob.w/2,knob.y+knob.h/2-45);drag(2,knob.x+knob.w/2,knob.y+knob.h/2-45);
+  check(val(id)>.4,"Compact Reslice knob binding");c->setParamNormalized(id,saved);
+ }
+ auto advance=[&](){focus(3);auto button=mockup::resliceAdvanceRect(val,rack);rectClick(button);check(mockup::toggleResliceAdvance(button.x+button.w/2,button.y+button.h/2,val,rack),"Reslice Advance button geometry");};
+ advance();
+ double savedMode=val(kResliceAlgorithm);const ParamID modeSliders[]={kResliceStutter,kResliceStraight,kResliceActivity};
  for(int mode=0;mode<3;++mode){c->setParamNormalized(kResliceAlgorithm,mode*.5);auto id=modeSliders[mode];double saved=val(id);c->setParamNormalized(id,.25);auto slider=control(id);drag(0,slider.x+20,slider.y+29);drag(1,slider.x+20+slider.w*.25,slider.y+29);drag(2,slider.x+20+slider.w*.25,slider.y+29);check(std::abs(val(id)-.5)<.015,"Selected algorithm horizontal fader");rectClick(slider,-1);double defaultValue=val(id);c->setParamNormalized(id,.9);click(slider.x+20,slider.y+29,2);check(val(id)==defaultValue,"Double click fader resets without a dialog");c->setParamNormalized(id,saved);check(control(kResliceFade).w>0&&control(kResliceMix).w>0,"Shared controls and fixed bottom knobs");}
  c->setParamNormalized(kResliceAlgorithm,savedMode);
  focus(3);auto rmode=control(kResliceAlgorithm);check(rmode.w>0,"Generative mode selector");setScroll(rack.offset()+250.);toggle(kResliceCrushOn);toggle(kResliceCombOn);double before=val(kResliceSeed);rectClick(mockup::reslicePhraseRect(val,rack));check(val(kResliceSeed)!=before,"New procedural phrase seed");
  c->setParamNormalized(kResliceMix,.271);c->setParamNormalized(kMixLock0+3,1);rectClick(mockup::randomRect(3,val,rack));check(val(kResliceMix)==.271,"Reslice Random preserves locked mix");c->setParamNormalized(kMixLock0+3,0);rectClick(mockup::randomRect(3,val,rack));check(val(kResliceMix)!=.271,"Reslice Random changes unlocked mix");
 
+ advance(); // Return to compact mode, including its shorter scroll range.
+ focus(3);double compactMix=val(kResliceMix);c->setParamNormalized(kResliceMix,.25);r=control(kResliceMix);drag(0,r.x+r.w/2,r.y+r.h/2);drag(1,r.x+r.w/2,r.y+r.h/2-45);drag(2,r.x+r.w/2,r.y+r.h/2-45);check(std::abs(val(kResliceMix)-.5)<.015,"Collapsed Reslice knob remains interactive");c->setParamNormalized(kResliceMix,compactMix);
  focus(4);r=mockup::stepRect(0,4,val,rack);before=val(kGaterState0);rectClick(r);check(val(kGaterState0)==(before>.25?0.:1.),"Gater sequencer after scroll");
  auto original=mockup::routeChain(val);focus(original[3]);r=mockup::headerRect(original[3],val,rack);drag(0,r.x+20,r.y+20);setScroll(0);r=mockup::headerRect(original[0],val,rack);drag(1,r.x+20,r.y+15);drag(2,r.x+20,r.y+15);auto moved=mockup::routeChain(val);check(moved[0]==original[3]&&moved[1]==original[0],"Vertical routing from bottom to first across scrolling");
  focus(moved[0]);r=mockup::headerRect(moved[0],val,rack);drag(0,r.x+20,r.y+20);setScroll(mockup::maxScroll(rack));r=mockup::moduleRect(moved[3],val,rack);drag(1,r.x+80,r.y+r.h-10);drag(2,r.x+80,r.y+r.h-10);check(mockup::routeChain(val)==original,"Vertical routing first to last across scrolling");
