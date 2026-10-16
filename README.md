@@ -37,7 +37,7 @@ See [OFFLINE-TRIAL.md](OFFLINE-TRIAL.md) for publisher signing and machine regis
 
 ## Presets and compatibility
 
-The factory collection contains three 128-preset banks: Legacy, Circuit Fractures and Forest Escape. Windows user presets live under `%APPDATA%\GrainsDosage\Presets\`; macOS uses `~/Library/Audio/Presets/GrainsDosage/`.
+Default is the only bundled preset. Existing user presets are retained; untouched old factory files are hidden from the browser without deleting them. The modulation library adds 200 distinct waves, while saved legacy wave choices remain compatible. Windows user presets live under `%APPDATA%\GrainsDosage\Presets\`; macOS uses `~/Library/Audio/Presets/GrainsDosage/`.
 
 Older plugin states and preset files migrate their selected destinations to the expanded lists. New presets use format 2. Check old DAW automation that changes destination selectors themselves after upgrading, because the expanded lists use new normalized positions. See the manual's automation section.
 

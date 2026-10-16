@@ -54,6 +54,11 @@ int main() {
    for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);for(int i=kFreeze+1;i<kAudioQuality;++i)out.writeDouble(expected[i]);out.writeInt32(12345);
    old.seek(0,IBStream::kIBSeekSet,nullptr);auto restored=defaults();restored[kAudioQuality]=0.;assert(loadState(&old,restored)&&restored==expected);IBStreamer in(&old,kLittleEndian);int32 marker=0;assert(in.readInt32(marker)&&marker==12345);
   }
+  // E states keep their old waveform IDs and end before the new tail.
+  {auto expected=defaults();expected[lfoID(0,lWave)]=73./129.;MemoryStream old;IBStreamer out(&old,kLittleEndian);out.writeInt32(0x5147314E);
+   for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);for(int i=kFreeze+1;i<kUiLfoValue0;++i)out.writeDouble(expected[i]);out.writeInt32(2468);
+   old.seek(0,IBStream::kIBSeekSet,nullptr);auto restored=defaults();assert(loadState(&old,restored)&&restored==expected);assert(settings(restored,120,48000).lfos[0].wave==73);IBStreamer in(&old,kLittleEndian);int32 marker=0;assert(in.readInt32(marker)&&marker==2468);
+  }
   // Pre-generative release: appended cutter controls keep their new defaults.
   {auto expected=defaults();expected[kResliceEnabled]=1.;MemoryStream old;IBStreamer out(&old,kLittleEndian);out.writeInt32(0x51473149);
    for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);for(int i=kFreeze+1;i<kResliceAlgorithm;++i)out.writeDouble(expected[i]);
@@ -228,10 +233,10 @@ int main() {
     MemoryStream rt3; assert(p2.getState(&rt3)==kResultOk);
     rt.seek(0,IBStream::kIBSeekSet,nullptr); rt3.seek(0,IBStream::kIBSeekSet,nullptr);
     int32 m1=0,m2=0;IBStreamer r1(&rt,kLittleEndian),r2(&rt3,kLittleEndian);
-    r1.readInt32(m1);r2.readInt32(m2);assert(m1==m2&&m1==0x5147314E);
+    r1.readInt32(m1);r2.readInt32(m2);assert(m1==m2&&m1==0x5147314F);
     // getState layout: kParamEnd values, buffer size, freeze flag, then the tail
     // (kBypassReserved lives in this region) up to kCount.
-    const int fields=kParamEnd+2+(int(kUiLfoValue0)-int(kFreeze)-1);
+    const int fields=kParamEnd+2+(int(kCount)-int(kFreeze)-1);
     for(int i=0;i<fields;++i){double a=0,b=0;assert(r1.readDouble(a)&&r2.readDouble(b));assert(a==b);}
   }
   processor->setActive(false);processor->terminate();processor->release();

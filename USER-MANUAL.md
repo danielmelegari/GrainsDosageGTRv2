@@ -276,7 +276,7 @@ There are **four independent LFOs**, each with **six destination slots**. Select
 
 | Control | Function |
 |---|---|
-| **Wave** | 128 shaped waves plus Sample & Hold and Sample & Glide. |
+| **Wave** | 328 shaped waves plus Sample & Hold and Sample & Glide. The 200 new shapes are grouped into ten families. Saved Wave preserves old preset/automation selections. |
 | **Sync** | Switches between host-tempo timing and free-running Hz. |
 | **Length** | Synchronized cycle length; offers straight, triplet, dotted and long cycles. |
 | **Rate** | Free-running rate, 0.01–40 Hz. |
@@ -371,7 +371,7 @@ Example: assign X to **Reslice Variation**, Y to **Reslice Mix**, use modest pos
 
 ## 14. Presets, randomization and automation
 
-Use the header preset selector to browse the factory banks: **Legacy**, **Circuit Fractures**, and **Forest Escape**, with 128 entries per bank. The preset menu creates missing factory files. Save your own settings using **Save**, and use **Load** for an existing `.gdspreset` file. The left/right arrows step through the available preset files.
+The header preset selector contains **Default** and **Saved Presets**. No factory files are installed, updated or deleted. Untouched old bundled files are hidden; edited and user-named files remain available. **Load** can still open any retained file. **Save** stores your own settings. The arrows cycle Default and saved presets.
 
 Windows preset location:
 

@@ -19,6 +19,7 @@
 #include "preset_io.h"
 #include "module_preset.h"
 #include "preset_banks.h"
+#include "preset_catalog.h"
 #include "public.sdk/source/common/pluginview.h"
 #include <algorithm>
 #include <array>
@@ -484,7 +485,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   std::vector<ParamID> changedControls;
   std::array<int,5> selection{{[self tab],selectedLfo,selectedRepeat,selectedGate,selectedReslice}};
   if(selection!=sceneSelection){sceneSelection=selection;rebuild=true;}
-  for(int id=0;id<kCount;++id)if(!isMonitor(id)){double v=owner->value(id);if(sceneValues[id]!=v){sceneValues[id]=v;changedControls.push_back(ParamID(id));}}
+  for(int id=0;id<kCount;++id)if(!isMonitor(id)){double v=owner->value(id);if(sceneValues[id]!=v){sceneValues[id]=v;changedControls.push_back(ParamID(id));if(id==lfoID(selectedLfo,lWave))rebuild=true;}}
   const int activeWave=kUiModWave0+selectedLfo;
   if(modWaveSelection([&](ParamID id){return owner->value(id);},selectedLfo)>0&&sceneValues[activeWave]!=owner->value(activeWave)){sceneValues[activeWave]=owner->value(activeWave);rebuild=true;}
   std::vector<mockup::Control> patches;
@@ -550,12 +551,6 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   NSString* path=[NSHomeDirectory() stringByAppendingPathComponent:@"Library/Audio/Presets/GrainsDosage"];
   NSURL* folder=[NSURL fileURLWithPath:path isDirectory:YES];NSError* error=nil;
   if(![[NSFileManager defaultManager] createDirectoryAtURL:folder withIntermediateDirectories:YES attributes:nil error:&error]){NSAlert* alert=[[NSAlert alloc] init];alert.messageText=@"Cannot create the preset folder";alert.informativeText=error.localizedDescription;[alert runModal];return nil;}
-  for(int bank=0;bank<aztec::presetBankCount;++bank)for(int i=0;i<aztec::presetsPerBank;++i){NSString* name=[[NSString stringWithUTF8String:aztec::bankPresetName(bank,i).c_str()] stringByAppendingPathExtension:@"gdspreset"];NSURL* url=[folder URLByAppendingPathComponent:name];
-    BOOL exists=[[NSFileManager defaultManager] fileExistsAtPath:url.path];
-    if(exists){NSNumber* size=nil;[url getResourceValue:&size forKey:NSURLFileSizeKey error:nil];if(!size||size.unsignedLongLongValue>65536)continue;NSData* old=[NSData dataWithContentsOfURL:url];if(!old||!aztec::needsBankMixUpgrade(std::string((const char*)old.bytes,old.length),bank,i))continue;}
-    auto p=aztec::bankPreset(bank,i);auto bytes=aztec::encodePreset([&](int id){return p[id];});NSData* data=[NSData dataWithBytes:bytes.data() length:bytes.size()];
-    if(![data writeToURL:url options:(exists?NSDataWritingAtomic:NSDataWritingWithoutOverwriting) error:&error]&&(exists||![[NSFileManager defaultManager] fileExistsAtPath:url.path])){NSAlert* alert=[[NSAlert alloc] init];alert.messageText=@"Cannot install the factory presets";alert.informativeText=error.localizedDescription;[alert runModal];return nil;}
-  }
   return folder;
 }
 - (BOOL)loadPresetURL:(NSURL*)url {
@@ -565,26 +560,25 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   for(int id=0;id<aztec::kCount;++id)if(aztec::presetParameter(id))owner->edit(id,p[id]);
   presetName=[[url lastPathComponent] stringByDeletingPathExtension];[self setNeedsDisplay:YES];return YES;
 }
+- (void)defaultPreset {auto p=aztec::initialParameters();for(int id=0;id<aztec::kCount;++id)if(aztec::presetParameter(id))owner->edit(id,p[id]);presetName=@"Default";[self setNeedsDisplay:YES];}
+- (NSArray<NSURL*>*)savedPresetFiles:(NSURL*)folder {
+  NSArray<NSURL*>* files=[[NSFileManager defaultManager] contentsOfDirectoryAtURL:folder includingPropertiesForKeys:nil options:NSDirectoryEnumerationSkipsHiddenFiles error:nil];NSMutableArray<NSURL*>* saved=[NSMutableArray array];
+  for(NSURL* url in files){if(![url.pathExtension.lowercaseString isEqualToString:@"gdspreset"])continue;std::string stem(url.lastPathComponent.stringByDeletingPathExtension.UTF8String);BOOL hide=NO;
+    if(aztec::installedFactoryIndex(stem).first>=0){NSNumber* size=nil;[url getResourceValue:&size forKey:NSURLFileSizeKey error:nil];if(size&&size.unsignedLongLongValue<=65536){NSData* bytes=[NSData dataWithContentsOfURL:url];if(bytes)hide=aztec::untouchedFactoryPreset(stem,std::string((const char*)bytes.bytes,bytes.length));}}
+    if(!hide)[saved addObject:url];
+  }
+  return [saved sortedArrayUsingComparator:^NSComparisonResult(NSURL* a,NSURL* b){return [a.lastPathComponent localizedStandardCompare:b.lastPathComponent];}];
+}
 - (void)choosePreset:(NSMenuItem*)item {
-  NSURL* url=item.representedObject;if(item.tag==-1){[[NSWorkspace sharedWorkspace] openURL:url];return;}
+  if(item.tag==-2){[self defaultPreset];return;}NSURL* url=item.representedObject;if(item.tag==-1){[[NSWorkspace sharedWorkspace] openURL:url];return;}
   if(![self loadPresetURL:url]){NSAlert* alert=[[NSAlert alloc] init];alert.messageText=@"Cannot load this preset";alert.informativeText=@"Invalid or incompatible preset. No settings changed.";[alert runModal];}
 }
 - (void)presetMenu:(NSEvent*)event {
-  NSURL* folder=[self presetFolder];if(!folder)return;
-  NSArray<NSURL*>* files=[[NSFileManager defaultManager] contentsOfDirectoryAtURL:folder includingPropertiesForKeys:nil options:NSDirectoryEnumerationSkipsHiddenFiles error:nil];
-  files=[files sortedArrayUsingComparator:^NSComparisonResult(NSURL* a,NSURL* b){int ca=aztec::presetCategory(std::string(a.lastPathComponent.stringByDeletingPathExtension.UTF8String)),cb=aztec::presetCategory(std::string(b.lastPathComponent.stringByDeletingPathExtension.UTF8String));if(ca!=cb)return ca<cb?NSOrderedAscending:NSOrderedDescending;return [a.lastPathComponent localizedStandardCompare:b.lastPathComponent];}];
-  NSMenu* menu=[[NSMenu alloc] initWithTitle:@"Presets"];
-  for(int bank=0;bank<4;++bank){NSString* bankTitle=bank<3?[NSString stringWithUTF8String:aztec::presetBankNames[bank]]:@"User Presets";NSMenu* bankMenu=[[NSMenu alloc] initWithTitle:bankTitle];
-   for(int category=0;category<aztec::factoryCategoryCount+2;++category){
-    if(bank>0&&bank<3&&category>=8)continue;if(bank==3&&category!=9)continue;if(bank==0&&category==9)continue;
-    NSString* categoryTitle=bank<3?[NSString stringWithUTF8String:aztec::bankCategoryName(bank,category)]:@"User Presets";
-    NSMenu* group=[[NSMenu alloc] initWithTitle:categoryTitle];
-    for(NSURL* url in files)if([url.pathExtension.lowercaseString isEqualToString:@"gdspreset"]){NSString* name=url.lastPathComponent.stringByDeletingPathExtension;std::string key(name.UTF8String);int cat=aztec::presetCategory(key),pack=cat==9?3:aztec::presetBank(key);
-      if(pack!=bank||cat!=category)continue;NSMenuItem* item=[[NSMenuItem alloc] initWithTitle:name action:@selector(choosePreset:) keyEquivalent:@""];item.target=self;item.representedObject=url;item.state=[name isEqualToString:presetName]?NSControlStateValueOn:NSControlStateValueOff;[group addItem:item];}
-    if(group.numberOfItems){NSMenuItem* parent=[[NSMenuItem alloc] initWithTitle:group.title action:nullptr keyEquivalent:@""];parent.submenu=group;[bankMenu addItem:parent];}
-   }
-   if(bankMenu.numberOfItems){NSMenuItem* parent=[[NSMenuItem alloc] initWithTitle:bankTitle action:nullptr keyEquivalent:@""];parent.submenu=bankMenu;[menu addItem:parent];}
-  }
+  NSURL* folder=[self presetFolder];if(!folder)return;NSMenu* menu=[[NSMenu alloc] initWithTitle:@"Presets"];
+  NSMenuItem* def=[[NSMenuItem alloc] initWithTitle:@"Default" action:@selector(choosePreset:) keyEquivalent:@""];def.target=self;def.tag=-2;[menu addItem:def];
+  NSMenu* saved=[[NSMenu alloc] initWithTitle:@"Saved Presets"];
+  for(NSURL* url in [self savedPresetFiles:folder]){NSString* name=url.lastPathComponent.stringByDeletingPathExtension;NSMenuItem* item=[[NSMenuItem alloc] initWithTitle:name action:@selector(choosePreset:) keyEquivalent:@""];item.target=self;item.representedObject=url;item.state=[name isEqualToString:presetName]?NSControlStateValueOn:NSControlStateValueOff;[saved addItem:item];}
+  if(saved.numberOfItems){NSMenuItem* group=[[NSMenuItem alloc] initWithTitle:@"Saved Presets" action:nullptr keyEquivalent:@""];group.submenu=saved;[menu addItem:group];}
   [menu addItem:[NSMenuItem separatorItem]];NSMenuItem* open=[[NSMenuItem alloc] initWithTitle:@"Open Preset Folder…" action:@selector(choosePreset:) keyEquivalent:@""];open.target=self;open.tag=-1;open.representedObject=folder;[menu addItem:open];[NSMenu popUpContextMenu:menu withEvent:event forView:self];
 }
 - (NSURL*)modulePresetFolder:(int)module {
@@ -632,22 +626,11 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   if(!ok){NSAlert* alert=[[NSAlert alloc] init];alert.messageText=save?@"Preset could not be saved":@"Preset could not be loaded";alert.informativeText=error?error.localizedDescription:@"Invalid or incompatible GrainsDosage preset. No settings changed.";[alert runModal];}
   [self setNeedsDisplay:YES];
 }
-// PRESET < / > buttons: cycle through the sorted preset folder (factory + user files).
+// Cycle Default and user-saved files without modifying anything on disk.
 - (void)stepPreset:(int)direction {
-  if(!owner)return;NSURL* folder=[self presetFolder];if(!folder)return;
-  const char* rep=[folder fileSystemRepresentation];if(!rep)return;
-  std::wstring directory;for(const char* s=rep;*s;++s)directory+=wchar_t(static_cast<unsigned char>(*s));// UTF-8 bytes as wchar units; nextPresetFile decodes via dirent
-  // Build the current-name wstring first: inside a message-send expression the
-  // selector keyword `direction:` resolves to the ObjC selector namespace, not
-  // the method's int parameter, so passing `direction` inline fails to compile.
-  std::wstring current;const char* cur=[presetName UTF8String];if(cur)for(const char* s=cur;*s;++s)current+=wchar_t(static_cast<unsigned char>(*s));
-  const int dir=direction;
-  auto name=aztec::nextPresetFile(directory,dir,current);
-  if(name.empty())return;
-  std::string utf8name;for(wchar_t c:name)utf8name+=static_cast<char>(c);
-  NSString* file=[NSString stringWithUTF8String:utf8name.c_str()];
-  NSURL* url=[folder URLByAppendingPathComponent:file];
-  if(![self loadPresetURL:url]){NSAlert* alert=[[NSAlert alloc] init];alert.messageText=@"Cannot load this preset";alert.informativeText=@"Invalid or incompatible preset. No settings changed.";[alert runModal];}
+  if(!owner)return;NSURL* folder=[self presetFolder];if(!folder)return;NSArray<NSURL*>* files=[self savedPresetFiles:folder];int current=-1;
+  for(NSUInteger i=0;i<files.count;++i)if([files[i].lastPathComponent.stringByDeletingPathExtension isEqualToString:presetName])current=int(i);
+  int next=aztec::adjacentPreset(current,direction,int(files.count));if(next<0)[self defaultPreset];else [self loadPresetURL:files[NSUInteger(next)]];
 }
 - (void)mouseDown:(NSEvent*)event {
   if(!owner)return;[self.window makeFirstResponder:self];NSPoint p=[self logical:event];[self layoutControls];
@@ -709,10 +692,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
       NSMenu* menu=[[NSMenu alloc] initWithTitle:@"Select"];NSMenu* destination=menu;int n=owner->info(c.id).stepCount;
       for(int i=0;i<=n;++i){
         if(!aztec::availableMenuOption(c.id,i))continue;
-        if(c.id==aztec::lfoID(selectedLfo,aztec::lWave)){
-          if(i<128&&i%16==0){NSString* title=[NSString stringWithUTF8String:aztec::waveFamilies[i/16]];NSMenuItem* group=[[NSMenuItem alloc] initWithTitle:title action:nullptr keyEquivalent:@""];destination=[[NSMenu alloc] initWithTitle:title];group.submenu=destination;[menu addItem:group];}
-          else if(i==128){[menu addItem:[NSMenuItem separatorItem]];destination=menu;}
-        }
+        if(c.id==aztec::kLfoWaveChoice0+selectedLfo)if(const char* groupName=aztec::waveMenuGroup(i)){NSString* title=[NSString stringWithUTF8String:groupName];NSMenuItem* group=[[NSMenuItem alloc] initWithTitle:title action:nullptr keyEquivalent:@""];destination=[[NSMenu alloc] initWithTitle:title];group.submenu=destination;[menu addItem:group];}
         NSMenuItem* item=[[NSMenuItem alloc] initWithTitle:owner->display(c.id,double(i)/std::max(1,n),false) action:@selector(choose:) keyEquivalent:@""];
         item.target=self;item.tag=i;item.representedObject=@(c.id);item.state=int(std::round(owner->value(c.id)*n))==i?NSControlStateValueOn:NSControlStateValueOff;[destination addItem:item];
       }[NSMenu popUpContextMenu:menu withEvent:event forView:self];

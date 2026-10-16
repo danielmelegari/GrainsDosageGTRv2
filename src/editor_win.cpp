@@ -5,6 +5,7 @@
 #include "preset_io.h"
 #include "module_preset.h"
 #include "preset_banks.h"
+#include "preset_catalog.h"
 #include <shlobj.h>
 #include <shellapi.h>
 #include <gdiplus.h>
@@ -264,24 +265,22 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
     std::wstring folder=std::wstring(root)+L"\\GrainsDosage";
     if(!CreateDirectoryW(folder.c_str(),nullptr)&&GetLastError()!=ERROR_ALREADY_EXISTS)return {};
     folder+=L"\\Presets";if(!CreateDirectoryW(folder.c_str(),nullptr)&&GetLastError()!=ERROR_ALREADY_EXISTS)return {};
-    for(int bank=0;bank<presetBankCount;++bank)for(int i=0;i<presetsPerBank;++i){std::string name=bankPresetName(bank,i);std::wstring path=folder+L"\\"+std::wstring(name.begin(),name.end())+L".gdspreset";
-      HANDLE f=CreateFileW(path.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
-      bool existing=false;
-      if(f==INVALID_HANDLE_VALUE){if(GetLastError()!=ERROR_FILE_EXISTS&&GetLastError()!=ERROR_ALREADY_EXISTS)return {};existing=true;
-        f=CreateFileW(path.c_str(),GENERIC_READ|GENERIC_WRITE,0,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);if(f==INVALID_HANDLE_VALUE)continue;
-        LARGE_INTEGER size{};if(!GetFileSizeEx(f,&size)||size.QuadPart>65536){CloseHandle(f);continue;}std::string old(size_t(size.QuadPart),'\0');DWORD read=0;
-        if(!ReadFile(f,old.data(),DWORD(old.size()),&read,nullptr)||read!=old.size()||!needsBankMixUpgrade(old,bank,i)){CloseHandle(f);continue;}
-        SetFilePointer(f,0,nullptr,FILE_BEGIN);
-      }
-      auto p=bankPreset(bank,i);auto text=encodePreset([&](int id){return p[id];});DWORD n=0;bool ok=WriteFile(f,text.data(),DWORD(text.size()),&n,nullptr)&&n==text.size();if(ok)ok=SetEndOfFile(f)!=0;CloseHandle(f);if(!ok){if(!existing)DeleteFileW(path.c_str());return {};}
-    }return folder;
+    return folder;
   }
   void setPresetName(const std::wstring& path){auto pos=path.find_last_of(L"\\/");presetName=path.substr(pos==std::wstring::npos?0:pos+1);auto dot=presetName.find_last_of(L'.');if(dot!=std::wstring::npos)presetName.resize(dot);}
-  // PRESET < / > buttons: cycle through the sorted preset folder (factory + user files).
+  void defaultPreset(){auto p=initialParameters();for(int id=0;id<kCount;++id)if(presetParameter(id))edit(id,p[id]);presetName=L"Default";}
+  std::vector<std::wstring> savedPresetNames(const std::wstring& folder){
+    auto names=presetFilesIn(folder);
+    names.erase(std::remove_if(names.begin(),names.end(),[&](const std::wstring& name){
+      std::string stem(name.begin(),name.end());stem.resize(stem.size()-presetExtLen);if(installedFactoryIndex(stem).first<0)return false;
+      auto path=folder+L"\\"+name;HANDLE f=CreateFileW(path.c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);if(f==INVALID_HANDLE_VALUE)return false;
+      LARGE_INTEGER size{};bool hide=false;if(GetFileSizeEx(f,&size)&&size.QuadPart>0&&size.QuadPart<=65536){std::string bytes(size_t(size.QuadPart),'\0');DWORD read=0;if(ReadFile(f,bytes.data(),DWORD(bytes.size()),&read,nullptr)&&read==bytes.size())hide=untouchedFactoryPreset(stem,bytes);}CloseHandle(f);return hide;
+    }),names.end());std::sort(names.begin(),names.end(),presetFileLess);return names;
+  }
   void stepPreset(int direction){
-    auto folder=presetFolder();if(folder.empty()){MessageBoxW(window,L"Cannot create or populate the preset folder.",L"GrainsDosage",MB_OK|MB_ICONERROR);return;}
-    auto name=nextPresetFile(folder,direction,presetName+L".gdspreset");if(name.empty())return;
-    if(!loadPresetPath(folder+L"\\"+name))MessageBoxW(window,L"Invalid or incompatible preset. No settings changed.",L"GrainsDosage",MB_OK|MB_ICONERROR);
+    auto folder=presetFolder();if(folder.empty())return;auto names=savedPresetNames(folder);int current=-1;
+    for(size_t i=0;i<names.size();++i)if(names[i]==presetName+L".gdspreset")current=int(i);
+    int next=adjacentPreset(current,direction,int(names.size()));if(next<0)defaultPreset();else loadPresetPath(folder+L"\\"+names[next]);
   }
   bool loadPresetPath(const std::wstring& path,int module=-1){
     HANDLE file=CreateFileW(path.c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);if(file==INVALID_HANDLE_VALUE)return false;
@@ -291,18 +290,12 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
   }
   void presetMenu(){
     auto folder=presetFolder();if(folder.empty()){MessageBoxW(window,L"Cannot create or populate the preset folder.",L"GrainsDosage",MB_OK|MB_ICONERROR);return;}
-    std::vector<std::wstring> names;WIN32_FIND_DATAW data{};HANDLE search=FindFirstFileW((folder+L"\\*.gdspreset").c_str(),&data);
-    if(search!=INVALID_HANDLE_VALUE){do{if(!(data.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY))names.emplace_back(data.cFileName);}while(FindNextFileW(search,&data));FindClose(search);}
-    std::sort(names.begin(),names.end(),presetFileLess);HMENU menu=CreatePopupMenu();
-    for(int bank=0;bank<4;++bank){HMENU pack=CreatePopupMenu();int groups=0;
-      for(int category=0;category<factoryCategoryCount+2;++category){if(bank>0&&bank<3&&category>=8)continue;if(bank==3&&category!=9)continue;if(bank==0&&category==9)continue;HMENU group=CreatePopupMenu();int count=0;
-        for(size_t i=0;i<names.size();++i){auto label=names[i].substr(0,names[i].find_last_of(L'.'));int cat=presetCategory(label),b=cat==9?3:presetBank(label);if(b!=bank||cat!=category)continue;AppendMenuW(group,MF_STRING|(label==presetName?MF_CHECKED:0),UINT_PTR(i+1),label.c_str());++count;}
-        if(count){std::string title=bank<3?bankCategoryName(bank,category):"User Presets";std::wstring label;for(char ch:title){label+=wchar_t(ch);if(ch=='&')label+=L'&';}AppendMenuW(pack,MF_POPUP,UINT_PTR(group),label.c_str());++groups;}else DestroyMenu(group);
-      }
-      if(groups){std::string title=bank<3?presetBankNames[bank]:"User Presets";std::wstring label(title.begin(),title.end());AppendMenuW(menu,MF_POPUP,UINT_PTR(pack),label.c_str());}else DestroyMenu(pack);
-    }
-    AppendMenuW(menu,MF_SEPARATOR,0,nullptr);AppendMenuW(menu,MF_STRING,UINT_PTR(names.size()+1),L"Open Preset Folder…");POINT point;GetCursorPos(&point);int choice=TrackPopupMenu(menu,TPM_RETURNCMD,point.x,point.y,0,window,nullptr);DestroyMenu(menu);
-    if(choice==int(names.size()+1))ShellExecuteW(window,L"open",folder.c_str(),nullptr,nullptr,SW_SHOWNORMAL);
+    auto names=savedPresetNames(folder);HMENU menu=CreatePopupMenu();
+    AppendMenuW(menu,MF_STRING|(presetName==L"Default"?MF_CHECKED:0),UINT_PTR(names.size()+1),L"Default");
+    if(!names.empty()){HMENU saved=CreatePopupMenu();for(size_t i=0;i<names.size();++i){auto label=names[i].substr(0,names[i].find_last_of(L'.'));AppendMenuW(saved,MF_STRING|(label==presetName?MF_CHECKED:0),UINT_PTR(i+1),label.c_str());}AppendMenuW(menu,MF_POPUP,UINT_PTR(saved),L"Saved Presets");}
+    AppendMenuW(menu,MF_SEPARATOR,0,nullptr);AppendMenuW(menu,MF_STRING,UINT_PTR(names.size()+2),L"Open Preset Folder…");POINT point;GetCursorPos(&point);int choice=TrackPopupMenu(menu,TPM_RETURNCMD,point.x,point.y,0,window,nullptr);DestroyMenu(menu);
+    if(choice==int(names.size()+1))defaultPreset();
+    else if(choice==int(names.size()+2))ShellExecuteW(window,L"open",folder.c_str(),nullptr,nullptr,SW_SHOWNORMAL);
     else if(choice>0&&choice<=int(names.size())&&!loadPresetPath(folder+L"\\"+names[size_t(choice-1)]))MessageBoxW(window,L"Invalid or incompatible preset. No settings changed.",L"GrainsDosage",MB_OK|MB_ICONERROR);
     InvalidateRect(window,nullptr,FALSE);
   }
@@ -442,7 +435,7 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
       if(mockup::valueRect({c.x,c.y,c.w,c.h},mockup::Kind(c.kind),c.id,c.label).contains(x,y))return;
       if(c.kind==PanMode){edit(c.id,std::clamp(int((x-c.x)/(c.w/3)),0,2)/2.);return;}
       if(c.kind==Toggle||c.kind==Pad){edit(c.id,value(c.id)>.5?0:1);return;}
-      if(c.kind==Select){HMENU m=CreatePopupMenu();int count=info(c.id).stepCount;for(int i=0;i<=count;++i)if(availableMenuOption(c.id,i))AppendMenuW(m,MF_STRING|(int(std::round(value(c.id)*count))==i?MF_CHECKED:0),i+1,display(c.id,i/double(std::max(1,count))).c_str());POINT p;GetCursorPos(&p);int chosen=TrackPopupMenu(m,TPM_RETURNCMD,p.x,p.y,0,window,nullptr);DestroyMenu(m);if(chosen)edit(c.id,(chosen-1)/double(std::max(1,count)));return;}
+      if(c.kind==Select){HMENU m=CreatePopupMenu(),destination=m;int count=info(c.id).stepCount;for(int i=0;i<=count;++i)if(availableMenuOption(c.id,i)){if(c.id==kLfoWaveChoice0+selectedLfo)if(const char* group=waveMenuGroup(i)){destination=CreatePopupMenu();AppendMenuW(m,MF_POPUP,UINT_PTR(destination),wide(group).c_str());}AppendMenuW(destination,MF_STRING|(int(std::round(value(c.id)*count))==i?MF_CHECKED:0),i+1,display(c.id,i/double(std::max(1,count))).c_str());}POINT p;GetCursorPos(&p);int chosen=TrackPopupMenu(m,TPM_RETURNCMD,p.x,p.y,0,window,nullptr);DestroyMenu(m);if(chosen)edit(c.id,(chosen-1)/double(std::max(1,count)));return;}
       dragID=int(c.id);dragKind=c.kind;dragWidth=c.w;dragHeight=c.h;originX=x;originY=y;dragValue=value(c.id);controller->beginEdit(c.id);SetCapture(window);return;
     }
   }
