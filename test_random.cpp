@@ -35,6 +35,21 @@ int main(){
       if(locked)assert(p[aztec::kResliceMix]==.271);
     }if(!locked)assert(p[aztec::kResliceMix]!=.271);
   }
+  // Whole-patch randomization: bounded, repeatable, lock-aware and broad.
+  {using namespace aztec;std::array<double,kCount> p;p.fill(.271);p[kAudioQuality]=.5;
+   for(int i=0;i<6;++i)p[kMixLock0+i]=1.;
+   uint32_t seed=0;auto get=[&](ParamID id){return p[id];};
+   for(int run=0;run<100;++run){auto before=p;std::array<bool,kCount> touched{};
+    randomizeSound(seed,get,[&](ParamID id,double v){assert(std::isfinite(v)&&v>=0&&v<=1);p[id]=v;touched[id]=true;});
+    assert(p[kAudioQuality]==.5&&p[kMasterLimiter]==.271&&p[kInputDeclick]==.271);
+    for(int i=0;i<6;++i)assert(p[lockableMixes[i]]==.271&&p[kMixLock0+i]==1.);
+    for(int i=0;i<kCount;++i)if(isMonitor(i))assert(p[i]==before[i]);
+    for(auto id:{kSize,kResliceSeed,kGaterChance,kFilterCutoff,kReverbLength,kLfoWaveChoice0})assert(touched[id]);
+    assert(p[kSize]!=before[kSize]);assert(p[kFreeze]==0.&&p[kGrainEnabled]==1.);
+    assert(p[kResliceMinAmp]<=p[kResliceMaxAmp]);
+    for(int l=0;l<4;++l)for(int slot=0;slot<6;++slot)assert(availableMenuOption(slotTarget(l,slot),int(std::round(p[slotTarget(l,slot)]*qg::modTargetCount))));
+   }
+  }
   std::cout<<"PASS: bounded module-specific random, preserving other modules and transport controls\n";
 }
 

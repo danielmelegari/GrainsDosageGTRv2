@@ -21,6 +21,7 @@ enum class RenderPass {All,Static,Dynamic};
 using Value=std::function<double(ParamID)>;using Display=std::function<std::string(ParamID,double)>;
 struct RackState {bool resliceAdvanced=false;int page=0;std::array<double,3> scroll{};double offset()const{return scroll[page];}Rect position(Rect r)const{r.y-=offset();return r;}};
 constexpr Rect preset{419,41,172,39},previous{600,42,32,38},next{638,42,32,38},load{677,42,63,38},save{747,42,68,38};
+constexpr Rect randomAll{680,85,135,25};
 constexpr Rect zoomMenu{926,bodyTop+1300,80,30};
 constexpr Rect xy{211,270,660,660},scope{78,290,285,258};
 // One geometry contract for drawing, clicks, drags and host automation.
@@ -222,7 +223,7 @@ inline void render(Painter& p,const Value& value,const Display& display,const st
  const bool fixed=pass!=RenderPass::Dynamic,live=pass!=RenderPass::Static;const Rgb white{230,233,237},muted{170,173,184},ink{20,22,24},screen{10,22,28},accent{255,122,32};
  if(live&&motion)motion->update(value,drag,insertion,state);
  auto button=[&](Rect r,const std::string& s){pill(p,r);p.text(s,r,14,orange,true);};
- if(fixed){p.box({0,0,width,height},{13,16,20},{13,16,20},0);if(p.image)p.image(Cables,{0,0,width,height},{0,0,1,1});p.box({6,6,width-12,109},{29,32,38},edge,6);if(p.image)p.image(Logo,{42,22,355,355.*412./2109.},{0,142,2109,412});p.box({51,122,981,75},{24,27,33},{11,12,16},5);for(int i=0;i<3;++i)pageButton(p,i,i==state.page);button(preset,presetName);button(previous,"<");button(next,">");button(load,"LOAD");button(save,"SAVE");p.text("INPUT DE-CLICKER",{835,40,172,20},13,white,true);}
+ if(fixed){p.box({0,0,width,height},{13,16,20},{13,16,20},0);if(p.image)p.image(Cables,{0,0,width,height},{0,0,1,1});p.box({6,6,width-12,109},{29,32,38},edge,6);if(p.image)p.image(Logo,{42,22,355,355.*412./2109.},{0,142,2109,412});p.box({51,122,981,75},{24,27,33},{11,12,16},5);for(int i=0;i<3;++i)pageButton(p,i,i==state.page);button(preset,presetName);button(previous,"<");button(next,">");button(load,"LOAD");button(save,"SAVE");button(randomAll,"RANDOM");p.text("INPUT DE-CLICKER",{835,40,172,20},13,white,true);}
  if(fixed)p.text("v" GRAINS_PLUGIN_VERSION,{300,94,85,16},10,muted,true);
  if(p.clip)p.clip({51,bodyTop,982,height-bodyTop});
  auto pos=[&](Rect r){return state.position(r);};auto title=[&](Rect r,const std::string& s){if(fixed)p.text(s,{r.x+32,r.y+17,r.w-230,25},20,white,false);};

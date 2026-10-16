@@ -1,6 +1,7 @@
 #pragma once
 #include "parameters.h"
 #include "reslice_controls.h"
+#include "filter_bank.h"
 #include <cstdint>
 #include <utility>
 namespace aztec {
@@ -44,3 +45,54 @@ template<class Getter,class Setter> void randomizeModule(int module,int selected
 
 }
 
+
+namespace aztec {
+// One sound generator shared by native UI and the host's legacy trigger.
+// Work from a snapshot so paired ranges are ordered even with asynchronous edits.
+template<class Getter,class Setter> void randomizeSound(uint32_t& seed,Getter get,Setter apply){
+ std::array<double,kCount> values{};std::array<bool,kCount> touched{};
+ for(int i=0;i<kCount;++i)values[i]=get(ParamID(i));
+ auto read=[&](ParamID id){return values[id];};
+ auto set=[&](ParamID id,double v){if(!mixIsLocked(id,read)){values[id]=std::clamp(v,0.,1.);touched[id]=true;}};
+ if(!seed)seed=0x9e3779b9u;
+ auto rnd=[&](){seed^=seed<<13;seed^=seed>>17;seed^=seed<<5;return double(seed&0xffffff)/16777216.;};
+ auto choice=[&](int steps){return int(rnd()*(steps+1))/double(steps);};
+ randomizeModule(0,0,seed,read,set);randomizeModule(2,0,seed,read,set);
+ randomizeReslice(seed,read,set);
+ for(ParamID id:{kStretchSpeed,kTranspose,kGrainPan,kRepeatChance,kGaterChance,kGaterMinLength,
+   kFilterCutoff,kFilterResonance,kFilterDrive,kFilterSeqDepth,kFilterSeqGlide,kReverbLength,
+   kReverbMix,kXYX,kXYY,kXAmount,kYAmount})set(id,rnd());
+ for(ParamID id:{kStretchOn,kRepeatAuto,kRepeatSeq,kGaterLengthRnd,kGaterStepRnd,kGaterLatch,
+   kMasterFilter,kFilterSeqOn,kResliceRndOn,kReverbOn,kXYEnable})set(id,choice(1));
+ set(kGrainEnabled,1.);set(kRepeatEnabled,choice(1));set(kResliceEnabled,choice(1));set(kGaterEnabled,choice(1));
+ set(kReverbKill,0.);set(kFreeze,0.); // A new patch must accept incoming audio, including while stopped.
+ set(kMix,.6+.4*rnd());set(kGaterGrid,choice(3));set(kPanMode,choice(2));
+ set(kFilterType,choice(2));set(kFilterModel,choice(qg::filterModelCount-1));set(kFilterSlope,choice(1));
+ set(kFilterSeqMode,choice(1));set(kFilterSeqPattern,choice(63));set(kFilterSeqRate,choice(5));
+ set(kCombRoot,choice(11));set(kCombOctave,choice(6));set(kCombScale,choice(1));
+ set(kReverbType,choice(4));set(kReverbModel,choice(4));set(kReverbSource,choice(1));
+ set(kReverbGrid,choice(3));set(kReverbRateV2,choice(6));set(kReverbRandomRate,choice(2));set(kResliceRndRate,choice(2));
+ set(kRoutingOrder,(1+int(rnd()*120))/120.);
+ for(int i=0;i<16;++i){
+  set(kStep0+i,choice(1));set(kRepeatStep0+i,choice(1));set(kRepeatRate0+i,choice(15));
+  set(kRepeatPitch0+i,(36+int(rnd()*25))/96.);set(kReverbStep0+i,choice(1));
+  set(kGaterState0+i,i==0?1.:choice(1));set(kGaterLength0+i,rnd());set(kGaterSustain0+i,rnd());set(kGaterRelease0+i,0.);
+ }
+ for(int i=0;i<4;++i){
+  set(kModuleLoopOn0+i,choice(1));set(kModuleLoopWindow0+i,choice(3));
+  for(int j=0;j<lRoute0;++j)set(lfoID(i,j),rnd());
+  set(lfoID(i,lEnabled),i==0?1.:choice(1));set(lfoID(i,lSync),1.);set(lfoID(i,lDepth),.15+.5*rnd());
+  set(kLfoWaveChoice0+i,(1+int(rnd()*qg::waveChoiceCount))/double(qg::waveChoiceCount));
+  set(lfoID(i,lGrid),choice(20));set(lfoID(i,lReset),choice(1));set(kRandomSteps0+i,choice(63));
+  set(kLfoSpeed0+i,choice(3));set(kModWaveRate0+i,choice(7));
+  for(int j=0;j<8;++j)set(routeID(i,j),.5);
+  for(int j=0;j<6;++j){int target;
+   do{target=1+int(rnd()*qg::modTargetCount);}while(!availableMenuOption(slotTarget(i,j),target));
+   set(slotTarget(i,j),target/double(qg::modTargetCount));set(slotAmount(i,j),.35+.3*rnd());set(slotPolarity(i,j),choice(2));
+  }
+ }
+ for(auto id:{kXTarget,kYTarget}){int option;do{option=1+int(rnd()*xyDestCount);}while(!availableMenuOption(id,option));set(id,option/double(xyDestCount));}
+ // Quality, output protection, de-click settings, locks and UI monitors stay put.
+ for(int i=0;i<kCount;++i)if(touched[i])apply(ParamID(i),values[i]);
+}
+}

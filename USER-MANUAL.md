@@ -383,6 +383,8 @@ macOS uses `~/Library/Audio/Presets/GrainsDosage/`.
 
 Presets contain parameter values, routing and applicable control states. They do not store recorded audio, frozen waveforms, or captured loops. Save your Cubase project as well as a plugin preset when you need host routing and automation.
 
+The header **RANDOM** button generates a new sound across Granulizer, Beat Repeater, Reslice, Gater, filters, reverb, input pitch/stretch, Morph and all four modulation sources. It can choose all 330 waveforms and uses only visible LFO destinations. Mix locks, quality, output protection and input de-click settings remain unchanged. Freeze is released so the new sound accepts incoming audio. Each click updates the controls and host parameters immediately, even while transport is stopped.
+
 Module **Random** buttons change that module's settings. The supported Mix locks preserve the selected mix controls during preset/random operations; they do not prevent ordinary manual adjustment or host automation. Save a named preset before experimenting if you need an exact return point.
 
 The expanded destination lists have a new saved-state/preset format. Earlier presets and saved plugin state are migrated so their selected destinations remain meaningful. New presets require this release or newer. **Existing Cubase automation lanes that automate destination selectors themselves use the old list's normalized positions; check and reselect those destination points after upgrading.** Ordinary parameter IDs remain unchanged. Automating destination *amounts* is usually more predictable than rapidly changing the selected destination.

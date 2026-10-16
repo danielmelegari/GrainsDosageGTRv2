@@ -524,7 +524,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   render(mockup::RenderPass::Dynamic);
   const auto licenseText=aztec::license::status();
   if(!licenseText.empty()){
-    mockup::Rect licenseButton{450,88,350,25};mockup::pill(painter,licenseButton);
+    mockup::Rect licenseButton{450,88,220,25};mockup::pill(painter,licenseButton);
     painter.text(licenseText+(aztec::license::activationRequired?"  ·  ACTIVATE":""),licenseButton,11,{230,233,237},true);
   }
   }
@@ -642,7 +642,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   if(!owner)return;[self.window makeFirstResponder:self];NSPoint p=[self logical:event];[self layoutControls];
   using namespace aztec;
   auto hit=[&](mockup::Rect r){return r.contains(p.x,p.y);};
-  if(license::activationRequired&&!license::status().empty()&&hit({450,88,350,25})){
+  if(license::activationRequired&&!license::status().empty()&&hit({450,88,220,25})){
     NSAlert* alert=[[NSAlert alloc] init];alert.messageText=@"GrainsDosage — Offline activation";
     alert.informativeText=@"Send this complete Device Code to the publisher for a signed 14-day trial or permanent activation. Permanent licenses support up to 3 computers. Paste the full GDS2 code from your TXT file. No internet connection is needed.";
     const auto code=license::deviceCode();
@@ -659,6 +659,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   if(hit(mockup::preset)){[self presetMenu:event];return;}
   if(hit(mockup::load)){[self preset:NO];return;}
   if(hit(mockup::save)){[self preset:YES];return;}
+  if(hit(mockup::randomAll)){randomizeSound(randomSeed,[&](ParamID id){return owner->value(id);},[&](ParamID id,double v){owner->edit(id,v);});staticScene=nil;motion.ready=false;[self layoutControls];[self setNeedsDisplay:YES];return;}
   if(rackState.page==1&&p.y>=mockup::bodyTop&&hit(rackState.position(mockup::zoomMenu))){
     NSMenu* menu=[[NSMenu alloc] initWithTitle:@"UI size"];
     for(int percent:{50,60,70,75,80,90,100}){NSMenuItem* item=[[NSMenuItem alloc] initWithTitle:[NSString stringWithFormat:@"%d%%",percent] action:@selector(chooseZoom:) keyEquivalent:@""];item.target=self;item.tag=percent;[menu addItem:item];}

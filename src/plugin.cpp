@@ -122,15 +122,8 @@ class Processor final : public AudioEffect {
     if(id==kUiTab){p_[id]=std::clamp(v,0.,1.);return;}
   }
   void applyRandomAll() {
-    // Re-roll every control of all three modules (the same ranges the per-module
-    // RANDOM buttons use), plus master trim: dry/wet, normalize, limiter, order.
-    auto set=[&](ParamID pid,double v){if(!mixIsLocked(pid,[&](ParamID id){return p_[id];}))p_[pid]=std::clamp(v,0.,1.);};
-    const int selected=int(std::round(p_[kUiRepeat]*15.));
-    for(int module=0;module<3;++module) aztec::randomizeModule(module,selected,randomSeed_,set);
-    set(kMix,.6+.4*nextRandom()); set(kNormalize,nextRandom()>=.5?1.:0.);
-    set(kMasterLimiter,nextRandom()>=.5?1.:0.); set(kModuleOrder,std::floor(nextRandom()*7.)/6.);
+    aztec::randomizeSound(randomSeed_,[&](ParamID id){return p_[id];},[&](ParamID id,double v){p_[id]=v;});
   }
-  double nextRandom() { randomSeed_^=randomSeed_<<13; randomSeed_^=randomSeed_>>17; randomSeed_^=randomSeed_<<5; return double(randomSeed_&0xffffff)/16777215.; }
 public:
   Processor() {
     setControllerClass(controllerID);
