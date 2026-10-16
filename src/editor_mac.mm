@@ -306,8 +306,8 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
     editableModuleSkins=[NSMutableDictionary dictionary];
     NSString* moduleFolder=[NSHomeDirectory() stringByAppendingPathComponent:@"Library/Application Support/GrainsDosage/Skins/Modules"];
     [[NSFileManager defaultManager] createDirectoryAtPath:moduleFolder withIntermediateDirectories:YES attributes:nil error:nil];
-    for(int stage:{0,2,3,4}){
-      const char* names[]={"granulizer","retired","beatrepeater","reslice","gater"};
+    for(int stage:{0,2,3,4,aztec::mockup::inputOptionsBackground}){
+      const char* names[]={"granulizer","retired","beatrepeater","reslice","gater","input-options"};
       NSString* name=[NSString stringWithUTF8String:names[stage]];
       NSString* file=[moduleFolder stringByAppendingPathComponent:[name stringByAppendingString:@".png"]];
       NSString* bundled=[[NSBundle bundleForClass:[GrainsSurface class]] pathForResource:name ofType:@"png"];
@@ -328,7 +328,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
 - (NSUInteger)staticBuilds{return staticBuilds;}
 - (NSUInteger)controlPatches{return controlPatches;}
 - (void)setFullRedrawForInspection:(BOOL)enabled{fullRedrawForInspection=enabled;if(!enabled)staticScene=nil;}
-- (BOOL)skinLoaded{return rackBackplate!=nil&&rackAtlas!=nil&&editableModuleSkins.count==4;}
+- (BOOL)skinLoaded{return rackBackplate!=nil&&rackAtlas!=nil&&editableModuleSkins.count==5;}
 - (void)stop {
   if(owner&&dragID>=0)owner->end(aztec::ParamID(dragID));
   if(owner&&dragXY){owner->end(aztec::kXYX);owner->end(aztec::kXYY);}
@@ -430,7 +430,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   painter.moduleBackground=[&](int stage,mockup::Rect r){
     NSImage* image=editableModuleSkins[@(stage)];if(!image)return;
     [image drawInRect:NSMakeRect(r.x,r.y,r.w,r.h) fromRect:NSZeroRect operation:NSCompositingOperationSourceOver fraction:1. respectFlipped:YES hints:nil];
-    [[NSColor colorWithCalibratedWhite:0 alpha:stage==3?.45:.30] setFill];NSRectFillUsingOperation(NSMakeRect(r.x,r.y,r.w,r.h),NSCompositingOperationSourceOver);
+    [[NSColor colorWithCalibratedWhite:0 alpha:stage==mockup::inputOptionsBackground?0.:stage==3?.45:.30] setFill];NSRectFillUsingOperation(NSMakeRect(r.x,r.y,r.w,r.h),NSCompositingOperationSourceOver);
   };
   painter.image=[&](int asset,mockup::Rect r,mockup::Rect source){
     NSString* key=[NSString stringWithFormat:@"%d:%.3f,%.3f,%.3f,%.3f",asset,source.x,source.y,source.w,source.h];

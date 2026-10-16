@@ -167,6 +167,13 @@ inline void renderControl(Painter& p,const Control& c,const Value& value,const D
 // Stretch only the blank purple panel interior; metal corners and screws retain their proportions.
 inline void rackPanel(Painter& p,Rect r){if(!visible(r))return;const Rect src{52,122,798,389};constexpr double cap=27;auto img=[&](Rect d,Rect s){if(p.image)p.image(Backplate,d,s);};img({r.x+cap,r.y+cap,r.w-2*cap,r.h-2*cap},{src.x+cap,src.y+cap,src.w-2*cap,src.h-2*cap});for(int side=0;side<2;++side){double x=side?r.x+r.w-cap:r.x,sx=side?src.x+src.w-cap:src.x;img({x,r.y,cap,cap},{sx,src.y,cap,cap});img({x,r.y+r.h-cap,cap,cap},{sx,src.y+src.h-cap,cap,cap});img({x,r.y+cap,cap,r.h-2*cap},{sx,src.y+cap,cap,src.h-2*cap});}img({r.x+cap,r.y,r.w-2*cap,cap},{src.x+cap,src.y,src.w-2*cap,cap});img({r.x+cap,r.y+r.h-cap,r.w-2*cap,cap},{src.x+cap,src.y+src.h-cap,src.w-2*cap,cap});}
 inline bool structural(ParamID id){return id==kResliceAlgorithm||id==kPanMode||id==kReverbSource||id==kReverbModel||id==kFilterModel||id==kFilterSeqMode||id==kRoutingOrder||id==kModuleOrder;}
+// Artwork slot 5 is the input panel, outside the reorderable audio stages.
+constexpr int inputOptionsBackground=5;
+inline void inputOptionsPanel(Painter& p,Rect r){
+ if(!visible(r))return;
+ rackPanel(p,r);
+ if(p.moduleBackground)p.moduleBackground(inputOptionsBackground,r);
+}
 inline void modulePanel(Painter& p,Rect r,int stage){
  if(!visible(r))return;
  constexpr Rgb colors[]={{19,40,42},{30,27,36},{46,33,22},{36,26,48},{22,32,48}};
@@ -185,7 +192,7 @@ inline bool monitorVisible(ParamID id,const Value& v,const RackState& s,int lfo)
 }
 inline void restoreControlBackground(Painter& p,const Control& c,const Value& v,const RackState& s){
  if(c.id==kInputDeclick||c.id==kDeclickSensitivity){if(p.image)p.image(Backplate,c.r,c.r);return;}
- if(s.page==0){if(c.id==kTranspose||c.id==kStretchSpeed||c.id==kStretchOn){rackPanel(p,s.position({54,210,974,188}));return;}for(int stage=0;stage<5;++stage){auto r=moduleRect(stage,v,s);if(c.r.y>=r.y&&c.r.y<r.y+r.h){modulePanel(p,r,stage);return;}}}
+ if(s.page==0){if(c.id==kTranspose||c.id==kStretchSpeed||c.id==kStretchOn){inputOptionsPanel(p,s.position({54,210,974,188}));return;}for(int stage=0;stage<5;++stage){auto r=moduleRect(stage,v,s);if(c.r.y>=r.y&&c.r.y<r.y+r.h){modulePanel(p,r,stage);return;}}}
  if(s.page==1)for(auto r:{Rect{54,210,974,475},Rect{54,699,480,294},Rect{548,699,480,294},Rect{54,1007,974,305},Rect{54,1326,974,210}}){r=s.position(r);if(r.contains(c.r.x,c.r.y)){rackPanel(p,r);return;}}
  if(s.page==2)rackPanel(p,s.position({54,210,974,832}));
 }
@@ -200,7 +207,7 @@ inline void render(Painter& p,const Value& value,const Display& display,const st
  Value drawnValue=value;std::array<double,5> tops{};for(int i=0;i<5;++i)tops[i]=moduleRect(i,value,state).y;
  auto list=controls(value,tab,lfo,repeat,gate,reslice,state);
  if(state.page==0){
-  Rect master=pos({54,210,974,188});if(fixed){rackPanel(p,master);title(master,"INPUT OPTIONS");p.text("SIGNAL CHAIN ↓  •  FIRST MODULE AT THE TOP",pos({78,404,520,20}),11,muted,false);p.text("DRAG A MODULE UP OR DOWN TO REORDER",pos({619,404,385,20}),11,muted,true);}
+  Rect master=pos({54,210,974,188});if(fixed){inputOptionsPanel(p,master);p.text("INPUT OPTIONS",{master.x+53,master.y+24,153,25},13,white,true);p.text("SIGNAL CHAIN ↓  •  FIRST MODULE AT THE TOP",pos({78,404,520,20}),11,muted,false);p.text("DRAG A MODULE UP OR DOWN TO REORDER",pos({619,404,385,20}),11,muted,true);}
   auto chain=routeChain(value);for(int stage:chain){auto r=moduleRect(stage,value,state);double dy=(motion&&motion->ready&&(drag>=0||motion->routing))?motion->y[stage]-state.offset()-r.y:0;r.y+=dy;if(!visible(r))continue;
    if(fixed){modulePanel(p,r,stage);p.box({r.x+36,r.y+13,32,30},{25,28,35},{91,96,106},5);p.text(std::to_string(1+int(std::find(chain.begin(),chain.end(),stage)-chain.begin())),{r.x+36,r.y+13,32,30},14,accent,true);auto pr=modulePresetRect(stage,value,state);pr.y+=dy;button(pr,std::string(moduleNames[stage])+" ▾");for(int j=0;j<3;++j)for(int k=0;k<2;++k)p.box({r.x+635+k*6,r.y+20+j*6,2,2},muted,muted,1);if(stage!=3||state.resliceAdvanced){auto rr=randomRect(stage,value,state);rr.y+=dy;button(rr,"RANDOM");}if(stage==3){auto ar=resliceAdvanceRect(value,state);ar.y+=dy;button(ar,"ADVANCE");if(state.resliceAdvanced)p.line(ar.x+14,ar.y+ar.h-5,ar.x+ar.w-14,ar.y+ar.h-5,accent,2);}if(stage==3&&state.resliceAdvanced){auto phrase=reslicePhraseRect(value,state);phrase.y+=dy;button(phrase,"NEW PHRASE");}}
 

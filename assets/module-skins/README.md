@@ -10,6 +10,11 @@ Version 0.13.13 uses the artwork supplied in Archive.zip:
 Both native editors cache decoded images on opening. They draw a translucent
 black overlay (30%, or 45% for Reslice) for control-label contrast; the PNGs
 remain full brightness. Controls and hit areas are separate from the artwork.
-Windows embeds these PNGs as resources 211–214. macOS bundles them in Resources;
+Windows embeds these PNGs as resources 211–215. macOS bundles them in Resources;
 optional user PNG overrides and legacy-JPG handling are documented in
 ../../docs/licensing.md. The SVG preview uses the same backgrounds and overlay.
+
+Input Options uses input-options.png, extracted unchanged from the supplied
+input.png.zip. It is drawn without a dark overlay, with Transpose and Stretch
+aligned to its two circular mounts. It also supports the macOS PNG override
+folder. Native artwork smoke checks require this fifth image to load.

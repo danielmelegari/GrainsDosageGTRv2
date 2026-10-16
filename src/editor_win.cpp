@@ -55,7 +55,7 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
   double originX=0,originY=0,dragValue=0,dragWidth=1,dragHeight=180;Kind dragKind=Knob;bool dragXY=false,routeMoved=false;
   uint32_t seed=0;HDC dc=nullptr;
   std::unique_ptr<Gdiplus::Bitmap> mockupKnob, rackBackplate, rackAtlas;
-  std::array<std::unique_ptr<Gdiplus::Bitmap>,5> moduleImages;
+  std::array<std::unique_ptr<Gdiplus::Bitmap>,6> moduleImages;
   ULONG_PTR imaging=0;HBITMAP skin=nullptr;HDC skinDC=nullptr;HGDIOBJ oldSkin=nullptr;std::array<HBITMAP,6> sprites{};std::array<HDC,6> spriteDC{};std::array<HGDIOBJ,6> oldSprite{};
   void loadSprite(int id,int index){
     // Runtime skin folder first: <plugin dir>\GrainsDosage-spriteNN.png lets
@@ -137,6 +137,7 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
     loadRack(212,L"assets/module-skins/beatrepeater.png",moduleImages[2]);
     loadRack(213,L"assets/module-skins/reslice.png",moduleImages[3]);
     loadRack(214,L"assets/module-skins/gater.png",moduleImages[4]);
+    loadRack(215,L"assets/module-skins/input-options.png",moduleImages[mockup::inputOptionsBackground]);
     // Skin-folder background.png wins over the bundled artwork.
     if(std::wstring bg=skinPath(201);!bg.empty()){
       Gdiplus::Bitmap* bitmap=Gdiplus::Bitmap::FromFile(bg.c_str());
@@ -378,7 +379,7 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
       auto* image=moduleImages[stage].get();if(!image||image->GetLastStatus()!=Gdiplus::Ok)return;
       PixelSpace pixels(dc);Gdiplus::Graphics g(dc);g.SetTransform(&pixels.transform);g.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
       g.DrawImage(image,Gdiplus::RectF(float(r.x),float(r.y),float(r.w),float(r.h)),0.f,0.f,float(image->GetWidth()),float(image->GetHeight()),Gdiplus::UnitPixel);
-      Gdiplus::SolidBrush shade(Gdiplus::Color(stage==3?115:77,0,0,0));g.FillRectangle(&shade,Gdiplus::RectF(float(r.x),float(r.y),float(r.w),float(r.h)));
+      Gdiplus::SolidBrush shade(Gdiplus::Color(stage==mockup::inputOptionsBackground?0:stage==3?115:77,0,0,0));g.FillRectangle(&shade,Gdiplus::RectF(float(r.x),float(r.y),float(r.w),float(r.h)));
     };
     painter.image=[&](int asset,mockup::Rect r,mockup::Rect source){
       auto* image=asset==mockup::Atlas?rackAtlas.get():rackBackplate.get();if(!image||image->GetLastStatus()!=Gdiplus::Ok)return;
@@ -446,7 +447,7 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
       case WM_SIZE:InvalidateRect(hwnd,nullptr,FALSE);return 0;
       case WM_APP+72:return e->rackState.page;
       case WM_APP+73:e->rackState.scroll[e->rackState.page]=std::clamp(double(lp),0.,mockup::maxScroll(e->rackState));InvalidateRect(hwnd,nullptr,FALSE);return 0;
-      case WM_APP+71:for(int stage:{0,2,3,4})if(!e->moduleImages[stage]||e->moduleImages[stage]->GetLastStatus()!=Gdiplus::Ok)return 0;return e->rackBackplate&&e->rackAtlas&&e->rackBackplate->GetLastStatus()==Gdiplus::Ok&&e->rackAtlas->GetLastStatus()==Gdiplus::Ok;
+      case WM_APP+71:for(int stage:{0,2,3,4,mockup::inputOptionsBackground})if(!e->moduleImages[stage]||e->moduleImages[stage]->GetLastStatus()!=Gdiplus::Ok)return 0;return e->rackBackplate&&e->rackAtlas&&e->rackBackplate->GetLastStatus()==Gdiplus::Ok&&e->rackAtlas->GetLastStatus()==Gdiplus::Ok;
       case WM_ERASEBKGND:return 1;
       case WM_TIMER:{
         if(!IsWindowVisible(hwnd)||IsIconic(GetAncestor(hwnd,GA_ROOT)))return 0;
