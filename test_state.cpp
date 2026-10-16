@@ -231,7 +231,7 @@ int main() {
     r1.readInt32(m1);r2.readInt32(m2);assert(m1==m2&&m1==0x5147314E);
     // getState layout: kParamEnd values, buffer size, freeze flag, then the tail
     // (kBypassReserved lives in this region) up to kCount.
-    const int fields=kParamEnd+2+(int(kCount)-int(kFreeze)-1);
+    const int fields=kParamEnd+2+(int(kUiLfoValue0)-int(kFreeze)-1);
     for(int i=0;i<fields;++i){double a=0,b=0;assert(r1.readDouble(a)&&r2.readDouble(b));assert(a==b);}
   }
   processor->setActive(false);processor->terminate();processor->release();

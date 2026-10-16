@@ -17,6 +17,11 @@ int main(int argc,char** argv){
  auto state=bankPreset(1,0);state[kUiTab]=tabToValue(tab);state[kXYX]=argc>3?std::atof(argv[3]):.5;state[kXYY]=argc>4?std::atof(argv[4]):.5;
  if(argc>6)state[kResliceAlgorithm]=std::clamp(std::atoi(argv[6]),0,2)*.5;
  state[kUiGrainActive]=1;state[kUiGrainStart]=.25;state[kUiGrainEnd]=.4;state[kUiGrainHead]=.31;state[kUiLfoPhase0]=.3;state[kGaterEnabled]=1;state[kUiGaterStep]=5./15;state[kUiGaterPhase]=.45;for(int i=0;i<16;++i)state[kUiGaterLength0+i]=.2+(i%4)*.2;state[kReverbRateV2]=5./6.;state[kReverbSource]=1;state[kFilterSeqOn]=1;state[kUiFilterSeqStep]=7./31;state[kPitch]=state[kTranspose]=.5;state[kStretchSpeed]=.2;state[kGrainMix]=.5;
+ // Optional final argument previews live modulation without an audio host.
+ if(argc>8&&std::atoi(argv[8])){state[kReverbMix]=.6;state[kUiModulationActive]=1.;state[kUiLfoValue0]=.85;state[lfoID(0,lEnabled)]=1.;state[lfoID(0,lDepth)]=1.;
+  const int ids[]={kSize,kPitch,kFilterCutoff,kReverbMix,kResliceFade,kResliceVariation};
+  for(int slot=0;slot<6;++slot)for(int t=0;t<qg::modTargetCount;++t)if(modulationParameter(t)==ids[slot]){state[slotTarget(0,slot)]=(t+1.)/qg::modTargetCount;state[slotAmount(0,slot)]=slot%2?.2:.8;state[slotPolarity(0,slot)]=0.;}
+ }
  // Representative incoming audio for this offline preview; the editor reads live monitor parameters.
  for(int i=0;i<128;++i)state[kUiWave0+i]=.12+.65*std::abs(std::sin(i*1.74)*std::cos(i*.183));
  for(int i=0;i<waveformBins;++i){double h=.12+.65*std::abs(std::sin(i*.87)*std::cos(i*.0915));state[kUiWaveLow0+i]=.5-h*.5;state[kUiWaveHigh0+i]=.5+h*.5;}

@@ -130,9 +130,11 @@ class Modulation {
   std::array<Lfo,lfoCount> lfos_{};
   std::array<std::array<int,modTargetCount>,lfoCount> routes_{};
   std::array<int,lfoCount> routeCounts_{};
+  std::array<double,lfoCount> outputs_{};
 public:
   void prepare() { for(int i=0;i<lfoCount;++i) lfos_[i].prepare(0x13579BDFULL+uint64_t(i)*104729); }
-  void reset() { for(auto& lfo:lfos_) lfo.reset(); }
+  void reset() { for(auto& lfo:lfos_) lfo.reset(); outputs_.fill(0.); }
+  double output(int i)const{return outputs_[i];}
   int wave(int i)const{return lfos_[i].wave();}
   double phase(int i)const{return lfos_[i].phase();}
   int64_t cycle(int i)const{return lfos_[i].cycle();}
@@ -148,6 +150,7 @@ public:
     ModValues result=base;
     for(int i=0;i<lfoCount;++i) {
       const double value=lfos_[i].process(settings[i],beat,sampleRate,gateTrigger,gateStep);
+      outputs_[i]=settings[i].enabled?value:0.;
       if(!settings[i].enabled)continue;
       const double unipolar=(value+std::clamp(settings[i].depth,0.,1.))*.5;
       for(int n=0;n<routeCounts_[i];++n){const int target=routes_[i][n];

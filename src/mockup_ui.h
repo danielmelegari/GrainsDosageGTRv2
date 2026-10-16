@@ -4,6 +4,7 @@
 #include "skin_theme.h"
 #include "filter_sequencer.h"
 #include "modulation.h"
+#include "modulation_display.h"
 #include <algorithm>
 #include <functional>
 #include <string>
@@ -111,28 +112,32 @@ inline void xyPanel(Painter& p,Rect r,bool axes=true){
  if(axes)p.text("X",{a.x+a.w-21,a.y+a.h/2+7,14,15},10,{112,136,140},true);
  if(axes)p.text("Y",{a.x+a.w/2+7,a.y+7,14,15},10,{112,136,140},true);
 }
-inline void rackKnob(Painter& p,Rect r,double v){
+inline void rackKnob(Painter& p,Rect r,double v,double modulated=-1.,bool overlayOnly=false){
  const double cx=r.x+r.w/2,cy=r.y+r.h/2,rad=r.w*.43;
- p.box(r,{12,15,20},edge,r.w/2);
- auto arc=[&](double amount,Rgb col,double thickness){
+ if(!overlayOnly)p.box(r,{12,15,20},edge,r.w/2);
+ auto arc=[&](double amount,Rgb col,double thickness,double start=0.){
   constexpr int segments=32;std::vector<std::pair<double,double>> points;points.reserve(segments+1);
-  for(int i=0;i<=segments;++i){double a=(-225.+270*amount*i/segments)*3.141592653589793/180.;points.push_back({cx+rad*std::cos(a),cy+rad*std::sin(a)});}
+  for(int i=0;i<=segments;++i){double a=(-225.+270*(start+(amount-start)*i/segments))*3.141592653589793/180.;points.push_back({cx+rad*std::cos(a),cy+rad*std::sin(a)});}
   if(p.polyline)p.polyline(points,col,thickness);else for(size_t i=1;i<points.size();++i)p.line(points[i-1].first,points[i-1].second,points[i].first,points[i].second,col,thickness);
  };
- arc(1.,{61,67,78},std::max(3.,r.w*.065));
- if(v>0)arc(v,orange,std::max(3.,r.w*.065));
+ if(!overlayOnly)arc(1.,{61,67,78},std::max(3.,r.w*.065));
+ if(!overlayOnly&&v>0)arc(v,orange,std::max(3.,r.w*.065));
+ // Preblend the translucent modulation into the known track background.
+ if(modulated>=0.&&std::abs(modulated-v)>1e-6)arc(std::max(v,modulated),skin::mix(Rgb{61,67,78},orange,.42),std::max(3.,r.w*.065),std::min(v,modulated));
+ if(overlayOnly)return;
  p.box({r.x+r.w*.16,r.y+r.h*.16,r.w*.68,r.h*.68},{42,47,56},{9,12,16},r.w*.34);
  p.line(cx-r.w*.16,cy-r.w*.22,cx+r.w*.16,cy-r.w*.22,{58,64,74},1);
  double a=(-225.+270*v)*3.141592653589793/180.;
  p.line(cx+rad*.45*std::cos(a),cy+rad*.45*std::sin(a),cx+rad*.69*std::cos(a),cy+rad*.69*std::sin(a),orange,2.5);
 }
-inline void renderControl(Painter& p,const Control& c,const Value& value,const Display& display,int lfo){
+inline void renderControl(Painter& p,const Control& c,const Value& value,const Display& display,int lfo,double modulated=-1.,bool overlayOnly=false){
  const auto r=c.r;const double v=std::clamp(value(c.id),0.,1.);
  const Rgb white{230,233,237},muted{170,173,184},accent{255,122,32},ink{20,22,24};
  if(c.kind==Knob){
   double diameter=std::min(r.w-22,r.h-60);
-  p.text(c.label,{r.x,r.y,r.w,21},14,white,true);
-  rackKnob(p,{r.x+(r.w-diameter)/2,r.y+29,diameter,diameter},v);
+  if(!overlayOnly)p.text(c.label,{r.x,r.y,r.w,21},14,white,true);
+  rackKnob(p,{r.x+(r.w-diameter)/2,r.y+29,diameter,diameter},v,modulated,overlayOnly);
+  if(overlayOnly)return;
   Rect read{r.x+10,r.y+r.h-22,r.w-20,22};pill(p,read);p.text(display(c.id,v),read,12,cyan,true);
  }else if(c.kind==Toggle){
   bool on=v>=.5;
@@ -153,16 +158,19 @@ inline void renderControl(Painter& p,const Control& c,const Value& value,const D
    p.text(label,{r.x+split+3,r.y,r.w-split-8,r.h},std::min(12.,r.h*.45),cyan,true);}
  }else if(c.kind==VSlider){
   double x=r.x+r.w/2,top=r.y+5,bottom=r.y+r.h-42,y=bottom-v*(bottom-top);
-  p.box({x-3,top,6,bottom-top+8},ink,{13,12,16},3);
-  for(int i=0;i<17;++i){double yy=top+i*(bottom-top)/16;p.line(x-22,yy,x-8,yy,muted,.7);p.line(x+8,yy,x+22,yy,muted,.7);}
+  if(!overlayOnly)p.box({x-3,top,6,bottom-top+8},ink,{13,12,16},3);
+  if(!overlayOnly)p.box({x-2,y,4,std::max(1.,bottom-y)},orange,orange,2);
+  if(modulated>=0.&&std::abs(modulated-v)>1e-6){double my=bottom-modulated*(bottom-top);auto tint=skin::mix(ink,orange,.42);p.box({x-2,std::min(y,my),4,std::abs(my-y)},tint,tint,2);}
+  if(!overlayOnly)for(int i=0;i<17;++i){double yy=top+i*(bottom-top)/16;p.line(x-22,yy,x-8,yy,muted,.7);p.line(x+8,yy,x+22,yy,muted,.7);}
   // A horizontal fader cap shares the metal finish of the thumb atlas.
   p.box({x-17,y-7,34,14},{194,112,49},{37,34,40},2);p.line(x-15,y-2,x+15,y-2,{255,186,123},2);
+  if(overlayOnly)return;
   p.text(c.label,{r.x,r.y+r.h-29,r.w,16},11,white,true);p.text(display(c.id,v),{r.x,r.y+r.h-13,r.w,15},10,white,true);
  }else if(c.kind==Slider||c.kind==Pan){
   if(c.id>=kLfoSlots0&&c.id<kLfoSpeed0){double amount=std::abs(v-.5)*2,mw=r.w-33;for(int i=0;i<20;++i){auto col=i<amount*20?accent:Rgb{31,36,43};p.box({r.x+i*mw/20,r.y+3,mw/20-2,r.h-6},col,col,0);}p.text(std::to_string(int(std::round(amount*100)))+"%",{r.x+mw+3,r.y,30,r.h},10,cyan,true);return;}
   bool compact=r.h<40;double y=r.y+(c.label.empty()?r.h*.5:(compact?r.h-7:29));
-  if(!c.label.empty())p.text(c.label,{r.x,r.y,r.w,17},12,white,false);
-  double track=r.w-(compact?32:0);p.box({r.x,y-4,track,8},{10,13,18},edge,4);double tx=r.x+3+v*(track-12);p.box({r.x+3,y-2,std::max(1.,tx-r.x),4},orange,orange,2);p.box({tx,y-8,9,16},{188,112,51},{51,41,32},2);p.line(tx+4,y-5,tx+4,y+5,{255,188,125},2);
+  if(!overlayOnly&&!c.label.empty())p.text(c.label,{r.x,r.y,r.w,17},12,white,false);
+  double track=r.w-(compact?32:0);if(!overlayOnly)p.box({r.x,y-4,track,8},{10,13,18},edge,4);double tx=r.x+3+v*(track-12);if(!overlayOnly)p.box({r.x+3,y-2,std::max(1.,tx-r.x),4},orange,orange,2);if(modulated>=0.&&std::abs(modulated-v)>1e-6){double mx=r.x+3+modulated*(track-12);auto tint=skin::mix(Rgb{10,13,18},orange,.42);p.box({std::min(tx,mx),y-2,std::abs(mx-tx),4},tint,tint,2);}p.box({tx,y-8,9,16},{188,112,51},{51,41,32},2);p.line(tx+4,y-5,tx+4,y+5,{255,188,125},2);if(overlayOnly)return;
   if(compact)p.text(display(c.id,v),{r.x+track+3,y-9,29,18},10,cyan,false);
   else p.text(display(c.id,v),{r.x,r.y+r.h-19,r.w,18},12,cyan,false);
  }else if(c.kind==Pad){bool on=v>=.5;p.box(r,on?cyan:Rgb{18,54,63},on?Rgb{106,247,255}:Rgb{26,74,85},std::min(10.,r.w/2));if(on)p.line(r.x+3,r.y+5,r.x+3,r.y+r.h-5,{106,247,255},1);
@@ -199,6 +207,7 @@ inline void modulePanel(Painter& p,Rect r,int stage){
 }
 
 inline bool monitorVisible(ParamID id,const Value& v,const RackState& s,int lfo){
+ if(id>=kUiLfoValue0&&id<kCount){if(s.page==2)return false;auto list=controls(v,0,lfo,0,0,0,s);for(const auto& c:list)if((c.kind==Knob||c.kind==Slider||c.kind==Pan||c.kind==VSlider)&&visible(c.r))return true;return false;}
  if(s.page==2)return false;
  if(s.page==1){if(id>=kUiLfoPhase0&&id<kModWaveRnd0)return int(id-kUiLfoPhase0)%4==lfo&&visible(s.position(scope));if(id>=kUiModWave0&&id<kReverbSource)return int(id-kUiModWave0)==lfo&&visible(s.position(scope));if(id==kUiFilterSeqStep)return visible(s.position({573,836,428,104}));if(id==kUiReverb||id==kUiReverbGate)return visible(s.position({300,1118,700,138}));if(id==kUiOutputL||id==kUiOutputR)return visible(s.position({92,1376,354,96}));return false;}
  if((id>=kUiWave0&&id<=kUiWaveSeconds)||(id>=kUiWaveLow0&&id<kReverbRateV2))return visible(waveRect(v,s));if(id==kUiGlitch)return visible(moduleRect(1,v,s));if(id==kUiStep||id==kUiRepeat)return visible(moduleRect(2,v,s));if((id>=kUiGaterStep&&id<kInputDeclick)||id==kUiGaterPhase)return visible(moduleRect(4,v,s));if(id==kUiResliceStep||id==kUiResliceActive||(id>=kUiResliceSource0&&id<kUiFilterSeqStep)){if(!s.resliceAdvanced)return false;auto r=moduleRect(3,v,s);return visible({r.x+26,r.y+670,923,72});}return false;
@@ -250,6 +259,8 @@ inline void render(Painter& p,const Value& value,const Display& display,const st
  }else{auto r=pos({54,210,974,832});if(fixed){rackPanel(p,r);title(r,"MORPH XY");xyPanel(p,pos(xy));}if(live){auto r=pos(xy);auto pt=xyPoint(r,value(kXYX),value(kXYY));if(p.clip)p.clip(xySurface(r));p.box({pt.first-9,pt.second-9,18,18},{13,49,56},cyan,9);p.box({pt.first-5,pt.second-5,10,10},cyan,cyan,5);if(p.unclip)p.unclip();}}
  if(state.page==0&&motion&&motion->ready&&(drag>=0||motion->routing))for(auto& c:list)if(c.id!=kInputDeclick&&c.id!=kDeclickSensitivity){for(int stage:{0,2,3,4})if(c.r.y>=tops[stage]&&c.r.y<tops[stage]+moduleHeight(stage,state.resliceAdvanced)){c.r.y+=motion->y[stage]-state.offset()-tops[stage];break;}}
  if(fixed)for(const auto& c:list)if(c.r.y!=65&&c.id!=kDeclickSensitivity&&c.kind!=Pad&&visible(c.r))renderControl(p,c,value,display,lfo);
+ // Dynamic overlays sit on the cached base controls; no static-scene rebuild.
+ if(live){auto mod=modulationDisplayValues(value);for(const auto& c:list)if(c.id!=kDeclickSensitivity&&(c.kind==Knob||c.kind==Slider||c.kind==Pan||c.kind==VSlider)&&visible(c.r)&&std::abs(mod[c.id]-value(c.id))>1e-6)renderControl(p,c,value,display,lfo,mod[c.id],true);}
  if(p.unclip)p.unclip();
  if(fixed)for(const auto& c:list)if(c.id==kInputDeclick||c.id==kDeclickSensitivity)renderControl(p,c,value,display,lfo);
  if(fixed&&maxScroll(state)>0){auto bar=scrollbar();p.box(bar,{24,28,34},{24,28,34},6);p.box(scrollThumb(state),{67,76,88},{92,103,117},6);}

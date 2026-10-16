@@ -31,7 +31,7 @@ static const FUID controllerID(0xD8FDFEB3, 0xA52848AB, 0x8B8706A4, 0xDA21E077);
 using namespace aztec;
 std::array<double,kCount> defaults(){return initialParameters();}
 // Last id that is part of the plain (contiguous) parameter array region written
-// by getState; everything after it up to kCount is appended in the tail layout.
+// by getState; everything after it up to kUiLfoValue0 is appended in the tail layout.
 static constexpr int kParamEnd = int(kUiFilterSeqStep) + 1;
 bool loadState(IBStream* stream, std::array<double,kCount>& p) {
   IBStreamer in(stream,kLittleEndian); int32 magic=0;
@@ -40,9 +40,9 @@ bool loadState(IBStream* stream, std::array<double,kCount>& p) {
   // Layouts: legacy versions store `count` plain doubles. Current saves
   // (0x51473145, written by getState) use the same prefix plus three extra
   // fields injected after kParamEnd: buffer size, freeze flag, then the array
-  // continues at kGrainBuffer+2 through kCount-1.
+  // continues through kUiLfoValue0-1. Live modulation monitors are transient.
   const bool current=magic>=0x51473145;
-  const int storedEnd=magic>=0x5147314E?int(kCount):magic>=0x5147314C?int(kAudioQuality):magic==0x5147314B?int(kModuleLoopOn0):magic==0x5147314A?int(kResliceSubdivision):magic==0x51473149?int(kResliceAlgorithm):magic==0x51473148?int(kModWaveRate0):magic==0x51473147?int(kMixLock0):magic==0x51473146?int(kReverbRateV2):kLegacySkinCount;
+  const int storedEnd=magic>=0x5147314E?int(kUiLfoValue0):magic>=0x5147314C?int(kAudioQuality):magic==0x5147314B?int(kModuleLoopOn0):magic==0x5147314A?int(kResliceSubdivision):magic==0x51473149?int(kResliceAlgorithm):magic==0x51473148?int(kModWaveRate0):magic==0x51473147?int(kMixLock0):magic==0x51473146?int(kReverbRateV2):kLegacySkinCount;
   const int count = current ? int(kParamEnd) : magic==0x51473144 ? kLegacySkinCount : magic==0x51473143 ? int(kResliceRndOn) : magic==0x51473130 ? int(kGrainMix) : (magic==0x51473131 ? int(kLfo0) : (magic==0x51473132 ? int(kLegacyCount) : (magic==0x51473133 ? int(kModuleOrder) : (magic==0x51473134 ? int(kExtraRoutes0) : (magic==0x51473135 ? int(kGlitchMove) : (magic==0x51473136 ? int(kMasterFilter) : (magic==0x51473137 ? int(kNormalize) : (magic==0x51473138 ? int(kReverbLength) : (magic==0x51473139 ? int(kUiWave0) : (magic==0x5147313A ? int(kLfoSlots0) : (magic==0x5147313B ? int(kModWaveRnd0) : (magic==0x5147313C ? int(kReverbSource) : (magic==0x5147313D ? int(kLimiterCeiling) : (magic==0x5147313E ? int(kGaterEnabled) : (magic==0x5147313F ? int(kInputDeclick) : (magic==0x51473140 ? int(kFilterModel) : (magic==0x51473141 ? int(kGaterMinLength) : int(kGlitchTriggerRate))))))))))))))))));
   for(int i=0;i<count;++i) {
     double v=0.; if(!in.readDouble(v) || !std::isfinite(v)) return false;
@@ -170,7 +170,7 @@ public:
     // kBypassReserved is written like any other id: the legacy slot keeps its
     // position in the stream (old files stay loadable) and getState/saveState
     // remain exact inverses of each other.
-    for(int i=kFreeze+1;i<int(kCount);++i) if(!out.writeDouble(p_[i])) return kResultFalse;
+    for(int i=kFreeze+1;i<int(kUiLfoValue0);++i) if(!out.writeDouble(p_[i])) return kResultFalse;
     return kResultOk;
   }
   tresult PLUGIN_API canProcessSampleSize(int32 size) override {
@@ -292,6 +292,8 @@ public:
     if(data.outputParameterChanges&&data.numSamples>0&&waveCountdown_<=0){
       waveCountdown_=std::max(1,int(rate_/30.));auto wave=engine_.grainView();
       auto emit=[&](int id,double v){int32 index=0;auto* q=data.outputParameterChanges->addParameterData(ParamID(id),index);if(q)q->addPoint(data.numSamples-1,v,index);};
+      emit(kUiModulationActive,!s.bypass&&licenseGain_>0.?1.:0.);
+      for(int i=0;i<4;++i)emit(kUiLfoValue0+i,(engine_.lfoOutput(i)+1.)*.5);
       for(int i=0;i<128;++i)emit(kUiWave0+i,wave.amplitude[i]);
       for(int i=0;i<waveformBins;++i){emit(kUiWaveLow0+i,(wave.low[i]+1.)*.5);emit(kUiWaveHigh0+i,(wave.high[i]+1.)*.5);}
       for(int i=0;i<16;++i)emit(kUiResliceSource0+i,engine_.resliceSource(i)/15.);emit(kUiFilterSeqStep,engine_.filterSequenceStep()/31.);emit(kUiResliceStep,engine_.resliceStep()/15.);emit(kUiResliceActive,engine_.resliceActive()?1.:0.);emit(kUiGaterStep,engine_.gaterStep()/15.);emit(kUiGaterPhase,engine_.gaterPhase());for(int i=0;i<16;++i){emit(kUiGaterState0+i,engine_.gaterState(i)?1.:0.);emit(kUiGaterLength0+i,engine_.gaterLength(i));}emit(kUiReverbGate,!s.bypass&&engine_.reverbGate()?1.:0.);emit(kUiGrainStart,wave.start);emit(kUiGrainEnd,wave.end);emit(kUiGrainHead,wave.head);emit(kUiGrainActive,!s.bypass&&wave.active?1.:0.);emit(kUiWaveSeconds,wave.seconds/16.);for(int i=0;i<4;++i){emit(kUiModWave0+i,engine_.lfoWave(i)/129.);emit(kUiLfoPhase0+i,engine_.lfoPhase(i));emit(kUiLfoCycle0+i,std::clamp((double(engine_.lfoCycle(i))+2147483648.)/4294967295.,0.,1.));emit(kUiLfoEpoch0+i,std::clamp((double(engine_.lfoEpoch(i))+2147483648.)/4294967295.,0.,1.));}
@@ -467,6 +469,7 @@ public:
     }
     for(int l=0;l<4;++l){char ascii[32];String128 name{};std::snprintf(ascii,sizeof(ascii),"Mod %d Speed",l+1);UString(name,128).fromAscii(ascii);auto* speed=new StringListParameter(name,kLfoSpeed0+l);for(auto title:{STR16("0.25x"),STR16("0.5x"),STR16("1x"),STR16("2x")})speed->appendString(title);speed->getInfo().defaultNormalizedValue=2./3.;speed->setNormalized(2./3.);parameters.addParameter(speed);}
     toggle(STR16("Reverb Kill Dry"),kReverbKill,0.);
+    for(int i=0;i<5;++i){auto* monitor=new RangeParameter(STR16("Live Modulation"),ParamID(kUiLfoValue0+i),nullptr,0,1,i<4?.5:0.);monitor->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(monitor);}
     for(int l=0;l<12;++l){auto* phase=new RangeParameter(STR16("Mod Display"),kUiLfoPhase0+l,nullptr,0,1,l<4?0.:2147483648./4294967295.);phase->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(phase);}
     for(int l=0;l<4;++l){char ascii[48];String128 name{};std::snprintf(ascii,sizeof(ascii),"Mod %d Wave RND",l+1);UString(name,128).fromAscii(ascii);auto* rnd=new StringListParameter(name,kModWaveRnd0+l);for(auto label:{STR16("Off"),STR16("1/1"),STR16("1/2"),STR16("1/4"),STR16("1/8")})rnd->appendString(label);parameters.addParameter(rnd);}
     for(int l=0;l<4;++l){char ascii[48];String128 name{};std::snprintf(ascii,sizeof(ascii),"Mod %d Wave Quantize",l+1);UString(name,128).fromAscii(ascii);auto* rnd=new StringListParameter(name,kModWaveRate0+l);for(auto label:{STR16("Saved rate"),STR16("Off"),STR16("1/1"),STR16("1/2"),STR16("1/4"),STR16("1/8"),STR16("2/1"),STR16("4/1")})rnd->appendString(label);parameters.addParameter(rnd);}

@@ -592,6 +592,7 @@ public:
   std::atomic<uint64_t> lastModPacked_{0}; // live Size/Density/Pitch/Chaos magnitudes (aztec-packed) for the UI knob bars
 public:
   int lfoWave(int i)const{return modulation_.wave(i);}
+  double lfoOutput(int i)const{return modulation_.output(i);}
   double lfoPhase(int i)const{return modulation_.phase(i);}
   int64_t lfoCycle(int i)const{return modulation_.cycle(i);}
   int64_t lfoEpoch(int i)const{return modulation_.epoch(i);}
