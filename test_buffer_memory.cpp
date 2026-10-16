@@ -36,7 +36,7 @@ int main(){
  for(int route=-2;route<120;++route){
   s.routing=route<0?-1:route;s.order=route==-2?6:0;
   for(double seconds:{1.,2.,4.,8.,16.}){
-   s.bufferSeconds=seconds;e.set(s);e.setFrozen(route%2==0);
+   s.quality=qg::audioQuality((route+3)%3);s.bufferSeconds=seconds;e.set(s);e.setFrozen(route%2==0);
    for(int i=0;i<256;++i){e.process(.1f,-.1f,100.+i/4000.,l,r);assert(std::isfinite(l)&&std::isfinite(r));}
   }
  }

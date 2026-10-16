@@ -1,6 +1,6 @@
 # GrainsDosage — complete user manual
 
-**Windows VST3 · purple three-page edition · 0.13.15**\
+**Windows VST3 · charcoal three-page edition · 0.13.15**\
 Applies to the updated `work/mockup-purple-skin` branch. The pages are **Modules**, **Modulation**, and **Morph**. This manual describes the current generative Reslice, not the retired Preslicer or the old Reslice step editor. Shared sound controls also apply to the macOS build; installation and registration below describe Windows.
 
 ## Contents
@@ -465,3 +465,9 @@ See [OFFLINE-TRIAL.md](OFFLINE-TRIAL.md) for the signing-key setup and protectio
 The editor requests 90% size on every opening. Use the Size menu to adjust it during the current session; reopening requests 90% again. Windows applies the host DPI scale on top of this UI size.
 
 Seed changes (including New Phrase) take effect at the next scheduled Reslice cut rather than interrupting the current audio. This preserves the current cut’s fade and avoids seed-edit discontinuities.
+
+## Output quality
+
+Output Quality: Draft reduces CPU with a 16-grain budget and slower filter-coefficient refresh; Normal (default) uses 64 grains; High allows 128 grains and sample-rate coefficient refresh. All modes keep the host sample rate and latency. Change Quality in the Modulation page’s Output panel; the choice is saved with projects and rack presets. Existing sounding grains finish naturally when lowering quality.
+
+The current interface uses charcoal panels, orange controls and cyan values, steps and displays throughout all three pages.

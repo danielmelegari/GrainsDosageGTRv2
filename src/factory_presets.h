@@ -10,6 +10,7 @@ inline std::array<double,kCount> initialParametersBeforeRemoval() {
   // Reslice starts with all steps enabled but the module itself stays off (kResliceEnabled default 0).
   for(int i=0;i<16;++i)p[kResliceStep0+i]=1.;
   for(int l=0;l<4;++l){p[kUiLfoCycle0+l]=p[kUiLfoEpoch0+l]=2147483648./4294967295.;p[kLfoSpeed0+l]=2./3.;for(int slot=0;slot<6;++slot)p[slotAmount(l,slot)]=.5;}
+  p[kAudioQuality]=.5;
   p[kReverbLength]=(2.8-.2)/19.8;
   p[kGrainEnabled]=p[kGlitchEnabled]=p[kRepeatEnabled]=1.;p[kGrainPan]=.5;p[kReverbGrid]=2./3.;p[kReverbMix]=.25;
   for(int i=0;i<16;i+=4)p[kReverbStep0+i]=1.;

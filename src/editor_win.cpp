@@ -392,12 +392,17 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
       PixelSpace pixels(dc);Gdiplus::Graphics g(dc);g.SetTransform(&pixels.transform);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
       Gdiplus::GraphicsPath path;float d=float(std::min({radius*2,r.w,r.h}));float x=float(r.x),y=float(r.y),w=float(r.w),h=float(r.h);
       if(d<1)path.AddRectangle(Gdiplus::RectF(x,y,w,h));else{path.AddArc(x,y,d,d,180,90);path.AddArc(x+w-d,y,d,d,270,90);path.AddArc(x+w-d,y+h-d,d,d,0,90);path.AddArc(x,y+h-d,d,d,90,90);path.CloseFigure();}
-      auto top=skin::mix(fill,skin::C(skin::kFiligree),r.h>=20?.10:0.);
+      auto top=skin::mix(fill,skin::Rgb{95,102,114},r.h>=20?.08:0.);
       Gdiplus::LinearGradientBrush brush(Gdiplus::PointF(x,y),Gdiplus::PointF(x,y+h),Gdiplus::Color(255,top.r,top.g,top.b),Gdiplus::Color(255,fill.r,fill.g,fill.b));
       Gdiplus::Pen pen(Gdiplus::Color(255,edge.r,edge.g,edge.b),1.3f);g.FillPath(&brush,&path);g.DrawPath(&pen,&path);
     };
     painter.text=[&](const std::string& s,mockup::Rect r,double size,skin::Rgb col,bool center){auto str=wide(s);HFONT f=CreateFontW(-int(size),0,0,0,FW_SEMIBOLD,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,ANTIALIASED_QUALITY,DEFAULT_PITCH,L"Arial");auto old=SelectObject(dc,f);SIZE extent{};GetTextExtentPoint32W(dc,str.c_str(),int(str.size()),&extent);SelectObject(dc,old);DeleteObject(f);if(extent.cx>r.w)size*=r.w/extent.cx;text(str,r.x,r.y,r.w,r.h,int(size),C(col),center,0);};
     painter.line=[&](double x,double y,double xx,double yy,skin::Rgb col,double width){line(x,y,xx,yy,C(col),int(std::max(1.,width)));};
+    painter.polyline=[&](const std::vector<std::pair<double,double>>& pts,skin::Rgb col,double width){
+      if(pts.size()<2)return;PixelSpace pixels(dc);Gdiplus::Graphics g(dc);g.SetTransform(&pixels.transform);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
+      std::vector<Gdiplus::PointF> points;points.reserve(pts.size());for(auto pt:pts)points.emplace_back(float(pt.first),float(pt.second));
+      Gdiplus::Pen pen(Gdiplus::Color(255,col.r,col.g,col.b),float(width));pen.SetStartCap(Gdiplus::LineCapRound);pen.SetEndCap(Gdiplus::LineCapRound);pen.SetLineJoin(Gdiplus::LineJoinRound);g.DrawLines(&pen,points.data(),int(points.size()));
+    };
     painter.polygon=[&](const std::vector<std::pair<double,double>>& pts,skin::Rgb col){if(pts.size()<3)return;PixelSpace pixels(dc);Gdiplus::Graphics g(dc);g.SetTransform(&pixels.transform);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);std::vector<Gdiplus::PointF> points;for(auto pt:pts)points.emplace_back(float(pt.first),float(pt.second));Gdiplus::SolidBrush brush(Gdiplus::Color(255,col.r,col.g,col.b));g.FillPolygon(&brush,points.data(),int(points.size()));};
     painter.knob=[&](mockup::Rect r,double value){
       if(!mockupKnob||mockupKnob->GetLastStatus()!=Gdiplus::Ok){disc(r.x+r.w/2,r.y+r.h/2,r.w/2,RGB(180,180,180),cream());return;}

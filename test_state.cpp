@@ -48,6 +48,12 @@ int main() {
    for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);for(int i=kFreeze+1;i<kModWaveRate0;++i)out.writeDouble(expected[i]);
    migrateExpandedDestinations(expected);old.seek(0,IBStream::kIBSeekSet,nullptr);auto restored=defaults();assert(loadState(&old,restored)&&restored==expected);assert(settings(restored,120,48000).lfos[0].waveRandom==3);
   }
+  // Immediately preceding format has no quality field; keep Normal without
+  // consuming the next stream item. New format round-trips all three tiers.
+  {auto expected=defaults();MemoryStream old;IBStreamer out(&old,kLittleEndian);out.writeInt32(0x5147314D);
+   for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);for(int i=kFreeze+1;i<kAudioQuality;++i)out.writeDouble(expected[i]);out.writeInt32(12345);
+   old.seek(0,IBStream::kIBSeekSet,nullptr);auto restored=defaults();restored[kAudioQuality]=0.;assert(loadState(&old,restored)&&restored==expected);IBStreamer in(&old,kLittleEndian);int32 marker=0;assert(in.readInt32(marker)&&marker==12345);
+  }
   // Pre-generative release: appended cutter controls keep their new defaults.
   {auto expected=defaults();expected[kResliceEnabled]=1.;MemoryStream old;IBStreamer out(&old,kLittleEndian);out.writeInt32(0x51473149);
    for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);for(int i=kFreeze+1;i<kResliceAlgorithm;++i)out.writeDouble(expected[i]);
@@ -59,7 +65,7 @@ int main() {
   // Last three-page release used 101 destinations and the shorter Morph list.
   {auto oldValues=defaults();oldValues[slotTarget(1,3)]=22./101.;oldValues[kXTarget]=double(kSize+1)/kXYX;
    MemoryStream old;IBStreamer out(&old,kLittleEndian);out.writeInt32(0x5147314C);
-   for(int i=0;i<kParamEnd;++i)out.writeDouble(oldValues[i]);out.writeDouble(oldValues[kGrainBuffer]);out.writeDouble(oldValues[kFreeze]);for(int i=kFreeze+1;i<kCount;++i)out.writeDouble(oldValues[i]);
+   for(int i=0;i<kParamEnd;++i)out.writeDouble(oldValues[i]);out.writeDouble(oldValues[kGrainBuffer]);out.writeDouble(oldValues[kFreeze]);for(int i=kFreeze+1;i<kAudioQuality;++i)out.writeDouble(oldValues[i]);
    old.seek(0,IBStream::kIBSeekSet,nullptr);auto restored=defaults();assert(loadState(&old,restored));
    assert(std::round(restored[slotTarget(1,3)]*qg::modTargetCount)==22.);assert(xyDestinationId(int(std::round(restored[kXTarget]*xyDestCount))-1)==kSize);
   }
@@ -120,6 +126,8 @@ int main() {
   }
   static_assert(kGlitchMove==185,"0.6.3 IDs stable");
   Controller controller; assert(controller.initialize(nullptr)==kResultOk);
+  assert(controller.getParameterObject(kAudioQuality)->getInfo().stepCount==2);
+  assert(controller.getParameterObject(kAudioQuality)->getInfo().defaultNormalizedValue==.5);
   // The global BYPASS button was removed: kBypassReserved keeps its legacy enum slot
   // (state/preset alignment) but is no longer a registered VST parameter, so the
   // validator never sees a bypass proxy. The trailing FREEZE/BUFFER/UI-TRIGGER ids
@@ -220,7 +228,7 @@ int main() {
     MemoryStream rt3; assert(p2.getState(&rt3)==kResultOk);
     rt.seek(0,IBStream::kIBSeekSet,nullptr); rt3.seek(0,IBStream::kIBSeekSet,nullptr);
     int32 m1=0,m2=0;IBStreamer r1(&rt,kLittleEndian),r2(&rt3,kLittleEndian);
-    r1.readInt32(m1);r2.readInt32(m2);assert(m1==m2&&m1==0x5147314D);
+    r1.readInt32(m1);r2.readInt32(m2);assert(m1==m2&&m1==0x5147314E);
     // getState layout: kParamEnd values, buffer size, freeze flag, then the tail
     // (kBypassReserved lives in this region) up to kCount.
     const int fields=kParamEnd+2+(int(kCount)-int(kFreeze)-1);

@@ -18,3 +18,12 @@ Input Options uses input-options.png, extracted unchanged from the supplied
 input.png.zip. It is drawn without a dark overlay, with Transpose and Stretch
 aligned to its two circular mounts. It also supports the macOS PNG override
 folder. Native artwork smoke checks require this fifth image to load.
+
+## 0.13.15 reference style
+
+The current shared renderer uses charcoal vector panels, orange controls and
+cyan readouts/steps across Modules, Modulation, Morph and Input Options, matching
+the subsequently supplied reference. The previously supplied PNGs remain in the
+repository as original artwork; they no longer define the active panel faces.
+Native layout, control IDs and hit areas are preserved. Panel and control painting
+shares the same implementation on Windows, macOS and the SVG review tool.

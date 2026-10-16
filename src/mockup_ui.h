@@ -57,6 +57,8 @@ inline Rect lfoRect(int i){return {688.+i*77,223,64,34};}
 inline int hitLfo(double x,double y,const RackState& s){if(s.page!=1||y<bodyTop)return -1;for(int i=0;i<4;++i)if(s.position(lfoRect(i)).contains(x,y))return i;return -1;}
 inline bool visible(Rect r){return r.y+r.h>bodyTop&&r.y<height;}
 using skin::Rgb;
+// Shared reference palette: charcoal chassis, orange controls, cyan data.
+inline constexpr Rgb panel{31,34,40},edge{65,71,82},orange{255,122,32},cyan{0,220,232},textWhite{230,233,237};
 struct Painter {std::function<void(int,Rect)> moduleBackground;std::function<void(int,Rect,Rect)> image;std::function<void(Rect,Rgb,Rgb,double)> box;std::function<void(const std::string&,Rect,double,Rgb,bool)> text;std::function<void(double,double,double,double,Rgb,double)> line;std::function<void(Rect,double)> knob;std::function<void(const std::vector<std::pair<double,double>>&,Rgb)> polygon;std::function<void(const std::vector<std::pair<double,double>>&,Rgb,double)> polyline;std::function<void(Rect)> clip;std::function<void()> unclip;};
 enum Kind {Knob,Slider,Toggle,Select,Pad,Pan,PanMode,VSlider};
 struct Control {ParamID id;Rect r;Kind kind;std::string label;};
@@ -90,17 +92,16 @@ inline Rect spriteRect(Sprite sprite){
 }
 inline void sprite(Painter& p,Sprite art,Rect r){if(p.image)p.image(Atlas,r,spriteRect(art));}
 inline void pill(Painter& p,Rect r){
- p.box({r.x,r.y+1,r.w,r.h},{12,14,18},{10,11,14},5);
- p.box({r.x+1,r.y+1,r.w-2,r.h-3},{35,38,44},{76,79,87},4);
- p.line(r.x+6,r.y+2,r.x+r.w-6,r.y+2,{98,100,108},.7);
+ p.box(r,{8,10,13},{6,8,10},5);
+ p.box({r.x+2,r.y+2,r.w-4,r.h-4},{29,32,38},edge,4);
+ p.line(r.x+7,r.y+4,r.x+r.w-7,r.y+4,{47,51,60},1);
 }
 inline void pageButton(Painter& p,int i,bool selected){
- auto r=pageRect(i);p.box(r,{12,14,18},{12,14,18},6);
- p.box({r.x+1,r.y+1,r.w-2,r.h-3},selected?Rgb{55,54,64}:Rgb{34,36,42},{86,85,94},5);
- p.line(r.x+7,r.y+2,r.x+r.w-7,r.y+2,selected?Rgb{125,119,135}:Rgb{88,89,99},.8);
- p.text("0"+std::to_string(i+1),{r.x+17,r.y+3,28,r.h-6},11,{155,153,166},true);
- p.text(i==0?"MODULES":i==1?"MODULATION":"MORPH",{r.x+48,r.y+1,r.w-89,r.h-3},18,selected?Rgb{232,237,235}:Rgb{174,178,188},true);
- if(selected)p.box({r.x+20,r.y+r.h-5,r.w-40,2},{100,204,182},{100,204,182},1);
+ auto r=pageRect(i);pill(p,r);
+ p.box({r.x+10,r.y+10,31,31},selected?orange:Rgb{46,50,58},edge,5);
+ p.text(std::to_string(i+1),{r.x+10,r.y+10,31,31},15,selected?Rgb{13,16,20}:textWhite,true);
+ p.text(i==0?"MODULES":i==1?"MODULATION":"MORPH",{r.x+48,r.y+1,r.w-60,r.h-3},18,selected?orange:textWhite,true);
+ if(selected)p.line(r.x+52,r.y+r.h-5,r.x+r.w-14,r.y+r.h-5,orange,2);
 }
 inline void xyPanel(Painter& p,Rect r,bool axes=true){
  p.box(r,{36,39,46},{99,102,111},12);
@@ -111,78 +112,90 @@ inline void xyPanel(Painter& p,Rect r,bool axes=true){
  if(axes)p.text("Y",{a.x+a.w/2+7,a.y+7,14,15},10,{112,136,140},true);
 }
 inline void rackKnob(Painter& p,Rect r,double v){
- const double cx=r.x+r.w/2,cy=r.y+r.h/2,rad=r.w*.32;
- p.box(r,{16,19,23},{86,89,96},r.w/2);
- p.box({r.x+3,r.y+3,r.w-6,r.h-6},{39,42,48},{17,19,24},r.w/2);
- // Reuse just the machined face; no enlarged gear teeth or glowing rim.
- if(p.image)p.image(Atlas,{r.x+r.w*.16,r.y+r.h*.16,r.w*.68,r.h*.68},{405,106,136,136});
- for(int i=0;i<11;++i){double a=(-225.+27*i)*3.141592653589793/180.;p.line(cx+r.w*.435*std::cos(a),cy+r.h*.435*std::sin(a),cx+r.w*.46*std::cos(a),cy+r.h*.46*std::sin(a),{137,143,150},.7);}
+ const double cx=r.x+r.w/2,cy=r.y+r.h/2,rad=r.w*.43;
+ p.box(r,{12,15,20},edge,r.w/2);
+ auto arc=[&](double amount,Rgb col,double thickness){
+  constexpr int segments=32;std::vector<std::pair<double,double>> points;points.reserve(segments+1);
+  for(int i=0;i<=segments;++i){double a=(-225.+270*amount*i/segments)*3.141592653589793/180.;points.push_back({cx+rad*std::cos(a),cy+rad*std::sin(a)});}
+  if(p.polyline)p.polyline(points,col,thickness);else for(size_t i=1;i<points.size();++i)p.line(points[i-1].first,points[i-1].second,points[i].first,points[i].second,col,thickness);
+ };
+ arc(1.,{61,67,78},std::max(3.,r.w*.065));
+ if(v>0)arc(v,orange,std::max(3.,r.w*.065));
+ p.box({r.x+r.w*.16,r.y+r.h*.16,r.w*.68,r.h*.68},{42,47,56},{9,12,16},r.w*.34);
+ p.line(cx-r.w*.16,cy-r.w*.22,cx+r.w*.16,cy-r.w*.22,{58,64,74},1);
  double a=(-225.+270*v)*3.141592653589793/180.;
- p.line(cx+rad*.48*std::cos(a),cy+rad*.48*std::sin(a),cx+rad*.90*std::cos(a),cy+rad*.90*std::sin(a),{20,22,25},std::max(2.,r.w*.035));
+ p.line(cx+rad*.45*std::cos(a),cy+rad*.45*std::sin(a),cx+rad*.69*std::cos(a),cy+rad*.69*std::sin(a),orange,2.5);
 }
 inline void renderControl(Painter& p,const Control& c,const Value& value,const Display& display,int lfo){
  const auto r=c.r;const double v=std::clamp(value(c.id),0.,1.);
- const Rgb white{230,233,237},muted{170,173,184},accent{100,204,182},ink{20,22,24};
+ const Rgb white{230,233,237},muted{170,173,184},accent{255,122,32},ink{20,22,24};
  if(c.kind==Knob){
   double diameter=std::min(r.w-22,r.h-60);
   p.text(c.label,{r.x,r.y,r.w,21},14,white,true);
   rackKnob(p,{r.x+(r.w-diameter)/2,r.y+29,diameter,diameter},v);
-  Rect read{r.x+10,r.y+r.h-22,r.w-20,22};pill(p,read);p.text(display(c.id,v),read,12,white,true);
+  Rect read{r.x+10,r.y+r.h-22,r.w-20,22};pill(p,read);p.text(display(c.id,v),read,12,cyan,true);
  }else if(c.kind==Toggle){
   bool on=v>=.5;
-  if(c.id>=kMixLock0&&c.id<kUiOutputL){sprite(p,on?Locked:Unlocked,{r.x,r.y,18,r.h});p.text(on?"LOCK":"FREE",{r.x+21,r.y,r.w-21,r.h},10,white,false);return;}
+  if(c.id>=kMixLock0&&c.id<kUiOutputL){p.box({r.x+3,r.y+8,12,10},orange,orange,2);p.line(r.x+6,r.y+8,r.x+6,r.y+3,orange,2);p.line(r.x+6,r.y+3,r.x+13,r.y+3,orange,2);if(on)p.line(r.x+13,r.y+3,r.x+13,r.y+8,orange,2);p.text(on?"LOCK":"FREE",{r.x+21,r.y,r.w-21,r.h},10,orange,false);return;}
   pill(p,r);double d=std::min(17.,r.h*.6);Rect led{r.x+8,r.y+(r.h-d)/2,d,d};
   p.box({led.x+3,led.y+3,d-6,d-6},{13,19,22},{70,78,83},d/2);p.box({led.x+5,led.y+5,d-10,d-10},on?accent:Rgb{70,75,83},on?accent:Rgb{70,75,83},d/2);
   std::string title=c.label=="ON"?(on?"ON":"OFF"):c.label;if(c.id==kFreeze&&on)title="FROZEN";
-  p.text(title,{r.x+22,r.y,r.w-27,r.h},std::min(15.,r.h*.43),white,true);
+  p.text(title,{r.x+22,r.y,r.w-27,r.h},std::min(15.,r.h*.43),on?orange:muted,true);
  }else if(c.kind==Select){
   pill(p,r);double shown=c.id==lfoID(lfo,lWave)&&modWaveSelection(value,lfo)>0?value(kUiModWave0+lfo):v;
   auto label=display(c.id,shown);if(c.id>=kModWaveRate0&&c.id<kResliceAlgorithm&&v<.5/7){const char* names[]={"Off","1/1","1/2","1/4","1/8","2/1","4/1"};label=names[modWaveSelection(value,int(c.id-kModWaveRate0))];}if(c.id==kReverbSource)label=v>=.5?"RANDOM IMP.":"STEP SEQ.";
   if(c.id==kFilterSeqMode)label=v>=.5?"S&G":"ARP";
   const auto legacy=label.find(" (legacy)");if(legacy!=std::string::npos)label.erase(legacy);
   if(c.id==kReverbRateV2&&v<.5/6){int old=value(kReverbSource)>=.5?kReverbRandomRate:kReverbGrid;label=display(old,value(old));}
-  if(c.label.empty())p.text(label,{r.x+4,r.y,r.w-8,r.h},std::min(13.,r.h*.48),white,true);
+  if(c.label.empty())p.text(label,{r.x+4,r.y,r.w-8,r.h},std::min(13.,r.h*.48),cyan,true);
   else{double split=c.label=="DEST"?34:std::min(r.w*.44,std::max(71.,c.label.size()*5.5+8.));p.line(r.x+split,r.y+5,r.x+split,r.y+r.h-5,{91,83,94},.7);
    p.text(c.label,{r.x+5,r.y,split-8,r.h},std::min(10.,r.h*.4),muted,true);
-   p.text(label,{r.x+split+3,r.y,r.w-split-8,r.h},std::min(12.,r.h*.45),white,true);}
+   p.text(label,{r.x+split+3,r.y,r.w-split-8,r.h},std::min(12.,r.h*.45),cyan,true);}
  }else if(c.kind==VSlider){
   double x=r.x+r.w/2,top=r.y+5,bottom=r.y+r.h-42,y=bottom-v*(bottom-top);
   p.box({x-3,top,6,bottom-top+8},ink,{13,12,16},3);
   for(int i=0;i<17;++i){double yy=top+i*(bottom-top)/16;p.line(x-22,yy,x-8,yy,muted,.7);p.line(x+8,yy,x+22,yy,muted,.7);}
   // A horizontal fader cap shares the metal finish of the thumb atlas.
-  p.box({x-17,y-7,34,14},{104,104,107},{37,34,40},2);p.line(x-15,y-2,x+15,y-2,{208,209,211},2);
+  p.box({x-17,y-7,34,14},{194,112,49},{37,34,40},2);p.line(x-15,y-2,x+15,y-2,{255,186,123},2);
   p.text(c.label,{r.x,r.y+r.h-29,r.w,16},11,white,true);p.text(display(c.id,v),{r.x,r.y+r.h-13,r.w,15},10,white,true);
  }else if(c.kind==Slider||c.kind==Pan){
-  if(c.id>=kLfoSlots0&&c.id<kLfoSpeed0){double amount=std::abs(v-.5)*2,mw=r.w-33;for(int i=0;i<20;++i){auto col=i<amount*20?accent:Rgb{37,24,45};p.box({r.x+i*mw/20,r.y+3,mw/20-2,r.h-6},col,col,0);}p.text(std::to_string(int(std::round(amount*100)))+"%",{r.x+mw+3,r.y,30,r.h},10,white,true);return;}
+  if(c.id>=kLfoSlots0&&c.id<kLfoSpeed0){double amount=std::abs(v-.5)*2,mw=r.w-33;for(int i=0;i<20;++i){auto col=i<amount*20?accent:Rgb{31,36,43};p.box({r.x+i*mw/20,r.y+3,mw/20-2,r.h-6},col,col,0);}p.text(std::to_string(int(std::round(amount*100)))+"%",{r.x+mw+3,r.y,30,r.h},10,cyan,true);return;}
   bool compact=r.h<40;double y=r.y+(c.label.empty()?r.h*.5:(compact?r.h-7:29));
   if(!c.label.empty())p.text(c.label,{r.x,r.y,r.w,17},12,white,false);
-  double track=r.w-(compact?32:0);p.box({r.x,y-3,track,6},{10,13,18},{79,81,91},3);double tx=r.x+3+v*(track-12);p.box({tx,y-8,9,16},{142,149,155},{31,35,42},2);p.line(tx+4,y-5,tx+4,y+5,{236,239,241},1);
-  if(compact)p.text(display(c.id,v),{r.x+track+3,y-9,29,18},10,white,false);
-  else p.text(display(c.id,v),{r.x,r.y+r.h-19,r.w,18},12,white,false);
- }else if(c.kind==Pad){bool on=v>=.5;p.box(r,on?accent:ink,on?Rgb{110,255,224}:Rgb{10,12,14},r.w/2);if(on)p.line(r.x+3,r.y+5,r.x+3,r.y+r.h-5,{110,255,223},1);
+  double track=r.w-(compact?32:0);p.box({r.x,y-4,track,8},{10,13,18},edge,4);double tx=r.x+3+v*(track-12);p.box({r.x+3,y-2,std::max(1.,tx-r.x),4},orange,orange,2);p.box({tx,y-8,9,16},{188,112,51},{51,41,32},2);p.line(tx+4,y-5,tx+4,y+5,{255,188,125},2);
+  if(compact)p.text(display(c.id,v),{r.x+track+3,y-9,29,18},10,cyan,false);
+  else p.text(display(c.id,v),{r.x,r.y+r.h-19,r.w,18},12,cyan,false);
+ }else if(c.kind==Pad){bool on=v>=.5;p.box(r,on?cyan:Rgb{18,54,63},on?Rgb{106,247,255}:Rgb{26,74,85},std::min(10.,r.w/2));if(on)p.line(r.x+3,r.y+5,r.x+3,r.y+r.h-5,{106,247,255},1);
   if(c.id>=kReverbStep0&&c.id<kReverbStep0+16&&int(std::round(value(kUiReverb)*15))==int(c.id-kReverbStep0))p.line(r.x+3,r.y+r.h-5,r.x+r.w-3,r.y+r.h-5,white,1.5);
  }
 }
 
-// Stretch only the blank purple panel interior; metal corners and screws retain their proportions.
-inline void rackPanel(Painter& p,Rect r){if(!visible(r))return;const Rect src{52,122,798,389};constexpr double cap=27;auto img=[&](Rect d,Rect s){if(p.image)p.image(Backplate,d,s);};img({r.x+cap,r.y+cap,r.w-2*cap,r.h-2*cap},{src.x+cap,src.y+cap,src.w-2*cap,src.h-2*cap});for(int side=0;side<2;++side){double x=side?r.x+r.w-cap:r.x,sx=side?src.x+src.w-cap:src.x;img({x,r.y,cap,cap},{sx,src.y,cap,cap});img({x,r.y+r.h-cap,cap,cap},{sx,src.y+src.h-cap,cap,cap});img({x,r.y+cap,cap,r.h-2*cap},{sx,src.y+cap,cap,src.h-2*cap});}img({r.x+cap,r.y,r.w-2*cap,cap},{src.x+cap,src.y,src.w-2*cap,cap});img({r.x+cap,r.y+r.h-cap,r.w-2*cap,cap},{src.x+cap,src.y+src.h-cap,src.w-2*cap,cap});}
+// Vector panels avoid scaling large textures during control updates.
+inline void panelScrews(Painter& p,Rect r){
+ for(int side=0;side<2;++side)for(int bottom=0;bottom<2;++bottom){double x=side?r.x+r.w-21:r.x+7,y=bottom?r.y+r.h-21:r.y+7;
+  p.box({x,y,14,14},{22,25,30},edge,7);p.line(x+4,y+4,x+10,y+10,{86,92,103},1.5);p.line(x+10,y+4,x+4,y+10,{86,92,103},1.5);}
+}
+inline void rackPanel(Painter& p,Rect r){
+ if(!visible(r))return;
+ p.box(r,{29,32,38},edge,5);p.box({r.x+3,r.y+3,r.w-6,r.h-6},panel,{20,23,28},4);
+ p.line(r.x+22,r.y+3,r.x+r.w-22,r.y+3,{53,58,67},1);panelScrews(p,r);
+}
 inline bool structural(ParamID id){return id==kResliceAlgorithm||id==kPanMode||id==kReverbSource||id==kReverbModel||id==kFilterModel||id==kFilterSeqMode||id==kRoutingOrder||id==kModuleOrder;}
 // Artwork slot 5 is the input panel, outside the reorderable audio stages.
 constexpr int inputOptionsBackground=5;
-inline void inputOptionsPanel(Painter& p,Rect r){
- if(!visible(r))return;
- rackPanel(p,r);
- if(p.moduleBackground)p.moduleBackground(inputOptionsBackground,r);
-}
+inline void inputOptionsPanel(Painter& p,Rect r){rackPanel(p,r);}
 inline void modulePanel(Painter& p,Rect r,int stage){
  if(!visible(r))return;
- constexpr Rgb colors[]={{19,40,42},{30,27,36},{46,33,22},{36,26,48},{22,32,48}};
- // The module artwork owns the entire module face, including the area beneath the screws.
- p.box(r,colors[stage],colors[stage],0);
- if(p.moduleBackground)p.moduleBackground(stage,r);
- // Reuse only the circular metal screw faces, without any purple corner pixels.
- if(p.image)for(int side=0;side<2;++side)for(int bottom=0;bottom<2;++bottom)
-  p.image(RoundScrew,{side?r.x+r.w-26:r.x+8,bottom?r.y+r.h-26:r.y+7,18,18},{60,129,18,18});
+ rackPanel(p,r);
+ if(stage==0){
+  // Restrained circuit traces and diagonal metal inlays echo the reference.
+  for(int i=0;i<7;++i){double y=r.y+70+i*31;p.line(r.x+24,y,r.x+160,y,{49,39,33},1);p.line(r.x+160,y,r.x+186,y-15,{49,39,33},1);}
+  for(int i=0;i<4;++i){double x=r.x+r.w-220+i*34;p.line(x,r.y+54,x-100,r.y+r.h-24,i==2?Rgb{78,45,26}:Rgb{44,49,57},i==2?10:5);}
+ }else if(stage==2){
+  for(int i=0;i<16;++i)for(int j=0;j<3;++j)p.box({r.x+28+i*57.,r.y+60+j*48.,18,18},{18,21,26},{38,42,50},9);
+  p.line(r.x+20,r.y+r.h-26,r.x+260,r.y+60,{63,33,30},12);
+ }
+ panelScrews(p,r);
 }
 
 inline bool monitorVisible(ParamID id,const Value& v,const RackState& s,int lfo){
@@ -191,16 +204,16 @@ inline bool monitorVisible(ParamID id,const Value& v,const RackState& s,int lfo)
  if((id>=kUiWave0&&id<=kUiWaveSeconds)||(id>=kUiWaveLow0&&id<kReverbRateV2))return visible(waveRect(v,s));if(id==kUiGlitch)return visible(moduleRect(1,v,s));if(id==kUiStep||id==kUiRepeat)return visible(moduleRect(2,v,s));if((id>=kUiGaterStep&&id<kInputDeclick)||id==kUiGaterPhase)return visible(moduleRect(4,v,s));if(id==kUiResliceStep||id==kUiResliceActive||(id>=kUiResliceSource0&&id<kUiFilterSeqStep)){if(!s.resliceAdvanced)return false;auto r=moduleRect(3,v,s);return visible({r.x+26,r.y+670,923,72});}return false;
 }
 inline void restoreControlBackground(Painter& p,const Control& c,const Value& v,const RackState& s){
- if(c.id==kInputDeclick||c.id==kDeclickSensitivity){if(p.image)p.image(Backplate,c.r,c.r);return;}
+ if(c.id==kInputDeclick||c.id==kDeclickSensitivity){p.box({6,6,width-12,109},{29,32,38},edge,6);return;}
  if(s.page==0){if(c.id==kTranspose||c.id==kStretchSpeed||c.id==kStretchOn){inputOptionsPanel(p,s.position({54,210,974,188}));return;}for(int stage=0;stage<5;++stage){auto r=moduleRect(stage,v,s);if(c.r.y>=r.y&&c.r.y<r.y+r.h){modulePanel(p,r,stage);return;}}}
  if(s.page==1)for(auto r:{Rect{54,210,974,475},Rect{54,699,480,294},Rect{548,699,480,294},Rect{54,1007,974,305},Rect{54,1326,974,210}}){r=s.position(r);if(r.contains(c.r.x,c.r.y)){rackPanel(p,r);return;}}
  if(s.page==2)rackPanel(p,s.position({54,210,974,832}));
 }
 inline void render(Painter& p,const Value& value,const Display& display,const std::string& presetName,int tab,int lfo,int repeat,int gate,int reslice,WaveVisual* visual=nullptr,int drag=-1,int insertion=-1,Motion* motion=nullptr,RenderPass pass=RenderPass::All,const RackState& state=RackState{}){
- const bool fixed=pass!=RenderPass::Dynamic,live=pass!=RenderPass::Static;const Rgb white{230,233,237},muted{170,173,184},ink{20,22,24},screen{15,34,34},accent{100,204,182};
+ const bool fixed=pass!=RenderPass::Dynamic,live=pass!=RenderPass::Static;const Rgb white{230,233,237},muted{170,173,184},ink{20,22,24},screen{10,22,28},accent{255,122,32};
  if(live&&motion)motion->update(value,drag,insertion,state);
- auto button=[&](Rect r,const std::string& s){pill(p,r);p.text(s,r,14,white,true);};
- if(fixed){p.box({0,0,width,height},{25,18,33},{25,18,33},0);if(p.image){p.image(Backplate,{0,0,width,120},{0,0,1083,120});p.image(Backplate,{0,120,50,height-120},{0,120,50,1300});p.image(Backplate,{1033,120,50,height-120},{1033,120,50,1300});}p.box({51,122,981,75},{24,25,31},{11,12,16},5);for(int i=0;i<3;++i)pageButton(p,i,i==state.page);button(preset,presetName);button(previous,"<");button(next,">");button(load,"LOAD");button(save,"SAVE");p.text("INPUT DE-CLICKER",{835,40,172,20},13,white,true);}
+ auto button=[&](Rect r,const std::string& s){pill(p,r);p.text(s,r,14,orange,true);};
+ if(fixed){p.box({0,0,width,height},{13,16,20},{13,16,20},0);p.box({6,6,width-12,109},{29,32,38},edge,6);p.text("GRAINS",{72,34,137,38},25,textWhite,false);p.text("DOSAGE",{213,34,174,38},25,orange,false);p.line(72,82,280,82,cyan,2);p.box({51,122,981,75},{24,27,33},{11,12,16},5);for(int i=0;i<3;++i)pageButton(p,i,i==state.page);button(preset,presetName);button(previous,"<");button(next,">");button(load,"LOAD");button(save,"SAVE");p.text("INPUT DE-CLICKER",{835,40,172,20},13,white,true);}
  if(fixed)p.text("v" GRAINS_PLUGIN_VERSION,{300,75,85,16},10,muted,true);
  if(p.clip)p.clip({51,bodyTop,982,height-bodyTop});
  auto pos=[&](Rect r){return state.position(r);};auto title=[&](Rect r,const std::string& s){if(fixed)p.text(s,{r.x+32,r.y+17,r.w-230,25},20,white,false);};
@@ -209,30 +222,36 @@ inline void render(Painter& p,const Value& value,const Display& display,const st
  if(state.page==0){
   Rect master=pos({54,210,974,188});if(fixed){inputOptionsPanel(p,master);p.text("INPUT OPTIONS",{master.x+53,master.y+24,153,25},13,white,true);p.text("SIGNAL CHAIN ↓  •  FIRST MODULE AT THE TOP",pos({78,404,520,20}),11,muted,false);p.text("DRAG A MODULE UP OR DOWN TO REORDER",pos({619,404,385,20}),11,muted,true);}
   auto chain=routeChain(value);for(int stage:chain){auto r=moduleRect(stage,value,state);double dy=(motion&&motion->ready&&(drag>=0||motion->routing))?motion->y[stage]-state.offset()-r.y:0;r.y+=dy;if(!visible(r))continue;
-   if(fixed){modulePanel(p,r,stage);p.box({r.x+36,r.y+13,32,30},{25,28,35},{91,96,106},5);p.text(std::to_string(1+int(std::find(chain.begin(),chain.end(),stage)-chain.begin())),{r.x+36,r.y+13,32,30},14,accent,true);auto pr=modulePresetRect(stage,value,state);pr.y+=dy;button(pr,std::string(moduleNames[stage])+" ▾");for(int j=0;j<3;++j)for(int k=0;k<2;++k)p.box({r.x+635+k*6,r.y+20+j*6,2,2},muted,muted,1);if(stage!=3||state.resliceAdvanced){auto rr=randomRect(stage,value,state);rr.y+=dy;button(rr,"RANDOM");}if(stage==3){auto ar=resliceAdvanceRect(value,state);ar.y+=dy;button(ar,"ADVANCE");if(state.resliceAdvanced)p.line(ar.x+14,ar.y+ar.h-5,ar.x+ar.w-14,ar.y+ar.h-5,accent,2);}if(stage==3&&state.resliceAdvanced){auto phrase=reslicePhraseRect(value,state);phrase.y+=dy;button(phrase,"NEW PHRASE");}}
+   if(fixed){modulePanel(p,r,stage);p.box({r.x+36,r.y+13,32,30},orange,{15,18,22},5);p.text(std::to_string(1+int(std::find(chain.begin(),chain.end(),stage)-chain.begin())),{r.x+36,r.y+13,32,30},14,ink,true);auto pr=modulePresetRect(stage,value,state);pr.y+=dy;button(pr,std::string(moduleNames[stage])+" ▾");for(int j=0;j<3;++j)for(int k=0;k<2;++k)p.box({r.x+635+k*6,r.y+20+j*6,2,2},muted,muted,1);if(stage!=3||state.resliceAdvanced){auto rr=randomRect(stage,value,state);rr.y+=dy;button(rr,"RANDOM");}if(stage==3){auto ar=resliceAdvanceRect(value,state);ar.y+=dy;button(ar,"ADVANCE");if(state.resliceAdvanced)p.line(ar.x+14,ar.y+ar.h-5,ar.x+ar.w-14,ar.y+ar.h-5,accent,2);}if(stage==3&&state.resliceAdvanced){auto phrase=reslicePhraseRect(value,state);phrase.y+=dy;button(phrase,"NEW PHRASE");}}
 
-   if(live&&stage==0){auto w=waveRect(value,state);w.y+=dy;p.box(w,screen,{76,75,82},10);WaveVisual direct;if(!visual){for(int i=0;i<waveformBins;++i){direct.lo[i]=value(kUiWaveLow0+i)*2-1;direct.hi[i]=value(kUiWaveHigh0+i)*2-1;}direct.active=value(kUiGrainActive);visual=&direct;}double scale=w.h/2-6,mid=w.y+w.h/2;auto env=[&](int first,int last){std::vector<std::pair<double,double>> pts;for(int i=first;i<=last;++i)pts.push_back({w.x+4+i*(w.w-8)/(waveformBins-1),mid-visual->hi[i]*scale});for(int i=last;i>=first;--i)pts.push_back({w.x+4+i*(w.w-8)/(waveformBins-1),mid-visual->lo[i]*scale});return pts;};auto base=skin::mix(screen,muted,.35);p.polygon(env(0,waveformBins-1),base);p.line(w.x+4,mid,w.x+w.w-4,mid,{63,80,76},1);if(visual->active>.01){double start=std::min(value(kUiGrainStart),value(kUiGrainEnd)),end=std::max(value(kUiGrainStart),value(kUiGrainEnd));int first=std::clamp(int(start*(waveformBins-1)),0,waveformBins-1),last=std::clamp(int(std::ceil(end*(waveformBins-1))),first,waveformBins-1);auto lit=skin::mix(base,accent,.45*visual->active);p.polygon(env(first,last),lit);double x=w.x+4+value(kUiGrainHead)*(w.w-8);p.line(x,w.y+6,x,w.y+w.h-6,lit,1.5);}}
+   if(live&&stage==0){auto w=waveRect(value,state);w.y+=dy;p.box(w,screen,{76,75,82},10);WaveVisual direct;if(!visual){for(int i=0;i<waveformBins;++i){direct.lo[i]=value(kUiWaveLow0+i)*2-1;direct.hi[i]=value(kUiWaveHigh0+i)*2-1;}direct.active=value(kUiGrainActive);visual=&direct;}double scale=w.h/2-6,mid=w.y+w.h/2;auto env=[&](int first,int last){std::vector<std::pair<double,double>> pts;for(int i=first;i<=last;++i)pts.push_back({w.x+4+i*(w.w-8)/(waveformBins-1),mid-visual->hi[i]*scale});for(int i=last;i>=first;--i)pts.push_back({w.x+4+i*(w.w-8)/(waveformBins-1),mid-visual->lo[i]*scale});return pts;};auto base=skin::mix(screen,cyan,.55);p.polygon(env(0,waveformBins-1),base);p.line(w.x+4,mid,w.x+w.w-4,mid,{63,80,76},1);if(visual->active>.01){double start=std::min(value(kUiGrainStart),value(kUiGrainEnd)),end=std::max(value(kUiGrainStart),value(kUiGrainEnd));int first=std::clamp(int(start*(waveformBins-1)),0,waveformBins-1),last=std::clamp(int(std::ceil(end*(waveformBins-1))),first,waveformBins-1);auto lit=skin::mix(base,cyan,.75*visual->active);p.polygon(env(first,last),lit);double x=w.x+4+value(kUiGrainHead)*(w.w-8);p.line(x,w.y+6,x,w.y+w.h-6,lit,1.5);}}
    if(fixed&&stage==3&&state.resliceAdvanced){const int algorithm=int(std::round(value(kResliceAlgorithm)*2));const char* sections[]={"CutDSG · REPEATS / SOURCE AREA","WarpDSG · TIMING / SPEED","PushDSG · RHYTHMIC ACTIVITY"};const char* groups[]={"SHARED · CUT TIMING / ENVELOPE","SHARED · AMPLITUDE / PAN / PITCH",sections[std::clamp(algorithm,0,2)],"SHARED · BITCRUSHER","SHARED · COMB","VARIATION / MIX"};const double rows[]={110,190,270,350,430,532};for(int i=0;i<6;++i)p.text(groups[i],{r.x+28,r.y+rows[i],900,22},12,muted,false);p.line(r.x+28,r.y+264,r.x+r.w-28,r.y+264,{75,77,88},.8);p.line(r.x+28,r.y+347,r.x+r.w-28,r.y+347,{75,77,88},.8);}
 
-   if(live&&stage==3&&state.resliceAdvanced){auto display=Rect{r.x+26,r.y+670,923,29};p.box(display,ink,muted,5);for(int i=0;i<16;++i){double x=display.x+5+i*(display.w-10)/16;bool playing=value(kResliceEnabled)>.5&&value(kUiResliceActive)>.5&&i==int(std::round(value(kUiResliceStep)*15));double h=4+17*value(kUiResliceSource0+i);p.box({x,display.y+24-h,(display.w-10)/16-5,h},playing?white:skin::mix(ink,accent,.6),ink,2);}p.text(value(kUiResliceActive)>.5?"GENERATIVE CUTS · HOST SYNC":"READY · FEED AUDIO AND PLAY",{r.x+27,r.y+713,520,24},11,muted,false);}
+   if(live&&stage==3&&state.resliceAdvanced){auto display=Rect{r.x+26,r.y+670,923,29};p.box(display,ink,muted,5);for(int i=0;i<16;++i){double x=display.x+5+i*(display.w-10)/16;bool playing=value(kResliceEnabled)>.5&&value(kUiResliceActive)>.5&&i==int(std::round(value(kUiResliceStep)*15));double h=4+17*value(kUiResliceSource0+i);p.box({x,display.y+24-h,(display.w-10)/16-5,h},playing?white:skin::mix(ink,cyan,.6),ink,2);}p.text(value(kUiResliceActive)>.5?"GENERATIVE CUTS · HOST SYNC":"READY · FEED AUDIO AND PLAY",{r.x+27,r.y+713,520,24},11,muted,false);}
 
-   if(live&&(stage==2||stage==4))for(int i=0;i<16;++i){Rect sr=stepRect(i,stage,value,state);sr.y+=dy;bool on=stage==2?value(kRepeatStep0+i)>.5:stage==3?value(kResliceStep0+i)>.5:value(value(kGaterStepRnd)>.5?kUiGaterState0+i:kGaterState0+i)>.25;bool selected=i==(stage==2?repeat:stage==3?reslice:gate);if(stage==4){p.box(sr,ink,selected?white:muted,12);double len=value(kGaterLengthRnd)>.5?std::clamp(value(kUiGaterLength0+i),.05,1.):.05+.95*value(kGaterLength0+i),h=(sr.h-8)*len;if(on)p.box({sr.x+4,sr.y+sr.h-4-h,sr.w-8,h},skin::mix(ink,accent,.65),ink,8);double progress=motion?motion->gate[i]:0;if(on&&progress>.001)p.box({sr.x+4,sr.y+sr.h-4-(sr.h-8)*progress,sr.w-8,(sr.h-8)*progress},accent,accent,8);if(value(kGaterRelease0+i)>.5)p.box({sr.x+10,sr.y+9,12,12},{180,104,171},white,6);}else p.box(sr,on?accent:ink,selected?white:muted,10);p.text(std::to_string(i+1),{sr.x-5,sr.y+sr.h+5,sr.w+10,18},12,white,true);if(stage==3)p.text(std::to_string(1+int(std::round(value(value(kResliceRndOn)>.5?kUiResliceSource0+i:kResliceIndex0+i)*15))),{sr.x-5,sr.y+sr.h+24,sr.w+10,16},10,muted,true);int play=int(std::round(value(stage==2?kUiStep:stage==3?kUiResliceStep:kUiGaterStep)*15));if(i==play)p.line(sr.x+5,sr.y+sr.h-6,sr.x+sr.w-5,sr.y+sr.h-6,white,2);}
+   if(live&&(stage==2||stage==4))for(int i=0;i<16;++i){Rect sr=stepRect(i,stage,value,state);sr.y+=dy;bool on=stage==2?value(kRepeatStep0+i)>.5:stage==3?value(kResliceStep0+i)>.5:value(value(kGaterStepRnd)>.5?kUiGaterState0+i:kGaterState0+i)>.25;bool selected=i==(stage==2?repeat:stage==3?reslice:gate);if(stage==4){p.box(sr,ink,selected?white:muted,12);double len=value(kGaterLengthRnd)>.5?std::clamp(value(kUiGaterLength0+i),.05,1.):.05+.95*value(kGaterLength0+i),h=(sr.h-8)*len;if(on)p.box({sr.x+4,sr.y+sr.h-4-h,sr.w-8,h},skin::mix(ink,cyan,.65),ink,8);double progress=motion?motion->gate[i]:0;if(on&&progress>.001)p.box({sr.x+4,sr.y+sr.h-4-(sr.h-8)*progress,sr.w-8,(sr.h-8)*progress},cyan,cyan,8);if(value(kGaterRelease0+i)>.5)p.box({sr.x+10,sr.y+9,12,12},orange,white,6);}else p.box(sr,on?cyan:Rgb{18,54,63},selected?white:Rgb{35,86,96},10);p.text(std::to_string(i+1),{sr.x-5,sr.y+sr.h+5,sr.w+10,18},12,white,true);if(stage==3)p.text(std::to_string(1+int(std::round(value(value(kResliceRndOn)>.5?kUiResliceSource0+i:kResliceIndex0+i)*15))),{sr.x-5,sr.y+sr.h+24,sr.w+10,16},10,muted,true);int play=int(std::round(value(stage==2?kUiStep:stage==3?kUiResliceStep:kUiGaterStep)*15));if(i==play)p.line(sr.x+5,sr.y+sr.h-6,sr.x+sr.w-5,sr.y+sr.h-6,white,2);}
   }
   if(drag>=0&&insertion>=0){auto c=routeChain(value);double y=insertion==4?moduleRect(c[3],value,state).y+moduleHeight(c[3],state.resliceAdvanced)+5:moduleRect(c[insertion],value,state).y-6;p.line(68,y,1014,y,accent,3);}
  }else if(state.page==1){
   for(auto r:{Rect{54,210,974,475},Rect{54,699,480,294},Rect{548,699,480,294},Rect{54,1007,974,305},Rect{54,1326,974,210}})if(fixed)rackPanel(p,pos(r));title(pos({54,210,974,475}),"MODULATION");title(pos({54,699,480,294}),"FILTER");title(pos({548,699,480,294}),"FILTER SEQUENCER");title(pos({54,1007,974,305}),"REVERB");title(pos({54,1326,974,210}),"OUTPUT");
   if(fixed){for(int i=0;i<4;++i){auto r=pos(lfoRect(i));pill(p,r);p.text(std::to_string(i+1),r,17,i==lfo?accent:white,true);}xyPanel(p,pos(scope),false);}
-  if(live&&visible(pos(scope))){auto sc=pos(scope);qg::Lfo preview;double cycle=std::round(value(kUiLfoCycle0+lfo)*4294967295.-2147483648.);int64_t epoch=int64_t(std::round(value(kUiLfoEpoch0+lfo)*4294967295.-2147483648.));preview.prepare(0x13579BDFULL+uint64_t(lfo)*104729+(value(lfoID(lfo,lReset))>=.5?uint64_t(epoch)*0x9e3779b97f4a7c15ULL:0));qg::LfoSettings shape;shape.enabled=true;shape.beats=1;shape.wave=int(std::round(value(modWaveSelection(value,lfo)>0?kUiModWave0+lfo:lfoID(lfo,lWave))*129));shape.randomSteps=1+int(std::round(value(kRandomSteps0+lfo)*63));shape.depth=value(lfoID(lfo,lDepth));shape.phase=0;shape.glide=.01+.99*value(lfoID(lfo,lGlide));auto glass=xySurface(sc);std::vector<std::pair<double,double>> pts;for(int i=0;i<=210;++i)pts.push_back({glass.x+3+i*(glass.w-6)/210,glass.y+glass.h/2-std::clamp(preview.process(shape,cycle+i/210.,48000,false,0),-1.,1.)*(glass.h/2-5)});if(p.polyline)p.polyline(pts,accent,2);else for(size_t i=1;i<pts.size();++i)p.line(pts[i-1].first,pts[i-1].second,pts[i].first,pts[i].second,accent,2);double x=glass.x+3+xyNormalized(value(kUiLfoPhase0+lfo))*(glass.w-6);p.line(x,glass.y+3,x,glass.y+glass.h-3,white,1);}
-  if(live&&visible(pos({573,836,428,104})))for(int i=0;i<32;++i){auto r=pos({573+i*13.4,836,9,104});p.box(r,ink,ink,4);double n=(qg::filterPattern(int(std::round(value(kFilterSeqPattern)*63)),i)+1)*.5;bool active=value(kFilterSeqOn)>.5&&i==int(std::round(value(kUiFilterSeqStep)*31));if(value(kFilterSeqOn)>.5)p.box({r.x+1,r.y+101-n*97,7,3+n*97},active?white:accent,accent,3);if(i%4==0)p.text(std::to_string(i+1),{r.x-4,r.y+108,18,15},9,muted,true);}
+  if(live&&visible(pos(scope))){auto sc=pos(scope);qg::Lfo preview;double cycle=std::round(value(kUiLfoCycle0+lfo)*4294967295.-2147483648.);int64_t epoch=int64_t(std::round(value(kUiLfoEpoch0+lfo)*4294967295.-2147483648.));preview.prepare(0x13579BDFULL+uint64_t(lfo)*104729+(value(lfoID(lfo,lReset))>=.5?uint64_t(epoch)*0x9e3779b97f4a7c15ULL:0));qg::LfoSettings shape;shape.enabled=true;shape.beats=1;shape.wave=int(std::round(value(modWaveSelection(value,lfo)>0?kUiModWave0+lfo:lfoID(lfo,lWave))*129));shape.randomSteps=1+int(std::round(value(kRandomSteps0+lfo)*63));shape.depth=value(lfoID(lfo,lDepth));shape.phase=0;shape.glide=.01+.99*value(lfoID(lfo,lGlide));auto glass=xySurface(sc);std::vector<std::pair<double,double>> pts;for(int i=0;i<=210;++i)pts.push_back({glass.x+3+i*(glass.w-6)/210,glass.y+glass.h/2-std::clamp(preview.process(shape,cycle+i/210.,48000,false,0),-1.,1.)*(glass.h/2-5)});if(p.polyline)p.polyline(pts,cyan,2);else for(size_t i=1;i<pts.size();++i)p.line(pts[i-1].first,pts[i-1].second,pts[i].first,pts[i].second,cyan,2);double x=glass.x+3+xyNormalized(value(kUiLfoPhase0+lfo))*(glass.w-6);p.line(x,glass.y+3,x,glass.y+glass.h-3,white,1);}
+  if(live&&visible(pos({573,836,428,104})))for(int i=0;i<32;++i){auto r=pos({573+i*13.4,836,9,104});p.box(r,ink,ink,4);double n=(qg::filterPattern(int(std::round(value(kFilterSeqPattern)*63)),i)+1)*.5;bool active=value(kFilterSeqOn)>.5&&i==int(std::round(value(kUiFilterSeqStep)*31));if(value(kFilterSeqOn)>.5)p.box({r.x+1,r.y+101-n*97,7,3+n*97},active?white:cyan,cyan,3);if(i%4==0)p.text(std::to_string(i+1),{r.x-4,r.y+108,18,15},9,muted,true);}
   if(fixed&&value(kReverbSource)>=.5)p.text("RANDOM IMPULSE",pos({305,1140,640,75}),18,muted,true);
   if(live&&value(kReverbSource)<.5)for(int i=0;i<16;++i){auto r=pos({300.+i*43,1118,26,138});if(visible(r))renderControl(p,{ParamID(kReverbStep0+i),r,Pad,""},value,display,lfo);p.text(std::to_string(i+1),{r.x-3,r.y+r.h+5,r.w+6,18},12,white,true);}
-  for(int ch=0;ch<2;++ch){auto r=pos({92.+ch*185,1376,169,96});if(fixed&&visible(r))sprite(p,Meter,r);if(live&&visible(r)){double level=motion?motion->meters[ch]:value(kUiOutputL+ch),db=20*std::log10(std::max(.00001,level)),a=(-144.+108*std::clamp((db+36)/39.,0.,1.))*3.141592653589793/180;p.line(r.x+84,r.y+83,r.x+84+60*std::cos(a),r.y+83+60*std::sin(a),{153,38,29},1.3);}}
+  for(int ch=0;ch<2;++ch){auto r=pos({92.+ch*185,1376,169,96});if(visible(r)){
+   if(fixed){pill(p,r);p.text(ch?"RIGHT":"LEFT",{r.x+10,r.y+8,r.w-20,18},11,muted,true);}
+   if(live){double level=motion?motion->meters[ch]:value(kUiOutputL+ch),db=20*std::log10(std::max(.00001,level));int lit=int(16*std::clamp((db+48)/48.,0.,1.));
+    for(int i=0;i<16;++i){auto col=i<lit?(i>=13?orange:cyan):Rgb{26,44,51};p.box({r.x+12+i*9,r.y+37,6,25},col,col,1);}
+    p.box({r.x+10,r.y+69,r.w-20,18},{29,32,38},{29,32,38},0);p.text(level<.00001?"-INF dB":std::to_string(int(std::round(db)))+" dB",{r.x+10,r.y+69,r.w-20,18},11,cyan,true);
+   }
+  }}
   if(fixed){button(pos(zoomMenu),"SIZE");}
- }else{auto r=pos({54,210,974,832});if(fixed){rackPanel(p,r);title(r,"MORPH XY");xyPanel(p,pos(xy));}if(live){auto r=pos(xy);auto pt=xyPoint(r,value(kXYX),value(kXYY));if(p.clip)p.clip(xySurface(r));p.box({pt.first-9,pt.second-9,18,18},{24,46,48},{158,225,208},9);p.box({pt.first-5,pt.second-5,10,10},accent,accent,5);if(p.unclip)p.unclip();}}
+ }else{auto r=pos({54,210,974,832});if(fixed){rackPanel(p,r);title(r,"MORPH XY");xyPanel(p,pos(xy));}if(live){auto r=pos(xy);auto pt=xyPoint(r,value(kXYX),value(kXYY));if(p.clip)p.clip(xySurface(r));p.box({pt.first-9,pt.second-9,18,18},{13,49,56},cyan,9);p.box({pt.first-5,pt.second-5,10,10},cyan,cyan,5);if(p.unclip)p.unclip();}}
  if(state.page==0&&motion&&motion->ready&&(drag>=0||motion->routing))for(auto& c:list)if(c.id!=kInputDeclick&&c.id!=kDeclickSensitivity){for(int stage:{0,2,3,4})if(c.r.y>=tops[stage]&&c.r.y<tops[stage]+moduleHeight(stage,state.resliceAdvanced)){c.r.y+=motion->y[stage]-state.offset()-tops[stage];break;}}
  if(fixed)for(const auto& c:list)if(c.r.y!=65&&c.id!=kDeclickSensitivity&&c.kind!=Pad&&visible(c.r))renderControl(p,c,value,display,lfo);
  if(p.unclip)p.unclip();
  if(fixed)for(const auto& c:list)if(c.id==kInputDeclick||c.id==kDeclickSensitivity)renderControl(p,c,value,display,lfo);
- if(fixed&&maxScroll(state)>0){auto bar=scrollbar();p.box(bar,{31,24,39},{31,24,39},6);p.box(scrollThumb(state),{124,110,139},{148,133,162},6);}
+ if(fixed&&maxScroll(state)>0){auto bar=scrollbar();p.box(bar,{24,28,34},{24,28,34},6);p.box(scrollThumb(state),{67,76,88},{92,103,117},6);}
 }
 }} // aztec::mockup

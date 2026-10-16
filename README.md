@@ -1,10 +1,14 @@
-# GrainsDosage 0.13.2 — purple three-page edition
+# GrainsDosage 0.13.15 — charcoal three-page edition
 
 This branch builds the **Modules / Modulation / Morph** interface. The audio rack contains Granulizer, Beat Repeater, generative Reslice (CutDSG, WarpDSG and PushDSG), and Gater, with per-module capture loops. The Modulation page adds four six-slot LFOs, a 19-model filter, a dedicated filter sequencer, reverb and master controls.
 
 Read the [complete user manual](USER-MANUAL.md) for installation in Cubase, every control, modulation, Morph, presets, offline registration and troubleshooting. A printable, offline HTML copy is included in the Windows installer.
 
 ## Current fixes
+
+- Output Quality offers Draft / Normal / High CPU budgets.
+- Sparse modulation routing and cached DSP work reduce processing cost; grain-overlap gain smoothing addresses a reproduced bass-click case.
+- Charcoal panels, orange controls and cyan readouts match the supplied reference across all three pages.
 
 - Windows graphics and text share one scale; host attachment and VST3 DPI changes update editor dimensions.
 - Full current Reslice sound/capture controls are available as LFO and Morph destinations.

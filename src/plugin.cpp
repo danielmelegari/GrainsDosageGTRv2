@@ -35,14 +35,14 @@ std::array<double,kCount> defaults(){return initialParameters();}
 static constexpr int kParamEnd = int(kUiFilterSeqStep) + 1;
 bool loadState(IBStream* stream, std::array<double,kCount>& p) {
   IBStreamer in(stream,kLittleEndian); int32 magic=0;
-  if(!in.readInt32(magic) || (magic!=0x51473130 && magic!=0x51473131 && magic!=0x51473132 && magic!=0x51473133 && magic!=0x51473134 && magic!=0x51473135 && magic!=0x51473136 && magic!=0x51473137 && magic!=0x51473138 && magic!=0x51473139 && magic!=0x5147313A && magic!=0x5147313B && magic!=0x5147313C && magic!=0x5147313D && magic!=0x5147313E && magic!=0x5147313F && magic!=0x51473140 && magic!=0x51473141 && magic!=0x51473142 && magic!=0x51473143 && magic!=0x51473144 && magic!=0x51473145 && magic!=0x51473146 && magic!=0x51473147 && magic!=0x51473148 && magic!=0x51473149 && magic!=0x5147314A && magic!=0x5147314B && magic!=0x5147314C && magic!=0x5147314D)) return false;
+  if(!in.readInt32(magic) || (magic!=0x51473130 && magic!=0x51473131 && magic!=0x51473132 && magic!=0x51473133 && magic!=0x51473134 && magic!=0x51473135 && magic!=0x51473136 && magic!=0x51473137 && magic!=0x51473138 && magic!=0x51473139 && magic!=0x5147313A && magic!=0x5147313B && magic!=0x5147313C && magic!=0x5147313D && magic!=0x5147313E && magic!=0x5147313F && magic!=0x51473140 && magic!=0x51473141 && magic!=0x51473142 && magic!=0x51473143 && magic!=0x51473144 && magic!=0x51473145 && magic!=0x51473146 && magic!=0x51473147 && magic!=0x51473148 && magic!=0x51473149 && magic!=0x5147314A && magic!=0x5147314B && magic!=0x5147314C && magic!=0x5147314D && magic!=0x5147314E)) return false;
   auto result=defaults();
   // Layouts: legacy versions store `count` plain doubles. Current saves
   // (0x51473145, written by getState) use the same prefix plus three extra
   // fields injected after kParamEnd: buffer size, freeze flag, then the array
   // continues at kGrainBuffer+2 through kCount-1.
   const bool current=magic>=0x51473145;
-  const int storedEnd=magic>=0x5147314C?int(kCount):magic==0x5147314B?int(kModuleLoopOn0):magic==0x5147314A?int(kResliceSubdivision):magic==0x51473149?int(kResliceAlgorithm):magic==0x51473148?int(kModWaveRate0):magic==0x51473147?int(kMixLock0):magic==0x51473146?int(kReverbRateV2):kLegacySkinCount;
+  const int storedEnd=magic>=0x5147314E?int(kCount):magic>=0x5147314C?int(kAudioQuality):magic==0x5147314B?int(kModuleLoopOn0):magic==0x5147314A?int(kResliceSubdivision):magic==0x51473149?int(kResliceAlgorithm):magic==0x51473148?int(kModWaveRate0):magic==0x51473147?int(kMixLock0):magic==0x51473146?int(kReverbRateV2):kLegacySkinCount;
   const int count = current ? int(kParamEnd) : magic==0x51473144 ? kLegacySkinCount : magic==0x51473143 ? int(kResliceRndOn) : magic==0x51473130 ? int(kGrainMix) : (magic==0x51473131 ? int(kLfo0) : (magic==0x51473132 ? int(kLegacyCount) : (magic==0x51473133 ? int(kModuleOrder) : (magic==0x51473134 ? int(kExtraRoutes0) : (magic==0x51473135 ? int(kGlitchMove) : (magic==0x51473136 ? int(kMasterFilter) : (magic==0x51473137 ? int(kNormalize) : (magic==0x51473138 ? int(kReverbLength) : (magic==0x51473139 ? int(kUiWave0) : (magic==0x5147313A ? int(kLfoSlots0) : (magic==0x5147313B ? int(kModWaveRnd0) : (magic==0x5147313C ? int(kReverbSource) : (magic==0x5147313D ? int(kLimiterCeiling) : (magic==0x5147313E ? int(kGaterEnabled) : (magic==0x5147313F ? int(kInputDeclick) : (magic==0x51473140 ? int(kFilterModel) : (magic==0x51473141 ? int(kGaterMinLength) : int(kGlitchTriggerRate))))))))))))))))));
   for(int i=0;i<count;++i) {
     double v=0.; if(!in.readDouble(v) || !std::isfinite(v)) return false;
@@ -161,7 +161,7 @@ public:
   }
   tresult PLUGIN_API getState(IBStream* stream) override {
     IBStreamer out(stream,kLittleEndian);
-    if(!out.writeInt32(0x5147314D)) return kResultFalse;
+    if(!out.writeInt32(0x5147314E)) return kResultFalse;
     for(int i=0;i<kParamEnd;++i) if(!out.writeDouble(p_[i])) return kResultFalse;
     // v0.14 additions: buffer size, freeze state, then the remaining tail ids
     // (RANDOM/PRESET slots) written like any other array entry.
@@ -250,7 +250,6 @@ public:
       if(data.symbolicSampleSize == kSample32) {
         auto& in = data.inputs[0]; auto& out = data.outputs[0];
         float l = (in.silenceFlags & 1) ? 0.f : in.channelBuffers32[0][n], r = in.numChannels > 1 ? ((in.silenceFlags & 2) ? 0.f : in.channelBuffers32[1][n]) : l;
-        aztec::modCell().packed.store(engine_.lastModPacked_.load(std::memory_order_relaxed),std::memory_order_relaxed);
         double dl=l,dr=r;declick_.process(dl,dr,value(p_,kInputDeclick)>=.5,value(p_,kDeclickSensitivity),s.bypass||licenseGain_<=0.);l=float(dl);r=float(dr);
         const float rawL=float(declick_.dry(0)),rawR=float(declick_.dry(1));
         float a=l,b=r;if(licenseGain_>0.)engine_.process(l,r,beat,a,b);
@@ -281,6 +280,7 @@ public:
         if(out.numChannels>1&&finalR!=0.)out.silenceFlags&=~uint64(2);
       }
     }
+    aztec::modCell().packed.store(engine_.lastModPacked_.load(std::memory_order_relaxed),std::memory_order_relaxed);
     if(data.outputParameterChanges&&data.numSamples>0){
       for(int ch=0;ch<2;++ch){int32 index=0;auto* q=data.outputParameterChanges->addParameterData(ParamID(kUiOutputL+ch),index);if(q)q->addPoint(data.numSamples-1,std::clamp(std::sqrt((ch?squareR:squareL)/data.numSamples),0.,1.),index);}
       const double beat=fallbackBeat_+(data.numSamples-1)*beatIncrement;
@@ -522,6 +522,7 @@ public:
     auto* rndRate=new StringListParameter(STR16("Reslice Random Rate"),kResliceRndRate);for(auto label:{STR16("1/2"),STR16("1/1"),STR16("2/1")})rndRate->appendString(label);parameters.addParameter(rndRate);
     toggle(STR16("Filter Sequencer"),kFilterSeqOn,0.);
     auto list=[&](const TChar* name,ParamID id,std::initializer_list<const TChar*> labels,double def=0.){auto* param=new StringListParameter(name,id);for(auto title:labels)param->appendString(title);param->getInfo().defaultNormalizedValue=def;param->setNormalized(def);parameters.addParameter(param);};
+    list(STR16("Audio Quality"),kAudioQuality,{STR16("Draft"),STR16("Normal"),STR16("High")},.5);
     list(STR16("Filter Sequencer Mode"),kFilterSeqMode,{STR16("Arp - Original"),STR16("Sample & Glide")});
     auto* arp=new StringListParameter(STR16("Filter Pattern"),kFilterSeqPattern);const char* families[]={"Rise","Fall","Triangle","Bounce","Stairs","Sine","Scatter","Pulse"};
     for(int i=0;i<64;++i){char label[64];String128 title{};std::snprintf(label,sizeof(label),"%02d %s %d",i+1,families[i/8],i%8+1);UString(title,128).fromAscii(label);arp->appendString(title);}parameters.addParameter(arp);
@@ -605,8 +606,8 @@ public:
 
 BEGIN_FACTORY_DEF("Daniel Melegari", "", "")
 DEF_CLASS2(INLINE_UID_FROM_FUID(processorID), PClassInfo::kManyInstances, kVstAudioEffectClass,
-           "GrainsDosage", Vst::kDistributable, "Fx|Granular", "0.13.2", kVstVersionString, Processor::create)
+           "GrainsDosage", Vst::kDistributable, "Fx|Granular", GRAINS_PLUGIN_VERSION, kVstVersionString, Processor::create)
 DEF_CLASS2(INLINE_UID_FROM_FUID(controllerID), PClassInfo::kManyInstances, kVstComponentControllerClass,
-           "GrainsDosage Controller", 0, "", "0.13.2", kVstVersionString, Controller::create)
+           "GrainsDosage Controller", 0, "", GRAINS_PLUGIN_VERSION, kVstVersionString, Controller::create)
 END_FACTORY
 

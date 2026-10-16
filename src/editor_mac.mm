@@ -91,7 +91,7 @@ static void box(NSRect r,NSColor* fill,NSColor* stroke,double radius=8.) {
   NSBezierPath* p=[NSBezierPath bezierPathWithRoundedRect:r xRadius:radius yRadius:radius];
   [fill setFill];[p fill];
   if(radius>=5. && r.size.height>=20. && fill.alphaComponent>.9){
-    NSColor* top=[fill blendedColorWithFraction:.12 ofColor:AZSKIN(kFiligree)];
+    NSColor* top=[fill blendedColorWithFraction:.08 ofColor:C(aztec::skin::Rgb{95,102,114})];
     NSGradient* sheen=[[NSGradient alloc] initWithStartingColor:top endingColor:fill];
     [sheen drawInBezierPath:p angle:90.];
   }
@@ -464,7 +464,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
     [cachedText drawInRect:NSMakeRect(r.x,r.y+(r.h-size*1.2)/2,r.w,size*1.4)];
   };
   painter.line=[](double x,double y,double xx,double yy,skin::Rgb col,double width){NSBezierPath* path=[NSBezierPath bezierPath];[path moveToPoint:NSMakePoint(x,y)];[path lineToPoint:NSMakePoint(xx,yy)];[C(col) setStroke];path.lineWidth=width;[path stroke];};
-  painter.polyline=[](const std::vector<std::pair<double,double>>& pts,skin::Rgb col,double width){if(pts.empty())return;NSBezierPath* path=[NSBezierPath bezierPath];[path moveToPoint:NSMakePoint(pts[0].first,pts[0].second)];for(size_t i=1;i<pts.size();++i)[path lineToPoint:NSMakePoint(pts[i].first,pts[i].second)];[C(col) setStroke];path.lineWidth=width;[path stroke];};
+  painter.polyline=[](const std::vector<std::pair<double,double>>& pts,skin::Rgb col,double width){if(pts.empty())return;NSBezierPath* path=[NSBezierPath bezierPath];[path moveToPoint:NSMakePoint(pts[0].first,pts[0].second)];for(size_t i=1;i<pts.size();++i)[path lineToPoint:NSMakePoint(pts[i].first,pts[i].second)];[C(col) setStroke];path.lineWidth=width;path.lineCapStyle=NSLineCapStyleRound;path.lineJoinStyle=NSLineJoinStyleRound;[path stroke];};
   painter.polygon=[](const std::vector<std::pair<double,double>>& pts,skin::Rgb col){if(pts.empty())return;NSBezierPath* path=[NSBezierPath bezierPath];[path moveToPoint:NSMakePoint(pts[0].first,pts[0].second)];for(size_t i=1;i<pts.size();++i)[path lineToPoint:NSMakePoint(pts[i].first,pts[i].second)];[path closePath];[C(col) setFill];[path fill];};
   painter.knob=[&](mockup::Rect r,double value){
     if(!knobFace){box(NSMakeRect(r.x,r.y,r.w,r.h),rgb(.7,.7,.7),cream(),r.w/2);return;}

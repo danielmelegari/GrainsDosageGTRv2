@@ -23,12 +23,14 @@ public:
     targetK_=1./(.5+11.5*std::clamp(resonance,0.,1.));
   }
   void process(float& left,float& right){
-    g_=targetG_+smooth_*(g_-targetG_);k_=targetK_+smooth_*(k_-targetK_);
+    double samples[2]={left,right};
     blend_=(enabled_?1.:0.)+smooth_*(blend_-(enabled_?1.:0.));
+    // After bypass fades out, the inaudible filter need not run behind the limiter.
+    if(enabled_||blend_>1e-8){
+    g_=targetG_+smooth_*(g_-targetG_);k_=targetK_+smooth_*(k_-targetK_);
     for(int i=0;i<3;++i)mode_[i]=(i==type_?1.:0.)+smooth_*(mode_[i]-(i==type_?1.:0.));
     drive_=driveTarget_+smooth_*(drive_-driveTarget_);slope_=slopeTarget_+smooth_*(slope_-slopeTarget_);
     double a1=1./(1.+g_*(g_+k_)),a2=g_*a1,a3=g_*a2;
-    double samples[2]={left,right};
     for(int ch=0;ch<2;++ch){
       double input=samples[ch];
       if(drive_>1e-6){double d=std::pow(10.,drive_/20.);input=std::tanh(input*d)/std::tanh(d);}
@@ -42,6 +44,7 @@ public:
       }
       filtered=first+slope_*(filtered-first);
       if(blend_>1e-8)samples[ch]+=blend_*(filtered-samples[ch]);
+    }
     }
     if(limiter_)for(auto& sample:samples)if(!std::isfinite(sample))sample=0.;
     double peak=std::max(std::abs(samples[0]),std::abs(samples[1]));

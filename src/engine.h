@@ -1,5 +1,6 @@
 #pragma once
 #include "parameters.h"
+#include "audio_quality.h"
 #include "modulation.h"
 #include "stretch.h"
 #include "transpose.h"
@@ -28,6 +29,7 @@ constexpr int maxVoices = 128;
 constexpr double pi = 3.14159265358979323846;
 
 struct Settings {
+  AudioQuality quality=AudioQuality::Normal;
   std::array<bool,4> loopOn{};std::array<double,4> loopBeats{{8,8,8,8}};
   std::array<double,aztec::extendedResliceCount> resliceModBase{};
   FilterSequenceSettings filterSequence;
@@ -72,6 +74,7 @@ class Engine {
   double repeatUntil_=-1e30;int64_t repeatCycle_=INT64_MIN;
   bool previousHold_=false;
   Settings settings_{},baseSettings_{};
+  std::array<int,5> chain_{{0,1,2,-1,-1}};
   std::array<bool,modTargetCount> modRouted_{};bool extendedMod_=false;
   Modulation modulation_;
   FilterSequencer filterSequencer_;
@@ -85,7 +88,23 @@ class Engine {
   ModValues modBase_{};
   double grainSize_=.075, grainDensity_=1., grainPitch_=0., grainPosition_=.1, grainChaos_=0., grainLevel_=1.;
   double bufferSeconds_=16.; // last applied selectable buffer size (see setBufferSeconds)
-  double levelSmoothing_=0.;
+  int meterTick_=0;
+  void publishModulation(const ModValues& values){
+    if(meterTick_==0)lastModPacked_.store(aztec::packModMagnitudes(values),std::memory_order_relaxed);
+    meterTick_=(meterTick_+1)&63;
+  }
+  double levelSmoothing_=0.,voiceScale_=1.;
+  std::array<double,2049> grainWindows_{};
+  double grainWindow(double phase)const{
+    if(settings_.quality==AudioQuality::High)return .5-.5*std::cos(2.*pi*phase);
+    const int stride=settings_.quality==AudioQuality::Draft?8:1;
+    const double at=std::clamp(phase,0.,1.)*(2048/stride);const int i=std::min(int(at),2048/stride-1);
+    return grainWindows_[i*stride]+(grainWindows_[(i+1)*stride]-grainWindows_[i*stride])*(at-i);
+  }
+  double voiceScale(int playing){
+    const double target=1./std::sqrt(double(std::max(1,playing)));
+    voiceScale_=target+levelSmoothing_*(voiceScale_-target);return voiceScale_;
+  }
   bool mixModulated_=false;
   uint32_t rng_ = 0x1234ABCD;
   int64_t write_ = 0, lastStep_ = INT64_MIN;
@@ -178,8 +197,9 @@ class Engine {
   }
   void trigger() {
     Voice* v = nullptr;
-    for(auto& candidate : voices_) if(!candidate.active) { v = &candidate; break; }
-    if(!v) v = &*std::max_element(voices_.begin(),voices_.end(),[](const Voice& a,const Voice& b) { return double(a.age)/a.length < double(b.age)/b.length; });
+    for(int i=0;i<qualityVoices(settings_.quality);++i)if(!voices_[i].active){v=&voices_[i];break;}
+    // Never truncate a sounding grain: voice stealing can click on bass notes.
+    if(!v)return;
     const double c = grainChaos_;
     const double length = grainSize_ * settings_.sampleRate * (1. + c * (random() - .5));
     v->length = std::max(16, int(length)); v->age = 0;
@@ -431,7 +451,8 @@ public:
     freezeStart_=0.; freezeLength_=0.; freezeRamp_=0; freezeBlend_=0.;
     settings_.freezeBucket = baseSettings_.freezeBucket = settings_.freeze ? bucketForSeconds(bufferSeconds_) : -1;
     if(settings_.freeze) { const int64_t keep=std::min<int64_t>(int64_t(capacity),std::max(int64_t(1),int64_t(std::llround(std::clamp(bufferSeconds_,1.,64.)*settings_.sampleRate)))); freezeStart_=0.; freezeLength_=double(keep); freezeBlend_=1.; }
-    levelSmoothing_=std::exp(-1./(.003*settings_.sampleRate));
+    levelSmoothing_=std::exp(-1./(.003*settings_.sampleRate));voiceScale_=1.;meterTick_=0;
+    for(int i=0;i<=2048;++i)grainWindows_[i]=.5-.5*std::cos(2.*pi*i/2048.);
   }
   void set(Settings s) {
     s.moduleOn[1]=false;s.glitchMix=0.; // Retired Preslicer is inert even in legacy sessions.
@@ -440,17 +461,20 @@ public:
     if(wasParallel!=isParallel){repeatWrite_=0;repeating_=false;repeatGate_=0.;repeatPhase_=0.;}
     if(s.order!=settings_.order||s.routing!=settings_.routing) { orderFade_=128; lastOrder_=settings_.order; }
     if(s.order!=settings_.order||s.routing!=settings_.routing){serialRepeat_.reset();serialGlitch_.reset();glitchBlock_=false;glitchClock_.reset();glitchUntil_=-1e30;}
+    auto legacy=aztecOrder(std::clamp(s.order,0,5));
+    chain_=s.routing>=0?aztec::fiveModuleOrder(s.routing):std::array<int,5>{{legacy[0],legacy[1],legacy[2],-1,-1}};
     setBufferSeconds(s.bufferSeconds);
     // FREEZE is engine-owned sustained state: settings() always carries
     // freeze=false (toggled directly on the engine), so preserve it across the
     // per-block copy instead of silently unfreezing mid-hold. (set() takes the
     // Settings by value precisely so these two lines stay local to this frame.)
     s.freeze=settings_.freeze; s.freezeBucket=settings_.freezeBucket;
-    settings_ = baseSettings_ = s;modRouted_.fill(false);extendedMod_=false;
+    settings_ = baseSettings_ = s;modulation_.configure(s.lfos);modRouted_.fill(false);extendedMod_=false;
     // BUFFER SELECTION drives FREEZE: switching buckets while frozen re-freezes
     // around the newly selected span (50 ms fade-in).
     applyFreezeSelection(bucketForSeconds(std::clamp(s.bufferSeconds,1.,64.)));
     for(const auto& mod:s.lfos)if(mod.enabled&&mod.depth>0.)for(int t=0;t<modTargetCount;++t)if(mod.amount[t]!=0.||mod.positive[t]!=0.||mod.negative[t]!=0.){modRouted_[t]=true;if(t>=11)extendedMod_=true;}
+    filter_.setQuality(s.quality);
     gater_.set(s.gater);reslice_.set(s.reslice);
     reverb_.set(s.reverbOn,s.reverbType,s.reverbGrid,s.reverbPattern,s.reverbMix,s.reverbLength,s.reverbKill,s.reverbRandom,s.reverbRandomGrid,s.reverbModel);
     modBase_ = {(s.size-.015)/.235,(s.density-1.)/31.,(s.pitch+48.)/96.,(s.position-.015)/1.985,s.chaos,s.grainMix,(s.stretchSpeed-.25)/3.75,(s.transpose+48.)/96.,s.filterCutoff,s.filterResonance,s.filterDrive};
@@ -556,7 +580,7 @@ public:
     filterSequencer_.reset();reslice_.reset();gater_.resetLatch();
     serialRepeat_.reset();serialGlitch_.reset();glitchBlock_=false;glitchClock_.reset();glitchUntil_=-1e30;randomGlitchOpen_=false;nextGlitch_=-1e30;repeatCycle_=INT64_MIN;repeatUntil_=-1e30;previousHold_=false;
     lastStep_ = INT64_MIN; glitchActive_ = repeating_ = false;
-    modulation_.reset(); stretch_.reset(); transpose_.reset(); grainClock_=0.; lastRhythm_=INT64_MIN; repeatGate_=glitchGate_=0.; transition_=orderFade_=0;lastOutput_[0]=lastOutput_[1]=0.;
+    voiceScale_=1.;modulation_.reset(); stretch_.reset(); transpose_.reset(); grainClock_=0.; lastRhythm_=INT64_MIN; repeatGate_=glitchGate_=0.; transition_=orderFade_=0;lastOutput_[0]=lastOutput_[1]=0.;
     for(auto& v : voices_) v.active = false;
   }
   int filterSequenceStep()const{return filterSequencer_.step();}
@@ -580,8 +604,8 @@ public:
     const int64_t step = int64_t(std::floor(beat / std::max(.015625, settings_.division) + 1e-8));
     const bool activeStep = (settings_.pattern & (1u << ((step % steps + steps) % steps))) != 0;
     ModValues values;values=modulation_.process(settings_.lfos,modBase_,beat,settings_.sampleRate,
-                                          step!=lastStep_ && activeStep,step);
-    lastModPacked_.store(aztec::packModMagnitudes(values),std::memory_order_relaxed);
+                                          step!=lastStep_ && activeStep,step,true);
+    publishModulation(values);
     applyExtended(values);
     // Input Options feed every downstream capture and processor.
     stretch_.process(inL,inR,settings_.stretchOn,.25+values[6]*3.75);
@@ -663,7 +687,7 @@ public:
     for(auto& v : voices_) {
       if(!v.active) continue;
       const double phase = double(v.age) / v.length;
-      const double window = .5 - .5 * std::cos(2. * pi * phase);
+      const double window = grainWindow(phase);
       // FREEZE crossfade: blend the live ring read with the frozen-snapshot
       // read (50 ms fade-in on freeze, 100 ms fade-out on unfreeze).
       const auto stereo=readStereo(v.read);double vl=stereo.l,vr=stereo.r;
@@ -673,7 +697,7 @@ public:
       weight+=window*window; ++playing; v.read += v.increment;
       if(++v.age >= v.length) v.active = false;
     }
-    const double scale = settings_.densityFlow ? 1./std::max({1.,std::sqrt(weight),std::abs(wetL),std::abs(wetR)}) : (playing ? 1. / std::sqrt(double(playing)) : 0.);
+    const double scale = settings_.densityFlow ? 1./std::max({1.,std::sqrt(weight),std::abs(wetL),std::abs(wetR)}) : voiceScale(playing);
     double sumL = settings_.moduleOn[0]?wetL*scale*grainLevel_*gate_:0., sumR=settings_.moduleOn[0]?wetR*scale*grainLevel_*gate_:0.;
     loop(0,sumL,sumR,settings_.moduleOn[0],beat);
     double repeatL=0,repeatR=0;
@@ -745,8 +769,8 @@ public:
     const bool gateTrigger=step!=lastStep_,rhythmTrigger=rhythm!=lastRhythm_;
     bool glitchOpen=settings_.glitchSequence ? (settings_.glitchPattern&(1u<<slot))!=0 : activeStep;
     const bool repeatOpen=settings_.repeatSequence ? (settings_.repeatPattern&(1u<<slot))!=0 : activeStep;
-    ModValues values;values=modulation_.process(settings_.lfos,modBase_,beat,settings_.sampleRate,gateTrigger&&activeStep,step);
-    lastModPacked_.store(aztec::packModMagnitudes(values),std::memory_order_relaxed);
+    ModValues values;values=modulation_.process(settings_.lfos,modBase_,beat,settings_.sampleRate,gateTrigger&&activeStep,step,true);
+    publishModulation(values);
     applyExtended(values);
     // Input Options feed every downstream capture and processor.
     stretch_.process(inL,inR,settings_.stretchOn,.25+values[6]*3.75);
@@ -792,10 +816,7 @@ public:
     };
     smoothGate(gate_,activeStep);smoothGate(glitchGate_,glitchOpen);smoothGate(repeatGate_,repeatOpen);
     double signal[2]={inL,inR};
-    const int order=std::clamp(settings_.order,0,5);
-    auto legacy=aztecOrder(order);
-    std::array<int,5> chain=settings_.routing>=0?aztec::fiveModuleOrder(settings_.routing):std::array<int,5>{{legacy[0],legacy[1],legacy[2],-1,-1}};
-    for(int stage:chain) {
+    for(int stage:chain_) {
       if(stage<0||stage==1)continue; // Preslicer retired; old routing IDs remain readable.
       if(stage>=3){float l=float(signal[0]),r=float(signal[1]);if(stage==3){reslice_.process(l,r,beat,settings_.tempo,settings_.playing);loop(2,l,r,settings_.reslice.enabled,beat);}else{gater_.process(l,r,beat,settings_.tempo,settings_.playing);loop(3,l,r,settings_.gater.enabled,beat);}signal[0]=l;signal[1]=r;continue;}
       double before[2]={signal[0],signal[1]};
@@ -808,7 +829,7 @@ public:
         double wet[2]={};int playing=0;double weight=0.;
         for(auto& v:voices_) if(v.active) {
           double phase=double(v.age)/v.length;
-          double window=.5-.5*std::cos(2.*pi*phase);
+          double window=grainWindow(phase);
           // FREEZE crossfade (parallel path): blend live ring with frozen snapshot.
           const auto stereo=readStereo(v.read);double vl=stereo.l,vr=stereo.r;
           if(freezeBlend_>0.) {const auto frozen=freezeReadStereo(v.read);vl+=(frozen.l-vl)*freezeBlend_;vr+=(frozen.r-vr)*freezeBlend_;}
@@ -817,7 +838,7 @@ public:
           weight+=window;++playing;v.read+=v.increment;
           if(++v.age>=v.length) v.active=false;
         }
-        double scale=settings_.densityFlow ? 1./std::max(.25,weight) : (playing ? 1./std::sqrt(double(playing)) : 0.);
+        double scale=settings_.densityFlow ? 1./std::max(.25,weight) : voiceScale(playing);
         for(int ch=0;ch<2;++ch) signal[ch]=signal[ch]*(1.-grainLevel_)+wet[ch]*scale*grainLevel_*gate_;
       } else if(stage==1) {
         float l=float(signal[0]),r=float(signal[1]);

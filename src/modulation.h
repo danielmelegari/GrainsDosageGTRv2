@@ -128,6 +128,8 @@ public:
 
 class Modulation {
   std::array<Lfo,lfoCount> lfos_{};
+  std::array<std::array<int,modTargetCount>,lfoCount> routes_{};
+  std::array<int,lfoCount> routeCounts_{};
 public:
   void prepare() { for(int i=0;i<lfoCount;++i) lfos_[i].prepare(0x13579BDFULL+uint64_t(i)*104729); }
   void reset() { for(auto& lfo:lfos_) lfo.reset(); }
@@ -135,15 +137,22 @@ public:
   double phase(int i)const{return lfos_[i].phase();}
   int64_t cycle(int i)const{return lfos_[i].cycle();}
   int64_t epoch(int i)const{return lfos_[i].epoch();}
+  void configure(const std::array<LfoSettings,lfoCount>& settings){
+    routeCounts_.fill(0);
+    for(int i=0;i<lfoCount;++i)for(int t=0;t<modTargetCount;++t)
+      if(settings[i].amount[t]!=0.||settings[i].positive[t]!=0.||settings[i].negative[t]!=0.)routes_[i][routeCounts_[i]++]=t;
+  }
   ModValues process(const std::array<LfoSettings,lfoCount>& settings,const ModValues& base,
-                    double beat,double sampleRate,bool gateTrigger,int64_t gateStep) {
+                    double beat,double sampleRate,bool gateTrigger,int64_t gateStep,bool configured=false) {
+    if(!configured)configure(settings);
     ModValues result=base;
     for(int i=0;i<lfoCount;++i) {
       const double value=lfos_[i].process(settings[i],beat,sampleRate,gateTrigger,gateStep);
       if(!settings[i].enabled)continue;
       const double unipolar=(value+std::clamp(settings[i].depth,0.,1.))*.5;
-      for(int target=0;target<modTargetCount;++target)
+      for(int n=0;n<routeCounts_[i];++n){const int target=routes_[i][n];
         result[target]+=value*settings[i].amount[target]+unipolar*(settings[i].positive[target]-settings[i].negative[target]);
+      }
     }
     for(auto& value:result) value=std::clamp(value,0.,1.);
     return result;

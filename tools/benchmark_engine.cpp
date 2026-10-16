@@ -9,6 +9,7 @@
 #include "parameter_settings.h"
 #include "factory_presets.h"
 #include <ctime>
+#include <cstdlib>
 #include <cstring>
 #include <iomanip>
 #include <iostream>
@@ -25,10 +26,13 @@ static double cpuSeconds(){
  return double(std::clock())/CLOCKS_PER_SEC;
 #endif
 }
-int main(){
+int main(int argc,char** argv){
  for(int preset: {-1,0,1,8,24,25,29,100}) {
   auto p=preset<0?aztec::initialParameters():aztec::legacyFactoryPreset(preset==100?29:preset);
   if(preset==100)p[aztec::slotTarget(0,0)]=22./qg::modTargetCount; // Extended Reslice Mix route.
+#ifndef GRAINS_BENCHMARK_OLD_ENGINE
+  if(argc>1)p[aztec::kAudioQuality]=std::clamp(std::atoi(argv[1]),0,2)*.5;
+#endif
   qg::Engine e;e.prepare(48000);uint64_t hash=14695981039346656037ULL;
   const double start=cpuSeconds();
   for(int n=0;n<480000;++n){

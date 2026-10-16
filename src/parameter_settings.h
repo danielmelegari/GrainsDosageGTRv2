@@ -12,6 +12,7 @@ inline qg::Settings settings(const std::array<double, kCount>& saved, double tem
     }
   }
   qg::Settings s;const double loopWindows[]={8.,4.,2.,1.};for(int i=0;i<4;++i){s.loopOn[i]=value(p,moduleLoopOn(i))>=.5;s.loopBeats[i]=loopWindows[int(std::round(value(p,moduleLoopWindow(i))*3.))];}
+  s.quality=qg::audioQuality(int(std::round(value(p,kAudioQuality)*2.)));
   s.tempo = tempo; s.sampleRate = rate;
   s.division = .25; // Fixed sixteenth-note density clock; no grain gate.
   s.size = .015 + value(p, kSize) * .235;
