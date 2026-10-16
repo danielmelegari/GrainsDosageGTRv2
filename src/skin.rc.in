@@ -19,3 +19,5 @@
 215 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/assets/module-skins/input-options.png"
 
 216 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/assets/approved-rack/logo.png"
+
+217 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/assets/approved-rack/cables.png"

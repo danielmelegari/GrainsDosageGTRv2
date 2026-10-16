@@ -15,3 +15,8 @@ The header uses `logo.png`, the original transparent 2172 × 724 PNG supplied
 by the user (Neon Droplet logo). The renderer selects its nontransparent bounds
 `0,142,2109,412` and scales proportionally; the source file is unchanged.
 Windows embeds it as resource 216; macOS bundles it as `approved-logo.png`.
+
+`cables.png` is the approved dark, heavily blurred multicolored studio-cable
+background. It is drawn beneath opaque panels on every page. Blur is baked
+into the PNG: no runtime filters or audio-thread work. Cocoa includes it in
+the static scene cache. Windows resource 217; macOS `approved-cables.png`.

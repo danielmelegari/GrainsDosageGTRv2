@@ -55,7 +55,7 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
   std::array<int,4> routingAtDrag;
   double originX=0,originY=0,dragValue=0,dragWidth=1,dragHeight=180;Kind dragKind=Knob;bool dragXY=false,routeMoved=false;
   uint32_t seed=0;HDC dc=nullptr;
-  std::unique_ptr<Gdiplus::Bitmap> mockupKnob, rackBackplate, rackAtlas, rackLogo;
+  std::unique_ptr<Gdiplus::Bitmap> mockupKnob, rackBackplate, rackAtlas, rackLogo, rackCables;
   std::array<std::unique_ptr<Gdiplus::Bitmap>,6> moduleImages;
   ULONG_PTR imaging=0;HBITMAP skin=nullptr;HDC skinDC=nullptr;HGDIOBJ oldSkin=nullptr;std::array<HBITMAP,6> sprites{};std::array<HDC,6> spriteDC{};std::array<HGDIOBJ,6> oldSprite{};
   void loadSprite(int id,int index){
@@ -132,6 +132,7 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
         }else GlobalFree(mem);}}
       if(!target)target.reset(Gdiplus::Bitmap::FromFile(fallback));
     };
+    loadRack(217,L"assets/approved-rack/cables.png",rackCables);
     loadRack(209,L"assets/approved-rack/backplate.png",rackBackplate);
     loadRack(210,L"assets/approved-rack/controls.png",rackAtlas);
     loadRack(216,L"assets/approved-rack/logo.png",rackLogo);
@@ -376,8 +377,9 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
       Gdiplus::SolidBrush shade(Gdiplus::Color(stage==mockup::inputOptionsBackground?0:stage==3?115:77,0,0,0));g.FillRectangle(&shade,Gdiplus::RectF(float(r.x),float(r.y),float(r.w),float(r.h)));
     };
     painter.image=[&](int asset,mockup::Rect r,mockup::Rect source){
-      auto* image=asset==mockup::Logo?rackLogo.get():asset==mockup::Atlas?rackAtlas.get():rackBackplate.get();if(!image||image->GetLastStatus()!=Gdiplus::Ok)return;
+      auto* image=asset==mockup::Cables?rackCables.get():asset==mockup::Logo?rackLogo.get():asset==mockup::Atlas?rackAtlas.get():rackBackplate.get();if(!image||image->GetLastStatus()!=Gdiplus::Ok)return;
       PixelSpace pixels(dc);Gdiplus::Graphics g(dc);g.SetTransform(&pixels.transform);g.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
+      if(asset==mockup::Cables)source={0,0,double(image->GetWidth()),double(image->GetHeight())};
       if(asset==mockup::RoundScrew){Gdiplus::GraphicsPath circle;circle.AddEllipse(float(r.x),float(r.y),float(r.w),float(r.h));g.SetClip(&circle,Gdiplus::CombineModeIntersect);}
       g.DrawImage(image,Gdiplus::RectF(float(r.x),float(r.y),float(r.w),float(r.h)),float(source.x),float(source.y),float(source.w),float(source.h),Gdiplus::UnitPixel);
     };
@@ -446,7 +448,7 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
       case WM_SIZE:InvalidateRect(hwnd,nullptr,FALSE);return 0;
       case WM_APP+72:return e->rackState.page;
       case WM_APP+73:e->rackState.scroll[e->rackState.page]=std::clamp(double(lp),0.,mockup::maxScroll(e->rackState));InvalidateRect(hwnd,nullptr,FALSE);return 0;
-      case WM_APP+71:for(int stage:{0,2,3,4,mockup::inputOptionsBackground})if(!e->moduleImages[stage]||e->moduleImages[stage]->GetLastStatus()!=Gdiplus::Ok)return 0;return e->rackLogo&&e->rackLogo->GetLastStatus()==Gdiplus::Ok&&e->rackBackplate&&e->rackAtlas&&e->rackBackplate->GetLastStatus()==Gdiplus::Ok&&e->rackAtlas->GetLastStatus()==Gdiplus::Ok;
+      case WM_APP+71:for(int stage:{0,2,3,4,mockup::inputOptionsBackground})if(!e->moduleImages[stage]||e->moduleImages[stage]->GetLastStatus()!=Gdiplus::Ok)return 0;return e->rackCables&&e->rackCables->GetLastStatus()==Gdiplus::Ok&&e->rackLogo&&e->rackLogo->GetLastStatus()==Gdiplus::Ok&&e->rackBackplate&&e->rackAtlas&&e->rackBackplate->GetLastStatus()==Gdiplus::Ok&&e->rackAtlas->GetLastStatus()==Gdiplus::Ok;
       case WM_ERASEBKGND:return 1;
       case WM_TIMER:{
         if(!IsWindowVisible(hwnd)||IsIconic(GetAncestor(hwnd,GA_ROOT)))return 0;
@@ -477,7 +479,7 @@ public:
     return onSize(&wanted);
   }
   explicit WinEditor(EditController* c):controller(c){controller->addRef();rect=ViewRect(0,0,int(mockup::width*.90),int(mockup::height*.90));seed=uint32_t(GetTickCount64())^uint32_t(reinterpret_cast<uintptr_t>(this));seed|=1;loadSkin();}
-  ~WinEditor()override{removed();for(auto& image:moduleImages)image.reset();mockupKnob.reset();rackBackplate.reset();rackAtlas.reset();rackLogo.reset();if(skinDC){SelectObject(skinDC,oldSkin);DeleteDC(skinDC);}if(skin)DeleteObject(skin);for(size_t i=0;i<sprites.size();++i){if(spriteDC[i]){SelectObject(spriteDC[i],oldSprite[i]);DeleteDC(spriteDC[i]);}if(sprites[i])DeleteObject(sprites[i]);}if(imaging)Gdiplus::GdiplusShutdown(imaging);controller->release();}
+  ~WinEditor()override{removed();for(auto& image:moduleImages)image.reset();mockupKnob.reset();rackBackplate.reset();rackAtlas.reset();rackLogo.reset();rackCables.reset();if(skinDC){SelectObject(skinDC,oldSkin);DeleteDC(skinDC);}if(skin)DeleteObject(skin);for(size_t i=0;i<sprites.size();++i){if(spriteDC[i]){SelectObject(spriteDC[i],oldSprite[i]);DeleteDC(spriteDC[i]);}if(sprites[i])DeleteObject(sprites[i]);}if(imaging)Gdiplus::GdiplusShutdown(imaging);controller->release();}
   tresult PLUGIN_API isPlatformTypeSupported(FIDString type)override{return type&&std::strcmp(type,kPlatformTypeHWND)==0?kResultTrue:kResultFalse;}
   tresult PLUGIN_API attached(void* parent,FIDString type)override{if(!parent||window||isPlatformTypeSupported(type)!=kResultTrue)return kResultFalse;HINSTANCE instance=nullptr;GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,reinterpret_cast<LPCWSTR>(&proc),&instance);WNDCLASSW wc{};wc.style=CS_DBLCLKS;wc.lpfnWndProc=proc;wc.hInstance=instance;wc.hCursor=LoadCursor(nullptr,IDC_ARROW);wc.lpszClassName=L"GrainsDosage070";RegisterClassW(&wc);window=CreateWindowExW(0,wc.lpszClassName,L"GrainsDosage",WS_CHILD|WS_VISIBLE,0,0,rect.getWidth(),rect.getHeight(),static_cast<HWND>(parent),nullptr,instance,this);if(!window)return kResultFalse;license::firstOpen();SetTimer(window,1,33,nullptr);auto result=CPluginView::attached(parent,type);userZoom=.90;ViewRect opening(0,0,int(std::round(mockup::width*userZoom*contentScale)),int(std::round(mockup::height*userZoom*contentScale)));if(plugFrame)plugFrame->resizeView(this,&opening);alignToParent();PostMessageW(window,WM_APP+74,0,0);return result;}
   tresult PLUGIN_API removed()override{end();if(window){KillTimer(window,1);DestroyWindow(window);window=nullptr;}return CPluginView::removed();}

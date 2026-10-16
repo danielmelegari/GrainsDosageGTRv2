@@ -135,6 +135,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   // current vector-on-background rendering, pixel-for-pixel as before.
   NSMutableArray<NSImage*>* moduleLayers;
   NSImage* rackBackplate;
+  NSImage* rackCables;
   NSImage* rackAtlas;
   NSImage* rackLogo;
   NSString* licenseLabel;
@@ -299,6 +300,9 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
     NSString* face=[[NSBundle bundleForClass:[GrainsSurface class]] pathForResource:@"mockup-knob" ofType:@"png"];
     if(!exists(face))face=@"assets/mockup/knob.png";
     knobFace=[[NSImage alloc] initWithContentsOfFile:face];
+    NSString* cables=[[NSBundle bundleForClass:[GrainsSurface class]] pathForResource:@"approved-cables" ofType:@"png"];
+    if(!exists(cables))cables=@"assets/approved-rack/cables.png";
+    rackCables=[[NSImage alloc] initWithContentsOfFile:cables];
     NSString* back=[[NSBundle bundleForClass:[GrainsSurface class]] pathForResource:@"approved-backplate" ofType:@"png"];
     if(!exists(back))back=@"assets/approved-rack/backplate.png";
     rackBackplate=[[NSImage alloc] initWithContentsOfFile:back];
@@ -333,7 +337,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
 - (NSUInteger)staticBuilds{return staticBuilds;}
 - (NSUInteger)controlPatches{return controlPatches;}
 - (void)setFullRedrawForInspection:(BOOL)enabled{fullRedrawForInspection=enabled;if(!enabled)staticScene=nil;}
-- (BOOL)skinLoaded{return rackLogo!=nil&&rackBackplate!=nil&&rackAtlas!=nil&&editableModuleSkins.count==5;}
+- (BOOL)skinLoaded{return rackCables!=nil&&rackLogo!=nil&&rackBackplate!=nil&&rackAtlas!=nil&&editableModuleSkins.count==5;}
 - (void)stop {
   if(owner&&dragID>=0)owner->end(aztec::ParamID(dragID));
   if(owner&&dragXY){owner->end(aztec::kXYX);owner->end(aztec::kXYY);}
@@ -441,8 +445,10 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
     NSString* key=[NSString stringWithFormat:@"%d:%.3f,%.3f,%.3f,%.3f",asset,source.x,source.y,source.w,source.h];
     CGImageRef slice=(__bridge CGImageRef)rasterSlices[key];
     if(!slice){
-      NSImage* image=asset==mockup::Logo?rackLogo:asset==mockup::Atlas?rackAtlas:rackBackplate;if(!image)return;
+      NSImage* image=asset==mockup::Cables?rackCables:asset==mockup::Logo?rackLogo:asset==mockup::Atlas?rackAtlas:rackBackplate;if(!image)return;
       CGImageRef pixels=[image CGImageForProposedRect:nullptr context:nil hints:nil];
+      if(!pixels)return;
+      if(asset==mockup::Cables)source={0,0,double(CGImageGetWidth(pixels)),double(CGImageGetHeight(pixels))};
       CGImageRef cropped=CGImageCreateWithImageInRect(pixels,CGRectMake(source.x,source.y,source.w,source.h));if(!cropped)return;
       rasterSlices[key]=CFBridgingRelease(cropped);slice=(__bridge CGImageRef)rasterSlices[key];
     }

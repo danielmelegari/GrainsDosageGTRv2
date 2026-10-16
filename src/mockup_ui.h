@@ -81,7 +81,7 @@ struct Motion {
  void update(const Value& value,int drag,int insertion,const RackState& state=RackState{}){auto now=std::chrono::steady_clock::now();double dt=ready?std::clamp(std::chrono::duration<double>(now-last).count(),0.,.1):0.;last=now;auto chain=routeChain(value);if(drag>=0&&insertion>=0)chain=fourModuleOrder(int(std::round(moveRoute(chain,drag,insertion)*120))-1);double ease=1-std::exp(-dt/.065),top=430;routing=false;for(int stage:chain){y[stage]=ready?y[stage]+ease*(top-y[stage]):top;if(std::abs(top-y[stage])>.8)routing=true;top+=moduleHeight(stage,state.resliceAdvanced)+14;}int playing=int(std::round(value(kUiGaterStep)*15));for(int i=0;i<16;++i){double target=i==playing&&value(kGaterEnabled)>.5?std::min(value(kUiGaterPhase),value(kUiGaterLength0+i)):0.;gate[i]+=(1-std::exp(-dt/.025))*(target-gate[i]);}for(int ch=0;ch<2;++ch){double target=value(kUiOutputL+ch);meters[ch]+=(1-std::exp(-dt/(target>meters[ch]?.075:.3)))*(target-meters[ch]);}ready=true;}
 };
 struct WaveVisual {std::array<double,waveformBins> lo{},hi{};double active=0;void update(const Value& v){for(int i=0;i<waveformBins;++i){lo[i]+=.06*((v(kUiWaveLow0+i)*2-1)-lo[i]);hi[i]+=.06*((v(kUiWaveHigh0+i)*2-1)-hi[i]);}active+=.06*((v(kUiGrainActive)>.5?1.:0.)-active);}};
-enum Art {Backplate, Atlas, RoundScrew, Logo};
+enum Art {Backplate, Atlas, RoundScrew, Logo, Cables};
 enum Sprite {KnobFace, Pill, Tab, ActiveTab, Scope, XY, Meter, Track, Thumb, Led, Amber, Locked, Unlocked};
 inline Rect spriteRect(Sprite sprite){
  static constexpr Rect frames[]={
@@ -222,7 +222,7 @@ inline void render(Painter& p,const Value& value,const Display& display,const st
  const bool fixed=pass!=RenderPass::Dynamic,live=pass!=RenderPass::Static;const Rgb white{230,233,237},muted{170,173,184},ink{20,22,24},screen{10,22,28},accent{255,122,32};
  if(live&&motion)motion->update(value,drag,insertion,state);
  auto button=[&](Rect r,const std::string& s){pill(p,r);p.text(s,r,14,orange,true);};
- if(fixed){p.box({0,0,width,height},{13,16,20},{13,16,20},0);p.box({6,6,width-12,109},{29,32,38},edge,6);if(p.image)p.image(Logo,{42,22,355,355.*412./2109.},{0,142,2109,412});p.box({51,122,981,75},{24,27,33},{11,12,16},5);for(int i=0;i<3;++i)pageButton(p,i,i==state.page);button(preset,presetName);button(previous,"<");button(next,">");button(load,"LOAD");button(save,"SAVE");p.text("INPUT DE-CLICKER",{835,40,172,20},13,white,true);}
+ if(fixed){p.box({0,0,width,height},{13,16,20},{13,16,20},0);if(p.image)p.image(Cables,{0,0,width,height},{0,0,1,1});p.box({6,6,width-12,109},{29,32,38},edge,6);if(p.image)p.image(Logo,{42,22,355,355.*412./2109.},{0,142,2109,412});p.box({51,122,981,75},{24,27,33},{11,12,16},5);for(int i=0;i<3;++i)pageButton(p,i,i==state.page);button(preset,presetName);button(previous,"<");button(next,">");button(load,"LOAD");button(save,"SAVE");p.text("INPUT DE-CLICKER",{835,40,172,20},13,white,true);}
  if(fixed)p.text("v" GRAINS_PLUGIN_VERSION,{300,94,85,16},10,muted,true);
  if(p.clip)p.clip({51,bodyTop,982,height-bodyTop});
  auto pos=[&](Rect r){return state.position(r);};auto title=[&](Rect r,const std::string& s){if(fixed)p.text(s,{r.x+32,r.y+17,r.w-230,25},20,white,false);};
