@@ -168,11 +168,12 @@ namespace aztec {
 inline bool retiredPreslicerParam(int id){return id==kGlitchMix||id==kGlitchDivision||id==kGlitchChance||id==kGlitchReverse||id==kGlitchSeq||(id>=kGlitchStep0&&id<kRepeatStep0)||id==kGlitchEnabled||id==kGlitchMove||id==kGlitchVariation||id==kGlitchRefresh||id==kGlitchTriggerRate;}
 inline bool availableMenuOption(ParamID id,int option){
  if(id==kXTarget||id==kYTarget)return xyDestinationId(option-1)!=kBypassReserved&&!retiredPreslicerParam(xyDestinationId(option-1));
- // Hide unused Beat Repeater/Gater choices without renumbering persisted routes.
+ // Restore Gater faders while keeping Beat Repeater and Gater rate hidden.
+ // Preserve destination IDs so saved routes remain compatible.
  for(int l=0;l<4;++l)for(int s=0;s<6;++s)if(id==slotTarget(l,s)){
   int t=option-1;
-  const bool repeatOrGater=(t>=16&&t<=18)||(t>=22&&t<=23)||t==28||t==30||t==33||(t>=37&&t<=84);
-  return !repeatOrGater&&!((t>=12&&t<=15)||t==27||t==29||t==35||(t>=85&&t<101));
+  const bool hiddenChoice=(t>=16&&t<=18)||t==28||t==30||t==33||(t>=37&&t<=52);
+  return !hiddenChoice&&!((t>=12&&t<=15)||t==27||t==29||t==35||(t>=85&&t<101));
  }
  return true;
 }
