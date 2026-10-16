@@ -135,6 +135,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   NSMutableArray<NSImage*>* moduleLayers;
   NSImage* rackBackplate;
   NSImage* rackAtlas;
+  NSImage* rackLogo;
   NSString* licenseLabel;
   NSMutableDictionary<NSNumber*,NSImage*>* editableModuleSkins;
   NSImage* staticScene;
@@ -303,6 +304,9 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
     NSString* atlas=[[NSBundle bundleForClass:[GrainsSurface class]] pathForResource:@"approved-controls" ofType:@"png"];
     if(!exists(atlas))atlas=@"assets/approved-rack/controls.png";
     rackAtlas=[[NSImage alloc] initWithContentsOfFile:atlas];
+    NSString* logo=[[NSBundle bundleForClass:[GrainsSurface class]] pathForResource:@"approved-logo" ofType:@"png"];
+    if(!exists(logo))logo=@"assets/approved-rack/logo.png";
+    rackLogo=[[NSImage alloc] initWithContentsOfFile:logo];
     editableModuleSkins=[NSMutableDictionary dictionary];
     NSString* moduleFolder=[NSHomeDirectory() stringByAppendingPathComponent:@"Library/Application Support/GrainsDosage/Skins/Modules"];
     [[NSFileManager defaultManager] createDirectoryAtPath:moduleFolder withIntermediateDirectories:YES attributes:nil error:nil];
@@ -328,7 +332,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
 - (NSUInteger)staticBuilds{return staticBuilds;}
 - (NSUInteger)controlPatches{return controlPatches;}
 - (void)setFullRedrawForInspection:(BOOL)enabled{fullRedrawForInspection=enabled;if(!enabled)staticScene=nil;}
-- (BOOL)skinLoaded{return rackBackplate!=nil&&rackAtlas!=nil&&editableModuleSkins.count==5;}
+- (BOOL)skinLoaded{return rackLogo!=nil&&rackBackplate!=nil&&rackAtlas!=nil&&editableModuleSkins.count==5;}
 - (void)stop {
   if(owner&&dragID>=0)owner->end(aztec::ParamID(dragID));
   if(owner&&dragXY){owner->end(aztec::kXYX);owner->end(aztec::kXYY);}
@@ -436,7 +440,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
     NSString* key=[NSString stringWithFormat:@"%d:%.3f,%.3f,%.3f,%.3f",asset,source.x,source.y,source.w,source.h];
     CGImageRef slice=(__bridge CGImageRef)rasterSlices[key];
     if(!slice){
-      NSImage* image=asset==mockup::Atlas?rackAtlas:rackBackplate;if(!image)return;
+      NSImage* image=asset==mockup::Logo?rackLogo:asset==mockup::Atlas?rackAtlas:rackBackplate;if(!image)return;
       CGImageRef pixels=[image CGImageForProposedRect:nullptr context:nil hints:nil];
       CGImageRef cropped=CGImageCreateWithImageInRect(pixels,CGRectMake(source.x,source.y,source.w,source.h));if(!cropped)return;
       rasterSlices[key]=CFBridgingRelease(cropped);slice=(__bridge CGImageRef)rasterSlices[key];

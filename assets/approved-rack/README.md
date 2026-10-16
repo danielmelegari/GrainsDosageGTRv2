@@ -10,3 +10,8 @@ Backplate and transparent control atlas derived from the user-approved October 8
 The shared offline SVG renderer embeds the same artwork. Native smoke tests verify resource loading, interactions, routing, locks, and capture all five module views.
 
 The Cocoa editor caches static artwork and text. Monitor changes paint the live layer at up to 30 Hz, and repainting stops after animation settles or the window is hidden. Resizes always use one uniform scale for drawing and hit testing, even when a host restores a stale aspect ratio. Module selection is controller-local; only routing edits enter host automation.
+
+The header uses `logo.png`, the original transparent 2172 × 724 PNG supplied
+by the user (Neon Droplet logo). The renderer selects its nontransparent bounds
+`0,142,2109,412` and scales proportionally; the source file is unchanged.
+Windows embeds it as resource 216; macOS bundles it as `approved-logo.png`.
