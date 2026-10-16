@@ -29,7 +29,7 @@ a neutral-transpose fast path, cached formant coefficients, and lower-rate UI
 meter publishing. The master filter stops doing inaudible work once bypass has
 faded out; the limiter continues normally. No audio-thread allocation is added.
 
-CPU measurements below refer to the isolated engine on the local Linux runner,
+CPU measurements refer to the isolated engine on the named benchmark runner,
 not Cubase on an Intel Mojave Mac. Host, UI, input de-clicker and output limiter
 costs are outside that engine benchmark. Use the same preset, sample rate,
 buffer size and active instance count when comparing on the target Mac.
@@ -78,3 +78,49 @@ variation, in serial and legacy parallel routing. Before the fix, maximum adjace
 sample jumps were 0.111–0.158, with 10–14 jumps above 0.025 per measured interval.
 After gain smoothing they were 0.0023–0.0106, with none above 0.025. This is a
 specific DSP regression, not a diagnosis of every reported Cubase dropout.
+
+### Measured Windows CPU reduction
+
+GitHub Actions Windows 2022 trial build, commit `de1a7b2` versus `8875771`,
+48 kHz stereo, 256-sample blocks, 10 seconds per scenario, median of three runs.
+Normal quality reduced engine CPU by **17.0–31.3%** in these eight scenarios.
+This includes the stereo-read and Reslice seed fixes from `723a5a1`.
+
+| Preset scenario | Before (% of one core) | Normal (% of one core) | Reduction |
+| --- | ---: | ---: | ---: |
+| Default (-1) | 3.594 | 2.812 | 21.8% |
+| 0 | 3.906 | 2.969 | 24.0% |
+| 1 | 4.531 | 3.125 | 31.0% |
+| 8 | 5.000 | 3.594 | 28.1% |
+| 24 | 5.938 | 4.531 | 23.7% |
+| 25 | 7.344 | 6.094 | 17.0% |
+| 29 | 7.500 | 5.156 | 31.3% |
+| 100 (extended Reslice route) | 6.875 | 5.625 | 18.2% |
+
+All runs were deterministic. Five scenarios remained bit-identical to the
+baseline; three changed with the intentional quality/grain-continuity updates.
+Windows passed all 32 regression suites, all 47 VST3 validator checks, and the
+native editor smoke tests. Results and packages:
+[commercial build run](https://github.com/danielmelegari/GrainsDosageGTRv2/actions/runs/38904427052).
+These figures do not establish the savings or dropout behavior in Cubase on Mojave.
+
+The macOS trial and licensed builds also passed their 31 regression suites
+and 47 VST3 validator checks. Unlocked macOS and Windows builds passed as well.
+Testing in the user's Cubase session on macOS 10.14 remains a separate check.
+
+### Quality-tier stress measurements
+
+Local Linux Release build, 48 kHz, 180 BPM, 10 seconds per case, median of
+three runs without competing builds/tests. `grains_benchmark_quality` uses two
+distinct synthetic dense-grain patches; the second enables a modulated phaser.
+Values are engine process CPU as a percentage of one core.
+
+| Patch | Draft | Normal | High |
+| --- | ---: | ---: | ---: |
+| Dense grains | 6.499% | 26.690% | 29.279% |
+| Dense grains with modulated phaser | 7.260% | 12.612% | 29.021% |
+
+Draft used 75–78% less CPU than High and 42–76% less than Normal in these
+stress patches. These deliberately heavy cases are not typical-preset forecasts;
+sparse patches may show little difference between tiers. The final local build
+passed all 31 regression suites and 47 VST3 validator checks.
