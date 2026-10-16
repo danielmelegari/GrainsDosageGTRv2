@@ -95,7 +95,10 @@ public:
  void reset(){write_=0;pending_=true;active_=false;span_=cursor_=0;events_=0;rng_=s_.seed?s_.seed:1;pattern_.fill(0);phraseStart_=phraseEnd_=repeatBeats_=0;phraseFill_=inFill_=false;combValid_=combWrite_=0;repeatsLeft_=0;}
  void set(const ResliceSettings& s){
   if(s.algorithm!=s_.algorithm)repeatsLeft_=0;
-  if(s.algorithm!=s_.algorithm||s.seed!=s_.seed||s.phraseBeats!=s_.phraseBeats||s.minPhraseBeats!=s_.minPhraseBeats||s.barBeats!=s_.barBeats){pending_=true;rng_=s.seed?s.seed:1;phraseStart_=phraseEnd_=0;}
+  // A seed edit must not truncate the current cut at a nonzero sample.
+  // Keep its cursor/envelope/deadline; consume the latest seed at the next cut.
+  if(s.seed!=s_.seed){rng_=s.seed?s.seed:1;phraseStart_=phraseEnd_=0;}
+  if(s.algorithm!=s_.algorithm||s.phraseBeats!=s_.phraseBeats||s.minPhraseBeats!=s_.minPhraseBeats||s.barBeats!=s_.barBeats){pending_=true;rng_=s.seed?s.seed:1;phraseStart_=phraseEnd_=0;}
   if(s.enabled&&!s_.enabled)pending_=true;
   if(s.crusher!=s_.crusher||s.comb!=s_.comb){pending_=true;combValid_=0;}
   if(s.fadeMs!=s_.fadeMs){fadeSize_=int(sr_*std::clamp(s.fadeMs,0.,50.)*.001);updateEnvelope();}

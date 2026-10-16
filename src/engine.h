@@ -151,6 +151,31 @@ class Engine {
     auto sample=[&](double offset){const auto at=int64_t(start+offset);return at<0.?0.:double(buffer_[ch][size_t(at%int64_t(buffer_[ch].size()))]);};
     return sample(base)*(1.-fraction)+sample(base+1.<length?base+1.:0.)*fraction;
   }
+  // Grain channels share read positions. Resolve wrapping once, keeping the
+  // original float interpolation and accumulation order for identical audio.
+  struct StereoRead {double l,r;};
+  StereoRead rawReadStereo(double pos) const {
+    const size_t size=buffer_[0].size();const double n=double(size);
+    if(pos<0.||pos>=n){pos=std::fmod(pos,n);if(pos<0.)pos+=n;}
+    const auto a=size_t(pos);const size_t c=a+1==size?0:a+1;const double fraction=pos-a;
+    auto sample=[&](int ch){const auto& b=buffer_[ch];return b[a]+(b[c]-b[a])*fraction;};
+    return {sample(0),sample(1)};
+  }
+  StereoRead readStereo(double pos) const {
+    const double length=double(grainWindow_),end=double(write_)+(settings_.freeze?0.:1.),start=end-length;
+    if(pos>=std::max(0.,start)&&pos<end-1.)return rawReadStereo(pos);
+    double p=std::fmod(pos-start,length);if(p<0.)p+=length;
+    const double base=std::floor(p),fraction=p-base;
+    const auto a=int64_t(start+base),b=int64_t(start+(base+1.<length?base+1.:0.));
+    const size_t size=buffer_[0].size();const size_t ai=a<0?0:size_t(a%int64_t(size)),bi=b<0?0:size_t(b%int64_t(size));
+    auto sample=[&](int ch){return (a<0?0.:double(buffer_[ch][ai]))*(1.-fraction)+(b<0?0.:double(buffer_[ch][bi]))*fraction;};
+    return {sample(0),sample(1)};
+  }
+  StereoRead freezeReadStereo(double pos) const {
+    if(freezeLength_<=0.)return readStereo(pos);
+    double p=std::fmod(pos-freezeStart_,freezeLength_);if(p<0.)p+=freezeLength_;
+    return rawReadStereo(freezeStart_+p);
+  }
   void trigger() {
     Voice* v = nullptr;
     for(auto& candidate : voices_) if(!candidate.active) { v = &candidate; break; }
@@ -641,8 +666,8 @@ public:
       const double window = .5 - .5 * std::cos(2. * pi * phase);
       // FREEZE crossfade: blend the live ring read with the frozen-snapshot
       // read (50 ms fade-in on freeze, 100 ms fade-out on unfreeze).
-      double vl=read(0,v.read),vr=read(1,v.read);
-      if(freezeBlend_>0.) { vl+=(freezeRead(0,v.read)-vl)*freezeBlend_; vr+=(freezeRead(1,v.read)-vr)*freezeBlend_; }
+      const auto stereo=readStereo(v.read);double vl=stereo.l,vr=stereo.r;
+      if(freezeBlend_>0.) {const auto frozen=freezeReadStereo(v.read);vl+=(frozen.l-vl)*freezeBlend_;vr+=(frozen.r-vr)*freezeBlend_;}
       wetL+=(vl*(1.-std::max(0.,v.pan))+vr*std::max(0.,-v.pan))*window;
       wetR+=(vr*(1.+std::min(0.,v.pan))+vl*std::max(0.,v.pan))*window;
       weight+=window*window; ++playing; v.read += v.increment;
@@ -785,8 +810,8 @@ public:
           double phase=double(v.age)/v.length;
           double window=.5-.5*std::cos(2.*pi*phase);
           // FREEZE crossfade (parallel path): blend live ring with frozen snapshot.
-          double vl=read(0,v.read),vr=read(1,v.read);
-          if(freezeBlend_>0.) { vl+=(freezeRead(0,v.read)-vl)*freezeBlend_; vr+=(freezeRead(1,v.read)-vr)*freezeBlend_; }
+          const auto stereo=readStereo(v.read);double vl=stereo.l,vr=stereo.r;
+          if(freezeBlend_>0.) {const auto frozen=freezeReadStereo(v.read);vl+=(frozen.l-vl)*freezeBlend_;vr+=(frozen.r-vr)*freezeBlend_;}
           wet[0]+=(vl*(1.-std::max(0.,v.pan))+vr*std::max(0.,-v.pan))*window;
           wet[1]+=(vr*(1.+std::min(0.,v.pan))+vl*std::max(0.,v.pan))*window;
           weight+=window;++playing;v.read+=v.increment;

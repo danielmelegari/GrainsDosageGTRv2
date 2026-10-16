@@ -1,6 +1,6 @@
 # GrainsDosage — complete user manual
 
-**Windows VST3 · purple three-page edition · 0.13.14**\
+**Windows VST3 · purple three-page edition · 0.13.15**\
 Applies to the updated `work/mockup-purple-skin` branch. The pages are **Modules**, **Modulation**, and **Morph**. This manual describes the current generative Reslice, not the retired Preslicer or the old Reslice step editor. Shared sound controls also apply to the macOS build; installation and registration below describe Windows.
 
 ## Contents
@@ -463,3 +463,5 @@ Expiry is always 14 days after that start. Keep a private registration ledger an
 See [OFFLINE-TRIAL.md](OFFLINE-TRIAL.md) for the signing-key setup and protection details. The Windows trial workflow publishes the installer, three-page screenshots and a CPU comparison report. Download retention on GitHub does not determine a customer's license expiry.
 
 The editor requests 90% size on every opening. Use the Size menu to adjust it during the current session; reopening requests 90% again. Windows applies the host DPI scale on top of this UI size.
+
+Seed changes (including New Phrase) take effect at the next scheduled Reslice cut rather than interrupting the current audio. This preserves the current cut’s fade and avoids seed-edit discontinuities.

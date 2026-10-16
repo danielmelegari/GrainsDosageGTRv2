@@ -39,6 +39,24 @@ int main(){
   for(int i=0;i<int(sr*4);++i){float l=.25f,r=l;e.process(l,r,i*3./sr,180);if(i>sr){mean+=l;++count;jump=std::max(jump,double(std::abs(l-previous)));}previous=l;}
   assert(mean/count>.12);assert(jump<.16);
  }
+ // Rapid seed automation must not restart a cut or silence it mid-phrase.
+ for(double sr:{8000.,48000.,96000.})for(int mode=0;mode<3;++mode){
+  qg::Reslice e;e.prepare(sr);qg::ResliceSettings s;s.enabled=true;s.algorithm=mode;s.fadeMs=3;s.fill=0;s.repeat=0;s.variation=.8;e.set(s);
+  float previous=0;double jump=0,energy=0;int changes=0;guard=true;
+  for(int i=0;i<int(sr*3);++i){double beat=i*2./sr;auto events=e.events();double deadline=e.nextCut();bool editing=i>sr&&i%31==0;
+   if(editing){s.seed=100+i;e.set(s);++changes;}
+   float l=.25f,r=l;e.process(l,r,beat,120);
+   if(editing&&beat+1e-8<deadline)assert(e.events()==events);
+   if(i>sr){jump=std::max(jump,double(std::abs(l-previous)));energy+=l*l;}previous=l;
+  }guard=false;assert(changes>100&&jump<.04&&energy>1);
+ }
+ assert(allocations==0);
+ // A pending seed leaves the current cut bit-identical, then changes the
+ // following output: deferring must not accidentally ignore the new seed.
+ for(int mode=0;mode<3;++mode){qg::Reslice a,b;a.prepare(8000);b.prepare(8000);qg::ResliceSettings s;s.enabled=true;s.algorithm=mode;s.variation=1;s.repeat=0;s.fill=.8;a.set(s);b.set(s);double deadline=0,difference=0;
+  for(int i=0;i<32000;++i){double beat=i/4000.;if(i==8101){deadline=a.nextCut();s.seed=4321;b.set(s);}float al=.2f*std::sin(i*.071),ar=al,bl=al,br=ar;a.process(al,ar,beat,120);b.process(bl,br,beat,120);if(i>=8101&&beat+1e-8<deadline)assert(al==bl&&ar==br);if(i>8101)difference+=std::abs(al-bl);}
+  assert(difference>1);
+ }
  // Respect non-4/4 bar boundaries using the host's quarter-note metre.
  for(double bar:{3.,3.5,5.})for(int mode=0;mode<3;++mode){qg::Reslice e;e.prepare(8000);qg::ResliceSettings s;s.enabled=true;s.algorithm=mode;s.barBeats=bar;s.phraseBeats=bar*2;e.set(s);for(int i=0;i<48000;++i){double beat=i/4000.;float l=.2f,r=.2f;e.process(l,r,beat,120);if(e.active())assert(e.nextCut()<=(std::floor((beat+1e-8)/bar)+1)*bar+1e-6);}}
  // No dependency on obsolete per-step on/off values.
