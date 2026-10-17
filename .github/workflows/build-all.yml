@@ -2,8 +2,13 @@ name: GrainsDosage — Commercial builds and License Generator
 on:
   workflow_dispatch:
   workflow_call:
+    inputs:
+      macos_trial_only:
+        description: Build and validate only the macOS Trial
+        type: boolean
+        default: false
   push:
-    branches: [main, work/mockup-purple-skin]
+    branches: [main]
     paths:
       - 'src/**'
       - 'assets/**'
@@ -24,8 +29,10 @@ concurrency:
   cancel-in-progress: true
 jobs:
   generator:
+    if: ${{ !inputs.macos_trial_only }}
     uses: ./.github/workflows/license-generator.yml
   windows:
+    if: ${{ !inputs.macos_trial_only }}
     name: Windows VST3 ${{ matrix.edition }}
     runs-on: windows-2022
     timeout-minutes: 45
@@ -105,7 +112,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        edition: [trial, licensed]
+        edition: ${{ fromJSON(inputs.macos_trial_only && '["trial"]' || '["trial","licensed"]') }}
     steps:
       - uses: actions/checkout@v4
       - name: Native RSA issuance and license lifecycle tests
@@ -130,6 +137,15 @@ jobs:
           '-DCMAKE_OBJCXX_FLAGS=-Werror=unguarded-availability -Werror=unguarded-availability-new'
       - name: Build AU, VST3 and regression tests
         run: cmake --build build --config Release --parallel 4
+      - name: Verify Trial helper in both final bundles
+        if: matrix.edition == 'trial'
+        run: |
+          set -euo pipefail
+          cmake --build build --config Release --target grains_stage_trial_helper
+          for helper in build/VST3/Release/GrainsDosage.vst3/Contents/Resources/GrainsDosageTrialHelper build/AU/Release/GrainsDosage.component/Contents/Resources/plugin.vst3/Contents/Resources/GrainsDosageTrialHelper; do
+            test -x "$helper"
+            cmp build/Release/GrainsDosageTrialHelper "$helper"
+          done
       - name: Audio and session regression tests
         run: ctest --test-dir build -C Release --output-on-failure
       - name: Native editor interactions
@@ -193,7 +209,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        edition: [trial, licensed]
+        edition: ${{ fromJSON(inputs.macos_trial_only && '["trial"]' || '["trial","licensed"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -220,6 +236,7 @@ jobs:
             auval-arm64.txt
             auval-diagnostics/
   manual:
+    if: ${{ !inputs.macos_trial_only }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

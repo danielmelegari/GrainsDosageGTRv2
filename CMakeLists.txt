@@ -166,10 +166,7 @@ if(APPLE)
       target_compile_options(GrainsDosageTrialHelper PRIVATE -fobjc-arc)
       target_link_libraries(GrainsDosageTrialHelper PRIVATE "-framework Foundation" "-framework Security")
       add_dependencies(GrainsDosage GrainsDosageTrialHelper)
-      add_custom_command(TARGET GrainsDosage POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_BUNDLE_DIR:GrainsDosage>/Contents/Resources"
-        COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:GrainsDosageTrialHelper>"
-          "$<TARGET_BUNDLE_DIR:GrainsDosage>/Contents/Resources/GrainsDosageTrialHelper")
+
     else()
       target_sources(GrainsDosage PRIVATE src/license_mac.mm)
     endif()
@@ -199,6 +196,25 @@ if(APPLE)
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gui-test/$<CONFIG>")
   target_link_libraries(aztec_gui_smoke PRIVATE sdk ${AZTEC_COCOA_FRAMEWORK} ${AZTEC_COREFOUNDATION_FRAMEWORK})
   smtg_target_set_bundle(GrainsDosage BUNDLE_IDENTIFIER com.danielmelegari.aztecgrains COMPANY_NAME "Daniel Melegari")
+  if(GRAINS_EDITION STREQUAL "trial")
+    # Stage after the VST3 AND wrapper targets finish. The SDK/Xcode bundle
+    # phases may replace resources during finalization; a plugin POST_BUILD
+    # hook alone did not put the helper in the distributed embedded VST3.
+    set(_trial_vst_resources "${CMAKE_BINARY_DIR}/VST3/$<CONFIG>/GrainsDosage.vst3/Contents/Resources")
+    set(_trial_stage_dependencies GrainsDosage GrainsDosageTrialHelper)
+    set(_trial_stage_commands
+      COMMAND ${CMAKE_COMMAND} -E make_directory "${_trial_vst_resources}"
+      COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:GrainsDosageTrialHelper>" "${_trial_vst_resources}/GrainsDosageTrialHelper")
+    if(TARGET GrainsDosageAU)
+      list(APPEND _trial_stage_dependencies GrainsDosageAU)
+      set(_trial_au_resources "${CMAKE_BINARY_DIR}/AU/$<CONFIG>/GrainsDosage.component/Contents/Resources/plugin.vst3/Contents/Resources")
+      list(APPEND _trial_stage_commands
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${_trial_au_resources}"
+        COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:GrainsDosageTrialHelper>" "${_trial_au_resources}/GrainsDosageTrialHelper")
+    endif()
+    add_custom_target(grains_stage_trial_helper ALL ${_trial_stage_commands}
+      DEPENDS ${_trial_stage_dependencies} VERBATIM)
+  endif()
 endif()
 
 if(WIN32)

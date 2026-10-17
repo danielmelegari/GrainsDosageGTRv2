@@ -1,0 +1,15 @@
+name: GrainsDosage — macOS Trial only
+on:
+  workflow_dispatch:
+  push:
+    branches: [work/mockup-purple-skin]
+permissions:
+  contents: read
+concurrency:
+  group: grains-macos-trial-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  trial:
+    uses: ./.github/workflows/build-all.yml
+    with:
+      macos_trial_only: true

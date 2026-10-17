@@ -7,8 +7,6 @@ on:
       - 'assets/**'
       - 'tools/split_module_skins.py'
       - '.github/workflows/build-app.yml'
-  pull_request:
-    branches: [main, master]
   workflow_dispatch:
     inputs:
       release_tag:

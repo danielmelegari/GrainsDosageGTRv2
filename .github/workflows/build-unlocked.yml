@@ -1,16 +1,6 @@
 name: GrainsDosage — Full Unlocked VST3 (no activation)
 on:
   workflow_dispatch:
-  push:
-    branches: [work/mockup-purple-skin]
-    paths:
-      - '.github/workflows/build-unlocked.yml'
-      - 'CMakeLists.txt'
-      - 'src/**'
-      - 'assets/**'
-      - 'test_*'
-      - 'tools/check-*.py'
-      - 'docs/unlocked-builds.md'
 permissions:
   contents: read
 concurrency:
