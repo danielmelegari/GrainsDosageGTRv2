@@ -1,11 +1,11 @@
-GrainsDosage 0.13.2 - Windows 10/11 x64, three-page interface
+GrainsDosage 0.13.15 - Windows 10/11 x64, three-page interface
 
 1. Close Cubase and other audio hosts.
 2. Run the Windows x64 ThreePage Setup executable.
-3. For the 14-Day-Trial edition, open GrainsDosage Trial Registration in the
-   Start menu and install the publisher-signed license for your machine.
+3. The 14-Day-Trial edition starts automatically on first use. No license
+   code is required. Purchased licenses use the separate Licensed edition.
 4. Start Cubase, rescan VST3 plugins if needed, and insert GrainsDosage as an
-   audio effect. Verify version 0.13.2 in Cubase's plugin information.
+   audio effect. Verify version 0.13.15 in Cubase's plugin information.
 
 Installed plugin: C:\Program Files\Common Files\VST3\GrainsDosage.vst3
 The complete folder is the plugin bundle. Do not move just its internal binary.
@@ -13,6 +13,6 @@ The complete folder is the plugin bundle. Do not move just its internal binary.
 Read GrainsDosage User Manual in the Start menu for all three pages, every
 Reslice control, modulation, Morph, presets, CPU advice and troubleshooting.
 
-The offline trial runs from its signed start until exactly 14 calendar days
-later. There is no one-hour session timeout. Registration shows its dates.
-An unregistered, not-yet-active or expired trial produces no audio.
+The offline Trial runs for 14 consecutive days from first use, including time
+with the DAW closed. The header shows the days remaining. At expiry, output fades
+to silence and wet processing stops. See AUTOMATIC-TRIAL.txt for details.

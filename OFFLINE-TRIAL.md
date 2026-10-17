@@ -1,3 +1,13 @@
+# Automatic 14-day Trial edition
+
+The current Trial starts automatically on first editor opening or audio activation, without a license code. It counts 14 consecutive days, displays the days remaining in the header, then fades to silence and stops wet processing. See [AUTOMATIC-TRIAL.txt](AUTOMATIC-TRIAL.txt). Build with `-DGRAINS_EDITION=trial`; no publisher key is needed.
+
+Dates persist per OS user in macOS Keychain or protected Windows storage. Ordinary restart/reinstallation preserves the deadline; rollback and invalid storage block processing. A fully offline trial cannot guarantee protection against binary modification, deletion of all state, a new OS user, or complete system restoration.
+
+## Legacy signed trials and Licensed activation
+
+The following instructions apply to earlier signed trials and the Licensed edition, not the automatic Trial download.
+
 # Registered-computer offline trials
 
 The Windows trial requires a publisher-signed license for that computer. No server,

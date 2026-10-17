@@ -22,6 +22,7 @@ int main(){
 #endif
  constexpr int size=128;constexpr double rate=48000.;
  for(int format:{kSample32,kSample64}){
+  aztec::license::automaticEnd=INT64_MAX;aztec::license::automaticSteadyEnd=INT64_MAX;
   aztec::license::allowed.store(true);auto* p=new Processor;assert(p->initialize(nullptr)==kResultOk);
   ProcessSetup setup{};setup.processMode=kRealtime;setup.symbolicSampleSize=format;setup.maxSamplesPerBlock=size;setup.sampleRate=rate;
   assert(p->setupProcessing(setup)==kResultOk);assert(p->setActive(true)==kResultOk);
@@ -42,7 +43,11 @@ int main(){
   double previous=left(size-1);aztec::license::allowed.store(false);
   for(int b=0;b<10;++b){assert(p->process(data)==kResultOk);for(int i=0;i<size;++i){assert(std::isfinite(left(i)));assert(std::abs(left(i)-previous)<.01);previous=left(i);}}
   // Expired/invalid license disables processing, not the DAW signal.
+  #if defined(GRAINS_TRIAL) && GRAINS_TRIAL
+  for(int i=0;i<size;++i)assert(left(i)==0.);assert(output.silenceFlags&1);
+#else
   for(int i=0;i<size;++i)assert(left(i)==2.);assert(!(output.silenceFlags&1));
+#endif
   aztec::license::allowed.store(true);previous=left(size-1);
   for(int b=0;b<12;++b){assert(p->process(data)==kResultOk);for(int i=0;i<size;++i){assert(std::abs(left(i)-previous)<.02);previous=left(i);}}
   assert(left(size-1)>.1&&left(size-1)<.51);
@@ -50,12 +55,19 @@ int main(){
   // Disabled effect retains the advertised lookahead/PDC, including exact doubles.
   for(int i=0;i<size;++i){fL[i]=float(.001*i);dL[i]=.001*i+1e-12;}
   assert(p->process(data)==kResultOk);
+  #if defined(GRAINS_TRIAL) && GRAINS_TRIAL
+  for(int i=0;i<size;++i)assert(left(i)==0.);
+  aztec::license::allowed=true;aztec::license::automaticEnd=1;assert(p->process(data)==kResultOk);assert(!aztec::license::allowed.load());for(int i=0;i<size;++i)assert(left(i)==0.);
+#else
   for(int i=32;i<size;++i)assert(left(i)==(format==kSample32?double(fL[i-32]):dL[i-32]));
+#endif
 #endif
   p->setActive(false);p->terminate();p->release();
  }
 #ifdef GRAINS_UNLOCKED
  std::cout<<"PASS: unlocked 32/64-bit VST3 processes audio with no activation or Machine ID\n";
+#elif defined(GRAINS_TRIAL) && GRAINS_TRIAL
+ std::cout<<"PASS: automatic trial audio fades to silence, stops wet processing, honors deadline and preserves silence flags in 32/64-bit modes\n";
 #else
  std::cout<<"PASS: real 32/64-bit VST3 audio stays active under authorization, fades to dry on expiry and recovers on activation without a DAW restart\n";
 #endif

@@ -6,23 +6,23 @@ one edition at a time. Trial and Licensed replace each other; do not keep rename
 duplicates installed. The existing development builds remain unrestricted for
 internal testing and must not be distributed as commercial builds.
 
-Trial requires a publisher-signed, machine-bound activation. Send the complete
-GDDEV2 code to the publisher and paste the GDS2 code from GrainsDosage-Trial-Key.txt.
-It lasts 14 calendar days from its signed UTC start (first issuance in the native
-generator), regardless of DAW use. The last seen time is protected in Keychain;
-the signed interval cannot be extended by reinstalling or deleting local state.
-An unsigned first-open record from older versions no longer authorizes a trial.
-Significant clock rollback disables the trial until the clock is corrected.
-After expiry the header says TRIAL EXPIRED and processing fades to dry over
-20 milliseconds. The interface and saved settings remain available. A background
-check enforces expiration even with the editor closed (within one second).
-No Keychain, filesystem or signature operations occur on the audio thread. The
-verified activation is cached; protected trial storage is refreshed every 30 seconds
-while a lightweight background clock check runs each second. Transient storage
-errors are retried without extending the signed expiry.
+No license code, registration or account is required.
+The trial starts when the plugin is first opened or activated for audio processing.
+It lasts 14 consecutive days, including time while the DAW is closed.
+The header displays the number of days left. At expiry it displays TRIAL EXPIRED,
+fades the output to silence, and stops the wet audio processing.
+Restarting the DAW, changing presets or reinstalling the plugin does not restart
+an intact trial record. Keep the computer clock correct. If protected storage
+cannot be read or saved, the trial remains blocked rather than granting more time.
 
-Licensed requires a valid device activation before enabling processing. A valid
-activation also permanently unlocks Trial. Activation is offline and shared by
+The trial record is stored in macOS Keychain, or in protected Windows user storage.
+The trial is offline and tied to the OS user environment. No purely offline
+software trial can prevent every deliberate binary patch or complete system rollback.
+For a purchase, install the Licensed edition and use its activation process.
+
+The audio thread checks wall and monotonic deadlines each block, without storage, locks or cryptography. Output fades to silence over 20 ms at expiry. Protected storage is refreshed every 30 seconds; one shared worker checks time each second and sleeps after expiry.
+
+Licensed requires a valid device activation before enabling processing. Install the Licensed edition to activate a purchase. Activation is offline and shared by
 AU/VST3 in the same macOS account. Reinstalling on the same Mac or activating its
 other user accounts uses the same Device Code and does not consume another slot.
 The plugin contains only the RSA public key, verifies SHA-256 signatures, and
@@ -85,10 +85,10 @@ activation text file to the customer. For their second and third computers, reus
 the SAME license ID with the new Device Code. A fourth device is refused.
 If exporting the activation file fails, retry that same device with a valid new
 output filename; the reserved slot is retained safely. No payment/email service is included. The native generator also issues machine-bound
-Windows permanent licenses for the updated Windows trial build.
+Windows permanent licenses for the Windows Licensed build.
 
 Use [GrainsDosage License Generator.app](license-generator.md) on Mojave Intel for
-normal trial/permanent issuance with one-time Keychain setup and the same SQLite
+permanent or legacy signed-trial issuance with one-time Keychain setup and the same SQLite
 ledger. Offline protection cannot prevent binary modification, cloned hardware
 identity or restoration of a complete system backup.
 

@@ -80,6 +80,17 @@ int main() {
   auto concurrent = [&](bool& ok) { State copy{start,start}; ok = store.refresh(start+2*second,copy,true); };
   std::thread a(concurrent,std::ref(okA)), b(concurrent,std::ref(okB)); a.join(); b.join();
   assert(okA && okB);
+  // Automatic trial discovers its own start, without a signed license.
+  {const auto dir=directory+L"-auto",reg=registry+L"-auto";Store automatic(reg,dir);State record{};
+   assert(automatic.check(start,record,false,0,true)==Refresh::missing);
+   assert(automatic.check(start,record,true,0,true)==Refresh::active);assert(record.start==start);
+   State restarted{};assert(automatic.check(start+second,restarted,true,0,true)==Refresh::active);assert(restarted.start==start);
+   assert(automatic.check(start+duration-1,restarted,false,0,true)==Refresh::active);
+   assert(automatic.check(start+duration,restarted,false,0,true)==Refresh::expired);
+   restarted={};assert(automatic.check(start+duration-1,restarted,true,0,true)!=Refresh::active);
+   assert(DeleteFileW((dir+L"\\licensed-state.dat").c_str()));restarted={};assert(automatic.check(start,restarted,true,0,true)!=Refresh::active);
+   RegDeleteTreeW(HKEY_CURRENT_USER,reg.c_str());DeleteFileW((dir+L"\\licensed-state.dat").c_str());RemoveDirectoryW(dir.c_str());
+  }
   // Simulate two hours of 30-second maintenance, including many instances.
   // No one-hour session timeout: the signed 14-day end is the only duration.
   for(Tick elapsed=30*second;elapsed<=7200*second;elapsed+=30*second){

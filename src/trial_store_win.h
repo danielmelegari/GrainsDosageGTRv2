@@ -30,7 +30,7 @@ struct LocalBuffer {
   ~LocalBuffer() { if (blob.pbData) LocalFree(blob.pbData); }
 };
 enum class Read { missing, valid, invalid };
-enum class Refresh { active, expired, invalid, unavailable };
+enum class Refresh { active, expired, invalid, unavailable, missing };
 
 // DPAPI authenticates the record and binds it to the current Windows account.
 // Entropy identifies the product; it is deliberately not treated as a secret.
@@ -101,7 +101,7 @@ public:
     CoTaskMemFree(path);
     return Store(L"Software\\GrainsDosage\\Trial", directory + L"\\GrainsDosage-Trial");
   }
-  Refresh check(Tick now, State& state, bool allowCreate, Tick minimumTime = 0) const {
+  Refresh check(Tick now, State& state, bool allowCreate, Tick minimumTime = 0, bool automatic = false) const {
     if (directory_.empty() || registryPath_.empty()) return Refresh::unavailable;
     if (!CreateDirectoryW(directory_.c_str(), nullptr) && GetLastError() != ERROR_ALREADY_EXISTS) return Refresh::unavailable;
     Handle file;
@@ -127,10 +127,13 @@ public:
     const auto registryRead = readRegistry(key.value, registryState);
     const auto fileRead = readFile(file.value, fileState);
     if (registryRead == Read::missing && fileRead == Read::missing) {
+      if(automatic&&!allowCreate)return Refresh::missing;
+      if(automatic&&state.start==0)state={now,now};
       if (!allowCreate || !wellFormed(state)) return Refresh::invalid;
       next = state;
     } else if (registryRead != Read::valid || fileRead != Read::valid ||
                !merge(registryState, fileState, next)) return Refresh::invalid;
+    if (automatic&&state.start==0)state=next;
     if (next.start != state.start || now < state.start) return Refresh::invalid;
     // Persist the high-water mark even when time has expired, so rolling the
     // clock back after a forward jump cannot reactivate an expired trial.

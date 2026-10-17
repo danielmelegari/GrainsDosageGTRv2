@@ -37,27 +37,21 @@ The bundle is a folder; do not move just its internal binary. Use Windows 10 or 
 
 Start Cubase after installation. Open **Studio → VST Plug-in Manager** and rescan if GrainsDosage is not listed. Insert it as an **audio effect**, not as an instrument. It needs incoming audio.
 
-### Offline registration
+### Automatic Trial
 
-1. Click **ACTIVATE** in the plugin header.
-2. Click **Copy Machine ID** and send the full code to the publisher. Trial mode does not need a License ID.
-3. Open `GrainsDosage-Trial-Key.txt` or `GrainsDosage-Permanent-Key.txt`, copy its entire content and paste it into the activation field.
-4. Click **Activate**. Processing becomes available immediately without restarting Cubase.
-5. Check **14 DAYS LICENSE ACTIVE — N DAYS LEFT**, **TRIAL EXPIRED**, or **LICENSE ACTIVE** in the header.
-
-The separate **GrainsDosage Trial Registration** Start-menu utility remains available: **Yes** exports a JSON machine request, and **No** imports the TXT or a legacy `.license` file. Reload the plugin after using this external utility.
-
-The plugin and registration tool make no online activation requests. A license is signed for a machine ID derived locally from Windows and the system volume. It will not enable audio on another computer. Reinstalling Windows or replacing the system volume can change the ID; contact the publisher if that happens.
-
-The license is installed for the current Windows account at `%LOCALAPPDATA%\GrainsDosage-Trial\trial.license`. Another account on the same registered machine can install that same signed license, retaining the same end date.
+Install the Trial edition and open it in your DAW. No license code, registration or account is required. The header displays **TRIAL - N DAYS LEFT**, updating as time passes.
 
 ### Exactly what “14 days” means
 
-The trial enables full processing during the **14 calendar days between the signed start and end timestamps**. It is not 14 days of accumulated playback, and it does not restart when Cubase opens. By default, the publisher's issuing tool starts the period when it issues the license; the publisher can choose a later start date before issuing it.
+The trial starts on first editor opening or audio activation and lasts **14 consecutive days**, including time while the DAW is closed. Restarting the DAW or reinstalling the plugin preserves an intact trial record. There is no one-hour session limit.
 
-There is **no one-hour session limit**. A license received several days after its start has only the remaining calendar time. Registration shows the dates in UTC each time it opens. Artifact download retention on GitHub is separate from the trial period.
+At expiry the header displays **TRIAL EXPIRED**. Output fades to silence over 20 milliseconds and wet processing stops, including with the editor closed. Your projects and presets remain available. Keep the system clock correct; invalid protected storage or clock rollback blocks processing.
 
-Before activation, before a future start, after expiry, or when protected state cannot be validated, the effect passes the original signal with its normal 32-sample latency. At expiry, it fades from processing to dry over 20 milliseconds; it does not silence Cubase or erase projects. Keep the Windows clock correct. Reinstalling or deleting trial files does not legitimately extend the signed period.
+The record is stored per OS user in macOS Keychain or protected Windows storage. Fully offline software cannot prevent every deliberate reset, system restoration or binary modification.
+
+### Purchased licenses
+
+Install the separate Licensed edition and use **ACTIVATE** to submit its device code and paste the publisher's activation. The automatic Trial has no activation dialog. Trial and Licensed share the plugin identity and saved settings.
 
 ## 2. First session in Cubase
 
@@ -418,15 +412,15 @@ Place Gater late in the rack, select a few active steps and lengthen Sustain. Ad
 ### No audio
 
 1. Bypass the insert in Cubase to confirm the track itself has audio.
-2. Open Trial Registration and check the installed license's signed dates and machine validity.
-3. Confirm Windows date/time is correct.
+2. Check the Trial countdown in the header, or the activation status in the Licensed edition.
+3. Confirm system date/time is correct.
 4. Disable Gater and Reverb Kill Dry temporarily; check Mix, step patterns and module states.
 5. Release Freeze and module Loops, then feed audio while the transport plays.
 6. Verify Cubase is loading the updated three-page trial from the standard VST3 folder, not another copy.
 
-If a valid trial unexpectedly goes silent, record the time, preset, sample rate, buffer size, number of plugin instances, and whether reopening restores sound. There is no intended one-hour timeout. This update retries temporary protected-storage access failures and can recover when validation succeeds; it still enforces the immutable signed end date on each audio block.
+If a valid trial unexpectedly goes silent, record the time, preset, sample rate, buffer size, number of plugin instances, and whether reopening restores sound. There is no intended one-hour timeout. This update retries temporary protected-storage access failures and can recover when validation succeeds; it still enforces the original trial deadline on each audio block.
 
-Do not delete licensing files to troubleshoot. If the installed license has already expired or does not match the machine, contact the publisher.
+Do not delete licensing files to troubleshoot. If the trial has expired, install and activate the Licensed edition to continue.
 
 ### GUI opens at the wrong scale
 
@@ -443,6 +437,8 @@ Cubase's real-time meter depends on your CPU, audio driver, buffer size, sample 
 Check module On, module Mix and master Mix. For an LFO, check its On, Depth, destination, Amount and polarity. For Morph, check On, destination and axis amount. A mode-specific Reslice control only affects its relevant mode; cut-level values can wait until the next cut. A held module loop can keep repeating older output while you change controls upstream.
 
 ## 17. Publisher: issuing offline trials
+
+The automatic Trial needs no issued code. The instructions below are for legacy signed trials and purchased Licensed activations.
 
 For normal issuance on macOS Mojave 10.14 Intel, use **GrainsDosage License Generator.app**. Its [publisher guide](docs/license-generator.md) covers importing an existing RSA private key or creating one on the publisher’s Mac, pairing its public key with updated builds, the persistent SQLite register, 14-day trials, and permanent licenses for up to three devices. It exports only `GrainsDosage-Trial-Key.txt` or `GrainsDosage-Permanent-Key.txt`. Reissuing a trial for the same machine retains the original dates. Windows registration accepts either TXT and shows whether the license is trial or permanent. Signed GDDEV2 trials and Windows permanent codes require the matching updated plugin build.
 

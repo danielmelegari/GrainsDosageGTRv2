@@ -70,10 +70,15 @@ jobs:
         run: |
           New-Item -ItemType Directory -Path package -Force | Out-Null
           Copy-Item build/VST3/Release/GrainsDosage.vst3 package/GrainsDosage.vst3 -Recurse
-          Copy-Item build/registration/Release/GrainsDosageRegistration.exe package/
+          if ('${{ matrix.edition }}' -eq 'licensed') { Copy-Item build/registration/Release/GrainsDosageRegistration.exe package/ }
           Copy-Item USER-MANUAL.html package/
-          Copy-Item TRIAL-REGISTRATION.txt package/
-          python tools/check-public-only.py package
+          if ('${{ matrix.edition }}' -eq 'trial') {
+            Copy-Item AUTOMATIC-TRIAL.txt package/
+            python tools/check-public-only.py --automatic-trial package
+          } else {
+            Copy-Item TRIAL-REGISTRATION.txt package/
+            python tools/check-public-only.py package
+          }
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Compress-Archive -Path package/* -DestinationPath GrainsDosage-Windows-${{ matrix.edition }}-VST3.zip
       - name: Install Inno Setup
@@ -134,7 +139,11 @@ jobs:
           AU=build/AU/Release/GrainsDosage.component
           VST=build/VST3/Release/GrainsDosage.vst3
           python3 tools/check-au-deployment.py "$AU"
-          python3 tools/check-public-only.py "$AU" "$VST"
+          if [ "${{ matrix.edition }}" = trial ]; then
+            python3 tools/check-public-only.py --automatic-trial "$AU" "$VST"
+          else
+            python3 tools/check-public-only.py "$AU" "$VST"
+          fi
           codesign --force --sign - --timestamp=none "$AU/Contents/Resources/plugin.vst3"
           codesign --force --sign - --timestamp=none "$AU"
           codesign --force --sign - --timestamp=none "$VST"
@@ -154,6 +163,7 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent build/AU/Release/GrainsDosage.component package/GrainsDosage-${{ matrix.edition }}.component.zip
           ditto -c -k --sequesterRsrc --keepParent build/VST3/Release/GrainsDosage.vst3 package/GrainsDosage-${{ matrix.edition }}.vst3.zip
           cp docs/licensing.md package/READ-ME-FIRST.md
+          if [[ "${{ matrix.edition }}" == trial ]]; then cp AUTOMATIC-TRIAL.txt package/; fi
           cp USER-MANUAL.html auval-intel.txt package/
       - uses: actions/upload-artifact@v4
         with:

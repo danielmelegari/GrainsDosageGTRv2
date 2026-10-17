@@ -50,14 +50,18 @@ Source: "{#ProjectDir}\{#BuildDir}\VST3\Release\GrainsDosage.vst3\*"; DestDir: "
 Source: "{#ProjectDir}\INSTALL-WINDOWS.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#ProjectDir}\USER-MANUAL.html"; DestDir: "{app}"; Flags: ignoreversion
 
-#ifdef Commercial
+#ifdef Licensed
 Source: "{#ProjectDir}\{#BuildDir}\registration\Release\GrainsDosageRegistration.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#ProjectDir}\TRIAL-REGISTRATION.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 #endif
 
+#ifdef Trial
+Source: "{#ProjectDir}\AUTOMATIC-TRIAL.txt"; DestDir: "{app}"; Flags: ignoreversion
+#endif
+
 [Icons]
-#ifdef Commercial
+#ifdef Licensed
 Name: "{group}\GrainsDosage Trial Registration"; Filename: "{app}\GrainsDosageRegistration.exe"
 #endif
 Name: "{group}\GrainsDosage User Manual"; Filename: "{app}\USER-MANUAL.html"

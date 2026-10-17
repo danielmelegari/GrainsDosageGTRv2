@@ -174,7 +174,11 @@ public:
     return AudioEffect::setBusArrangements(in,ni,out,no);
   }
   tresult PLUGIN_API setActive(TBool active) override {
-    if(active) { engine_.prepare(rate_);declick_.prepare(rate_,p_[kInputDeclick]>=.5);master_.prepare(rate_); fallbackBeat_=0.;waveCountdown_=0; }
+    if(active) {
+#if defined(GRAINS_TRIAL) && GRAINS_TRIAL
+      aztec::license::firstOpen(); // Host lifecycle thread, never process().
+#endif
+      engine_.prepare(rate_);declick_.prepare(rate_,p_[kInputDeclick]>=.5);master_.prepare(rate_); fallbackBeat_=0.;waveCountdown_=0; }
     return AudioEffect::setActive(active);
   }
   // NOTE: Processor must NOT override setComponentState — AudioEffect does not
@@ -235,7 +239,7 @@ public:
     p_[kFreeze]=engine_.isFrozen()?1.:0.; // mirror the sustained state for save/load + readback
     const double beatIncrement = tempo_ / (60. * rate_);
     double peak=0.,squareL=0.,squareR=0.;
-    const double licenseTarget=aztec::license::allowed.load(std::memory_order_acquire)?1.:0.;
+    const double licenseTarget=aztec::license::processingAllowed()?1.:0.;
     for(int32 n=0;n<data.numSamples;++n) {
       licenseGain_+=std::clamp(licenseTarget-licenseGain_,-1./(.02*rate_),1./(.02*rate_));
       if(n>0 && applyChanges(n)) { s=settings(p_,tempo_,rate_,barBeats);s.playing=!data.processContext||(data.processContext->state & ProcessContext::kPlaying); engine_.set(s);setMaster(); }
@@ -247,7 +251,11 @@ public:
         const float rawL=float(declick_.dry(0)),rawR=float(declick_.dry(1));
         float a=l,b=r;if(licenseGain_>0.)engine_.process(l,r,beat,a,b);
         if(s.bypass) { a=l; b=r; }else if(licenseGain_>0.)master_.process(a,b);
+#if defined(GRAINS_TRIAL) && GRAINS_TRIAL
+        a=float(a*licenseGain_);b=float(b*licenseGain_);
+#else
         if(licenseGain_<1.){a=float(rawL+licenseGain_*(double(a)-rawL));b=float(rawR+licenseGain_*(double(b)-rawR));}
+#endif
         peak=std::max({peak,std::abs(double(a)),std::abs(double(b))});
         squareL+=double(a)*a;squareR+=double(b)*b;
         out.channelBuffers32[0][n] = a;
@@ -263,8 +271,12 @@ public:
         float a=float(l),b=float(r);if(licenseGain_>0.)engine_.process(float(l),float(r),beat,a,b);
         if(!s.bypass&&licenseGain_>0.)master_.process(a,b);
         const double wetL=s.bypass?l:double(a),wetR=s.bypass?r:double(b);
+#if defined(GRAINS_TRIAL) && GRAINS_TRIAL
+        const double finalL=wetL*licenseGain_,finalR=wetR*licenseGain_;
+#else
         const double finalL=licenseGain_<1.?rawL+licenseGain_*(wetL-rawL):wetL;
         const double finalR=licenseGain_<1.?rawR+licenseGain_*(wetR-rawR):wetR;
+#endif
         peak=std::max({peak,std::abs(finalL),std::abs(finalR)});
         squareL+=finalL*finalL;squareR+=finalR*finalR;
         out.channelBuffers64[0][n]=finalL;
