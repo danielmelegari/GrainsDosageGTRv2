@@ -13,6 +13,10 @@ def version(value):
 def check_bundle(bundle):
     with (bundle / 'Contents/Info.plist').open('rb') as stream:
         info = plistlib.load(stream)
+    assert info.get('CFBundlePackageType') == 'BNDL', (bundle, 'Expected plugin bundle BNDL, not application APPL')
+    pkginfo = bundle / 'Contents/PkgInfo'
+    if pkginfo.exists():
+        assert pkginfo.read_bytes()[:4] == b'BNDL', (bundle, 'PkgInfo package type')
     minimum = tuple(map(int, info['LSMinimumSystemVersion'].split('.')))
     assert minimum[:2] <= (10, 14), (bundle, 'plist minimum', minimum)
     check_binary(bundle / 'Contents/MacOS' / info['CFBundleExecutable'])

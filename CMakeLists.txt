@@ -195,7 +195,18 @@ if(APPLE)
     OBJCXX_STANDARD 17 OBJCXX_STANDARD_REQUIRED ON
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gui-test/$<CONFIG>")
   target_link_libraries(aztec_gui_smoke PRIVATE sdk ${AZTEC_COCOA_FRAMEWORK} ${AZTEC_COREFOUNDATION_FRAMEWORK})
-  smtg_target_set_bundle(GrainsDosage BUNDLE_IDENTIFIER com.danielmelegari.aztecgrains COMPANY_NAME "Daniel Melegari")
+  # CMake's default bundle plist declares APPL. VST3 is a loadable BNDL,
+  # and must not be registered by Finder/Launch Services as an application.
+  set(GRAINS_MAC_MIN_VERSION "${CMAKE_OSX_DEPLOYMENT_TARGET}")
+  if(NOT GRAINS_MAC_MIN_VERSION)
+    set(GRAINS_MAC_MIN_VERSION "10.14")
+  endif()
+  configure_file(src/vst3_info.plist.in "${CMAKE_CURRENT_BINARY_DIR}/GrainsDosage-Info.plist" @ONLY)
+  set_target_properties(GrainsDosage PROPERTIES
+    MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_BINARY_DIR}/GrainsDosage-Info.plist")
+  smtg_target_set_bundle(GrainsDosage
+    INFOPLIST "${CMAKE_CURRENT_BINARY_DIR}/GrainsDosage-Info.plist"
+    BUNDLE_IDENTIFIER com.danielmelegari.aztecgrains COMPANY_NAME "Daniel Melegari")
   if(GRAINS_EDITION STREQUAL "trial")
     # Stage after the VST3 AND wrapper targets finish. The SDK/Xcode bundle
     # phases may replace resources during finalization; a plugin POST_BUILD
