@@ -150,13 +150,23 @@ jobs:
           codesign --verify --deep --strict "$AU"
           codesign --verify --deep --strict "$VST"
       - name: Validate Audio Unit on Intel
+        timeout-minutes: 5
         run: |
           set -euo pipefail
           mkdir -p "$HOME/Library/Audio/Plug-Ins/Components"
           ditto build/AU/Release/GrainsDosage.component "$HOME/Library/Audio/Plug-Ins/Components/GrainsDosage.component"
           killall -9 AudioComponentRegistrar || true
-          arch -x86_64 /usr/bin/auval -v aufx Gdsg Dmeg 2>&1 | tee auval-intel.txt
+          python3 tools/run-au-validation.py --diagnostics auval-diagnostics -- arch -x86_64 /usr/bin/auval -v aufx Gdsg Dmeg 2>&1 | tee auval-intel.txt
           grep -F 'AU VALIDATION SUCCEEDED.' auval-intel.txt
+      - name: Preserve Intel AU diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AU-diagnostics-${{ matrix.edition }}-Intel
+          path: |
+            auval-intel.txt
+            auval-diagnostics/
+          if-no-files-found: ignore
       - name: Package commercial edition
         run: |
           mkdir -p package
@@ -187,6 +197,7 @@ jobs:
           name: GrainsDosage-${{ matrix.edition }}-macOS
           path: shipped
       - name: Validate actual distributed archive
+        timeout-minutes: 5
         run: |
           set -euo pipefail
           mkdir -p "$HOME/Library/Audio/Plug-Ins/Components"
@@ -195,12 +206,15 @@ jobs:
           codesign --verify --deep --strict "$AU"
           python3 tools/check-au-deployment.py "$AU"
           killall -9 AudioComponentRegistrar || true
-          arch -arm64 /usr/bin/auval -v aufx Gdsg Dmeg 2>&1 | tee auval-arm64.txt
+          python3 tools/run-au-validation.py --diagnostics auval-diagnostics -- arch -arm64 /usr/bin/auval -v aufx Gdsg Dmeg 2>&1 | tee auval-arm64.txt
           grep -F 'AU VALIDATION SUCCEEDED.' auval-arm64.txt
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: GrainsDosage-${{ matrix.edition }}-Apple-Silicon-validation
-          path: auval-arm64.txt
+          path: |
+            auval-arm64.txt
+            auval-diagnostics/
   manual:
     runs-on: ubuntu-latest
     steps:

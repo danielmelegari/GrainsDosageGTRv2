@@ -15,6 +15,7 @@ template<class Storage> class Manager {
  Storage storage;
  std::mutex mutex;std::condition_variable wake;bool stopping=false;
  std::thread worker;
+ const bool backgroundOnly;std::atomic<bool> openRequested{false};
  State state=State::Ready;int64_t first=0,last=0,deadline=0,nextStore=0;
  std::atomic<State> visible{State::Ready};std::atomic<int64_t> end{0};
  void publish(State s){state=s;visible.store(s);allowed.store(s==State::Trial,std::memory_order_release);}
@@ -41,9 +42,29 @@ template<class Storage> class Manager {
   publish(State::Trial);
  }
 public:
- Manager(){try{refresh();}catch(...){publish(State::StorageError);}worker=std::thread([this]{std::unique_lock<std::mutex> lock(mutex);while(!stopping){if(state==State::Ready||state==State::Expired)wake.wait(lock,[this]{return stopping||(state!=State::Ready&&state!=State::Expired);});else if(!wake.wait_for(lock,std::chrono::seconds(1),[this]{return stopping;})){try{refresh();}catch(...){publish(State::StorageError);}}}});}
+ explicit Manager(bool background=false):backgroundOnly(background){
+  if(!backgroundOnly){try{refresh();}catch(...){publish(State::StorageError);}}
+  worker=std::thread([this]{
+   std::unique_lock<std::mutex> lock(mutex);
+   // Background mode defers even the first read until actual editor/audio use.
+   while(!stopping){
+    auto requested=[this]{return stopping||openRequested.load();};
+    if(!backgroundOnly&&(state==State::Ready||state==State::Expired))
+     wake.wait(lock,[&]{return requested()||(state!=State::Ready&&state!=State::Expired);});
+    else wake.wait_for(lock,std::chrono::seconds(1),requested);
+    if(stopping)break;
+    const bool create=openRequested.exchange(false);
+    if(!create&&(state==State::Ready||state==State::Expired))continue;
+    try{refresh(create);}catch(...){publish(State::StorageError);}
+   }
+  });
+ }
  ~Manager(){{std::lock_guard<std::mutex> lock(mutex);stopping=true;}wake.notify_all();if(worker.joinable())worker.join();}
- void open(){std::lock_guard<std::mutex> lock(mutex);try{refresh(true);}catch(...){publish(State::StorageError);}wake.notify_all();}
+ void open(){
+  // AU cold-open can hold host/loader locks. Never wait for Keychain or the
+  // storage worker there. Audio remains blocked until validation succeeds.
+  if(backgroundOnly){openRequested.store(true);wake.notify_all();return;}
+  std::lock_guard<std::mutex> lock(mutex);try{refresh(true);}catch(...){publish(State::StorageError);}wake.notify_all();}
  std::string label(){const auto s=visible.load();if(s==State::Trial){auto remaining=std::min(end.load()-storage.now(),automaticSteadyEnd.load()-storage.steady());if(remaining<=0)return "TRIAL EXPIRED";return "TRIAL - "+std::to_string((remaining+86399)/86400)+" DAYS LEFT";}if(s==State::Expired)return "TRIAL EXPIRED";if(s==State::ClockError)return "CHECK SYSTEM CLOCK";if(s==State::StorageError)return "TRIAL STORAGE ERROR";return "14 DAY TRIAL - STARTS ON FIRST USE";}
 };
 }

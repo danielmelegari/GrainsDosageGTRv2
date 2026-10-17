@@ -20,7 +20,7 @@ The trial is offline and tied to the OS user environment. No purely offline
 software trial can prevent every deliberate binary patch or complete system rollback.
 For a purchase, install the Licensed edition and use its activation process.
 
-The audio thread checks wall and monotonic deadlines each block, without storage, locks or cryptography. Output fades to silence over 20 ms at expiry. Protected storage is refreshed every 30 seconds; one shared worker checks time each second and sleeps after expiry.
+The audio thread checks wall and monotonic deadlines each block, without storage, locks or cryptography. Output fades to silence over 20 ms at expiry. macOS performs initial storage validation on the worker so AU cold-open never waits for Keychain; output stays blocked until validation succeeds. Protected storage is refreshed every 30 seconds; one shared worker checks time each second and stops storage refreshes after expiry.
 
 Licensed requires a valid device activation before enabling processing. Install the Licensed edition to activate a purchase. Activation is offline and shared by
 AU/VST3 in the same macOS account. Reinstalling on the same Mac or activating its

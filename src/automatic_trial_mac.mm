@@ -17,7 +17,7 @@ struct Storage {
 #endif
   NSError* error=nil;if(![[NSFileManager defaultManager] createDirectoryAtPath:root withIntermediateDirectories:YES attributes:nil error:&error])return State::StorageError;
   const int fd=::open([[root stringByAppendingPathComponent:@"state.lock"] fileSystemRepresentation],O_CREAT|O_RDWR,0600);if(fd<0)return State::StorageError;
-  struct Lock{int fd;~Lock(){flock(fd,LOCK_UN);close(fd);}} lock{fd};if(flock(fd,LOCK_EX)!=0)return State::StorageError;
+  struct Lock{int fd;~Lock(){flock(fd,LOCK_UN);close(fd);}} lock{fd};if(flock(fd,LOCK_EX|LOCK_NB)!=0)return State::StorageError;
   NSString* marker=[root stringByAppendingPathComponent:@"started"];
   bool marked=[[NSFileManager defaultManager] fileExistsAtPath:marker];
   NSMutableDictionary* q=[@{(__bridge id)kSecClass:(__bridge id)kSecClassGenericPassword,(__bridge id)kSecAttrService:@"com.danielmelegari.grainsdosage.automatic-trial.v1",(__bridge id)kSecAttrAccount:@"first-use",(__bridge id)kSecUseAuthenticationUI:(__bridge id)kSecUseAuthenticationUIFail} mutableCopy];
@@ -40,7 +40,7 @@ struct Storage {
   return rollback?State::ClockError:State::Trial;
  }}
 };
-automatic::Manager<Storage>& manager(){static automatic::Manager<Storage> instance;return instance;}
+automatic::Manager<Storage>& manager(){static automatic::Manager<Storage> instance(true);return instance;}
 }
 void initialize(){(void)manager();}
 void firstOpen(){manager().open();}
