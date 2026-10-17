@@ -50,6 +50,14 @@ int main(){
     for(int l=0;l<4;++l)for(int slot=0;slot<6;++slot)assert(availableMenuOption(slotTarget(l,slot),int(std::round(p[slotTarget(l,slot)]*qg::modTargetCount))));
    }
   }
+  {using namespace aztec;std::array<double,kCount> p{};uint32_t seed=123;
+   for(int run=0;run<200;++run){for(int i=0;i<4;++i)p[kModuleLoopOn0+i]=1.;
+    randomizeSound(seed,[&](ParamID id){return p[id];},[&](ParamID id,double v){p[id]=v;});
+    for(auto pair:{std::pair<ParamID,ParamID>{kGrainEnabled,kGrainMix},{kRepeatEnabled,kRepeatMix},{kResliceEnabled,kResliceMix},{kReverbOn,kReverbMix}})assert(p[pair.second]==(p[pair.first]>=.5?1.:0.));
+    for(int i=0;i<4;++i){assert(p[kModuleLoopOn0+i]==0.);for(int slot=0;slot<6;++slot){int t=int(std::round(p[slotTarget(i,slot)]*qg::modTargetCount))-1;if(t>=101)assert(extendedResliceIds[t-101]!=kModuleLoopOn0+2);}}
+    for(auto id:{kXTarget,kYTarget}){int target=xyDestinationId(int(std::round(p[id]*xyDestCount))-1);assert(target<kModuleLoopOn0||target>=kModuleLoopWindow0);}
+   }
+  }
   std::cout<<"PASS: bounded module-specific random, preserving other modules and transport controls\n";
 }
 

@@ -475,3 +475,5 @@ Output Quality: Draft reduces CPU with a 16-grain budget and slower filter-coeff
 The current interface uses charcoal panels, orange controls and cyan values, steps and displays throughout all three pages.
 
 Each modulator has **FROM** and **TO** beneath MOD W. to limit random wave selection to an inclusive range from **1 to 330**, matching the wave menu. For example, 123–287 selects only waves in that interval. Equal endpoints select one wave; reversed endpoints use the smaller-to-larger interval. The range is saved per modulator in presets and sessions. Older presets default to the full range. These bounds apply only when wave randomization is enabled; header RANDOM preserves them.
+
+Header **RANDOM** sets each unlocked Granulizer, Beat Repeater, Reslice and Reverb mix to 100% when enabled, or 0% when disabled. Existing Mix locks take precedence. All four module loops are switched off, and generated LFO/Morph routes cannot target Loop On. Per-module Random buttons retain their existing behavior.

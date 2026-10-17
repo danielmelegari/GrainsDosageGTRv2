@@ -79,7 +79,7 @@ template<class Getter,class Setter> void randomizeSound(uint32_t& seed,Getter ge
   set(kGaterState0+i,i==0?1.:choice(1));set(kGaterLength0+i,rnd());set(kGaterSustain0+i,rnd());set(kGaterRelease0+i,0.);
  }
  for(int i=0;i<4;++i){
-  set(kModuleLoopOn0+i,choice(1));set(kModuleLoopWindow0+i,choice(3));
+  set(kModuleLoopOn0+i,0.);set(kModuleLoopWindow0+i,choice(3));
   for(int j=0;j<lRoute0;++j)set(lfoID(i,j),rnd());
   set(lfoID(i,lEnabled),i==0?1.:choice(1));set(lfoID(i,lSync),1.);set(lfoID(i,lDepth),.15+.5*rnd());
   set(kLfoWaveChoice0+i,(1+int(rnd()*qg::waveChoiceCount))/double(qg::waveChoiceCount));
@@ -87,11 +87,15 @@ template<class Getter,class Setter> void randomizeSound(uint32_t& seed,Getter ge
   set(kLfoSpeed0+i,choice(3));set(kModWaveRate0+i,choice(7));
   for(int j=0;j<8;++j)set(routeID(i,j),.5);
   for(int j=0;j<6;++j){int target;
-   do{target=1+int(rnd()*qg::modTargetCount);}while(!availableMenuOption(slotTarget(i,j),target));
+   do{target=1+int(rnd()*qg::modTargetCount);}while(!availableMenuOption(slotTarget(i,j),target)||(target-1>=101&&extendedResliceIds[target-1-101]==kModuleLoopOn0+2));
    set(slotTarget(i,j),target/double(qg::modTargetCount));set(slotAmount(i,j),.35+.3*rnd());set(slotPolarity(i,j),choice(2));
   }
  }
- for(auto id:{kXTarget,kYTarget}){int option;do{option=1+int(rnd()*xyDestCount);}while(!availableMenuOption(id,option));set(id,option/double(xyDestCount));}
+ for(auto id:{kXTarget,kYTarget}){int option;do{option=1+int(rnd()*xyDestCount);}while(!availableMenuOption(id,option)||(xyDestinationId(option-1)>=kModuleLoopOn0&&xyDestinationId(option-1)<kModuleLoopWindow0));set(id,option/double(xyDestCount));}
+ // Global Random uses full wet modules or bypass, while explicit Mix locks win.
+ for(auto module:{std::pair<ParamID,ParamID>{kGrainEnabled,kGrainMix},
+                  {kRepeatEnabled,kRepeatMix},{kResliceEnabled,kResliceMix},{kReverbOn,kReverbMix}})
+  set(module.second,read(module.first)>=.5?1.:0.);
  // Quality, output protection, de-click settings, locks and UI monitors stay put.
  for(int i=0;i<kCount;++i)if(touched[i])apply(ParamID(i),values[i]);
 }
