@@ -40,24 +40,45 @@ int main(){
   for(int b=0;b<16;++b)assert(p->process(data)==kResultOk);
   assert(left(size-1)>.1&&left(size-1)<.51);assert(!(output.silenceFlags&1));
 #ifndef GRAINS_UNLOCKED
-  double previous=left(size-1);aztec::license::allowed.store(false);
+  double previous=left(size-1);
+#if defined(GRAINS_TRIAL) && GRAINS_TRIAL
+  // Expire while actual audio is running; no editor or license worker exists.
+  aztec::license::automaticEnd=1;
+#else
+  aztec::license::allowed.store(false);
+#endif
   for(int b=0;b<10;++b){assert(p->process(data)==kResultOk);for(int i=0;i<size;++i){assert(std::isfinite(left(i)));assert(std::abs(left(i)-previous)<.01);previous=left(i);}}
-  // Expired/invalid license disables processing, not the DAW signal.
+  // Trial must silence output; the paid edition retains its dry fallback.
   #if defined(GRAINS_TRIAL) && GRAINS_TRIAL
   for(int i=0;i<size;++i)assert(left(i)==0.);assert(output.silenceFlags&1);
 #else
   for(int i=0;i<size;++i)assert(left(i)==2.);assert(!(output.silenceFlags&1));
 #endif
+  aztec::license::automaticEnd=INT64_MAX;
   aztec::license::allowed.store(true);previous=left(size-1);
   for(int b=0;b<12;++b){assert(p->process(data)==kResultOk);for(int i=0;i<size;++i){assert(std::abs(left(i)-previous)<.02);previous=left(i);}}
   assert(left(size-1)>.1&&left(size-1)<.51);
-  aztec::license::allowed.store(false);for(int b=0;b<10;++b)assert(p->process(data)==kResultOk);
+#if defined(GRAINS_TRIAL) && GRAINS_TRIAL
+  aztec::license::automaticSteadyEnd=1; // Independently enforce monotonic expiry.
+#else
+  aztec::license::allowed.store(false);
+#endif
+  for(int b=0;b<10;++b)assert(p->process(data)==kResultOk);
   // Disabled effect retains the advertised lookahead/PDC, including exact doubles.
   for(int i=0;i<size;++i){fL[i]=float(.001*i);dL[i]=.001*i+1e-12;}
   assert(p->process(data)==kResultOk);
   #if defined(GRAINS_TRIAL) && GRAINS_TRIAL
   for(int i=0;i<size;++i)assert(left(i)==0.);
   aztec::license::allowed=true;aztec::license::automaticEnd=1;assert(p->process(data)==kResultOk);assert(!aztec::license::allowed.load());for(int i=0;i<size;++i)assert(left(i)==0.);
+  // Module/mix automation and restarting processing cannot restore expired audio.
+  changes.clearQueue();put(kMix,1.);put(kGrainEnabled,1.);put(kGrainMix,1.);
+  put(kReverbOn,1.);put(kReverbMix,1.);put(kBypassReserved,1.);
+  assert(p->setActive(false)==kResultOk);assert(p->setActive(true)==kResultOk);
+  for(int b=0;b<16;++b){
+   assert(p->process(data)==kResultOk);changes.clearQueue();
+   for(int i=0;i<size;++i){assert(left(i)==0.);assert((format==kSample32?double(foR[i]):doR[i])==0.);}
+   assert((output.silenceFlags&3)==3);
+  }
 #else
   for(int i=32;i<size;++i)assert(left(i)==(format==kSample32?double(fL[i-32]):dL[i-32]));
 #endif
