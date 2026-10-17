@@ -58,5 +58,21 @@ int main(){
   for(double seconds:{1.,16.,2.,8.,4.}){s.bufferSeconds=seconds;prepared.set(s);prepared.process(.1f,-.1f,0,l,r);}
   watch=false;assert(allocations==0&&deallocations==0);
  }
+ // Warm the process-wide immutable wave tables before measuring instance lifetime.
+ (void)qg::waveBank();
+ for(double rate:{44100.,48000.,96000.,192000.}){
+  size_t total=0,preparedBytes=0;
+  for(int cycle=0;cycle<4;++cycle){
+   allocations=deallocations=allocatedBytes=0;watch=true;
+   {qg::Engine instance;instance.prepare(rate);preparedBytes=allocatedBytes;qg::Settings config;config.sampleRate=rate;config.routing=0;instance.set(config);
+    for(int n=0;n<2048;++n)instance.process(.1f,-.1f,n/rate,l,r);
+    // Hosts may prepare the same retained object more than once.
+    instance.prepare(rate);instance.set(config);
+    for(int n=0;n<256;++n)instance.process(0,0,n/rate,l,r);
+   }
+   watch=false;assert(allocations==deallocations);total=allocatedBytes;
+  }
+  std::cout<<"Lifecycle "<<rate<<" Hz: "<<preparedBytes<<" initial prepare bytes, "<<total<<" cumulative allocated bytes, "<<allocations<<" allocations / "<<deallocations<<" releases per cycle\n";
+ }
  std::cout<<"PASS: allocation-free buffer/routing changes, wrapped history, fixed Freeze anchor, frozen window expansion, shared-bank validity\n";
 }
