@@ -1,0 +1,184 @@
+name: GrainsDosage — Trial Installers Windows and macOS
+on:
+  push:
+    branches: [work/mockup-purple-skin]
+    paths:
+      - 'installer/trial/**'
+      - 'tools/package-trial-macos.py'
+      - '.github/workflows/trial-installers.yml'
+  workflow_dispatch:
+    inputs:
+      macos_run_id:
+        description: 'Validated macOS Trial run ID (empty: newest successful run on this branch)'
+        type: string
+        required: false
+      windows_run_id:
+        description: 'Run with a successful Windows Trial job (empty: newest on this branch)'
+        type: string
+        required: false
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: grains-trial-installers-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  sources:
+    runs-on: ubuntu-latest
+    outputs:
+      macos: ${{ steps.resolve.outputs.macos }}
+      windows: ${{ steps.resolve.outputs.windows }}
+    steps:
+      - name: Select validated Trial artifacts only
+        id: resolve
+        uses: actions/github-script@v7
+        env:
+          MAC_RUN: ${{ inputs.macos_run_id }}
+          WIN_RUN: ${{ inputs.windows_run_id }}
+        with:
+          script: |
+            const repo = context.repo;
+            for (const platform of ['macos', 'windows']) {
+              const requested = process.env[platform === 'macos' ? 'MAC_RUN' : 'WIN_RUN'];
+              if (requested && !/^\d+$/.test(requested)) throw new Error('Run IDs must contain only digits');
+              const workflow_id = platform === 'macos' ? 'macos-trial.yml' : 'build-all.yml';
+              const candidates = requested
+                ? [(await github.rest.actions.getWorkflowRun({...repo, run_id: Number(requested)})).data]
+                : (await github.rest.actions.listWorkflowRuns({...repo, workflow_id, branch: context.ref.replace('refs/heads/', ''), per_page: 30})).data.workflow_runs;
+              let selected;
+              for (const run of candidates) {
+                if (run.status !== 'completed') continue;
+                const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {...repo, run_id: run.id, per_page: 100});
+                const passed = platform === 'macos'
+                  ? jobs.some(j => /macOS AU and VST3 trial$/.test(j.name) && j.conclusion === 'success') && jobs.some(j => /Apple Silicon \(trial\)$/.test(j.name) && j.conclusion === 'success')
+                  : jobs.some(j => /Windows VST3 trial$/.test(j.name) && j.conclusion === 'success');
+                if (!passed) continue;
+                const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {...repo, run_id: run.id, per_page: 100});
+                const name = platform === 'macos' ? 'GrainsDosage-trial-macOS' : 'GrainsDosage-Windows-VST3-trial';
+                if (!artifacts.some(a => a.name === name && !a.expired)) continue;
+                selected = run;
+                break;
+              }
+              if (!selected) throw new Error(`No validated ${platform} Trial artifact available. Run the Trial build first or supply its run ID.`);
+              core.setOutput(platform, String(selected.id));
+              await core.summary.addRaw(`${platform}: [source run ${selected.id}](${selected.html_url}), commit ${selected.head_sha}\n\n`).write();
+            }
+  windows:
+    name: Windows 10/11 x64 Trial installer
+    needs: sources
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: GrainsDosage-Windows-VST3-trial
+          run-id: ${{ needs.sources.outputs.windows }}
+          github-token: ${{ github.token }}
+          path: source
+      - name: Stage validated VST3 and determine its version
+        shell: pwsh
+        run: |
+          Expand-Archive source/GrainsDosage-Windows-trial-VST3.zip staged
+          $plugin = (Resolve-Path staged/GrainsDosage.vst3).Path
+          $binary = Join-Path $plugin 'Contents/x86_64-win/GrainsDosage.vst3'
+          if (!(Test-Path $binary)) { throw 'Missing Windows VST3 binary' }
+          $metadata = Get-Content (Join-Path $plugin 'Contents/Resources/moduleinfo.json') -Raw
+          if ($metadata -notmatch '"Version"\s*:\s*"(\d+\.\d+\.\d+)"') { throw 'Missing plugin version in moduleinfo.json' }
+          "TRIAL_VERSION=$($Matches[1])" >> $env:GITHUB_ENV
+          "TRIAL_PLUGIN=$plugin" >> $env:GITHUB_ENV
+          python tools/check-public-only.py --automatic-trial staged/GrainsDosage.vst3
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Install packaging tool
+        run: choco install innosetup -y --no-progress
+      - name: Build installer (no plugin compilation)
+        shell: pwsh
+        run: |
+          $destination = Join-Path $env:GITHUB_WORKSPACE 'dist'
+          & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' "/DAppVersion=$env:TRIAL_VERSION" "/DPluginDir=$env:TRIAL_PLUGIN" "/DOutputDir=$destination" installer/trial/Windows.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Install and verify every plugin file in the standard VST3 directory
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem dist/*Setup.exe | Select-Object -First 1
+          $result = Start-Process $setup.FullName -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-' -Wait -PassThru
+          if ($result.ExitCode -ne 0) { throw "Installer failed: $($result.ExitCode)" }
+          $installed = Join-Path $env:CommonProgramW6432 'VST3/GrainsDosage.vst3'
+          Get-ChildItem $env:TRIAL_PLUGIN -Recurse -File | ForEach-Object {
+            $relative = $_.FullName.Substring($env:TRIAL_PLUGIN.Length + 1)
+            $target = Join-Path $installed $relative
+            if (!(Test-Path $target) -or (Get-FileHash $_.FullName).Hash -ne (Get-FileHash $target).Hash) { throw "Installed file mismatch: $relative" }
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GrainsDosage-Trial-Windows10-11-Installer
+          path: dist/*Setup.exe
+          if-no-files-found: error
+          retention-days: 30
+  macos:
+    name: macOS Mojave Intel and Apple Silicon Trial installer
+    needs: sources
+    runs-on: macos-15-intel
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: GrainsDosage-trial-macOS
+          run-id: ${{ needs.sources.outputs.macos }}
+          github-token: ${{ github.token }}
+          path: source
+      - name: Package validated universal plugins (no plugin compilation)
+        run: python3 tools/package-trial-macos.py source dist
+      - name: Install and verify standard system plugin folders
+        run: |
+          set -euo pipefail
+          sudo installer -pkg dist/*.pkg -target /
+          mkdir -p expected
+          ditto -x -k source/GrainsDosage-trial.vst3.zip expected
+          ditto -x -k source/GrainsDosage-trial.component.zip expected
+          diff -qr expected/GrainsDosage.vst3 /Library/Audio/Plug-Ins/VST3/GrainsDosage.vst3
+          diff -qr expected/GrainsDosage.component /Library/Audio/Plug-Ins/Components/GrainsDosage.component
+          for bundle in /Library/Audio/Plug-Ins/VST3/GrainsDosage.vst3 /Library/Audio/Plug-Ins/Components/GrainsDosage.component; do
+            codesign --verify --deep --strict "$bundle"
+            python3 tools/check-au-deployment.py "$bundle"
+          done
+      - name: Validate installed Intel Audio Unit
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          killall -9 AudioComponentRegistrar || true
+          python3 tools/run-au-validation.py --diagnostics auval-diagnostics -- arch -x86_64 /usr/bin/auval -v aufx Gdsg Dmeg 2>&1 | tee auval-intel.txt
+          grep -F 'AU VALIDATION SUCCEEDED.' auval-intel.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GrainsDosage-Trial-macOS-Universal-Installer
+          path: dist/*.pkg
+          if-no-files-found: error
+          retention-days: 30
+  apple-silicon:
+    name: Verify macOS installer on Apple Silicon
+    needs: macos
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: GrainsDosage-Trial-macOS-Universal-Installer
+          path: installer-download
+      - name: Install the distributed package and verify its bundles
+        run: |
+          set -euo pipefail
+          sudo installer -pkg installer-download/*.pkg -target /
+          for bundle in /Library/Audio/Plug-Ins/VST3/GrainsDosage.vst3 /Library/Audio/Plug-Ins/Components/GrainsDosage.component; do
+            codesign --verify --deep --strict "$bundle"
+            python3 tools/check-au-deployment.py "$bundle"
+          done
+      - name: Validate installed Apple Silicon Audio Unit
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          killall -9 AudioComponentRegistrar || true
+          python3 tools/run-au-validation.py --diagnostics auval-diagnostics -- arch -arm64 /usr/bin/auval -v aufx Gdsg Dmeg 2>&1 | tee auval-arm64.txt
+          grep -F 'AU VALIDATION SUCCEEDED.' auval-arm64.txt

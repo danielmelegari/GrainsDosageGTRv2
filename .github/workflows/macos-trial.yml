@@ -3,6 +3,17 @@ on:
   workflow_dispatch:
   push:
     branches: [work/mockup-purple-skin]
+    paths:
+      - 'src/**'
+      - 'assets/**'
+      - 'cmake/**'
+      - 'CMakeLists.txt'
+      - 'test_*'
+      - 'tests/**'
+      - 'tools/test*'
+      - 'tools/check*'
+      - 'tools/run-au-validation.py'
+      - '.github/workflows/build-all.yml'
 permissions:
   contents: read
 concurrency:
