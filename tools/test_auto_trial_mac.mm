@@ -1,7 +1,8 @@
-#include "../src/automatic_trial_mac.mm"
+#include "../src/automatic_trial_store_mac.h"
 #include <cassert>
 #include <iostream>
 int main(){@autoreleasepool{
+ SecKeychainSetUserInteractionAllowed(false);
  using namespace aztec::license;
  NSString* service=[NSString stringWithFormat:@"com.grainsdosage.auto-test.%d",getpid()];
  NSDictionary* q=@{(__bridge id)kSecClass:(__bridge id)kSecClassGenericPassword,(__bridge id)kSecAttrService:service,(__bridge id)kSecAttrAccount:@"first-use"};

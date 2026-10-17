@@ -15,7 +15,14 @@ def check_bundle(bundle):
         info = plistlib.load(stream)
     minimum = tuple(map(int, info['LSMinimumSystemVersion'].split('.')))
     assert minimum[:2] <= (10, 14), (bundle, 'plist minimum', minimum)
-    data = (bundle / 'Contents/MacOS' / info['CFBundleExecutable']).read_bytes()
+    check_binary(bundle / 'Contents/MacOS' / info['CFBundleExecutable'])
+    helper = bundle / 'Contents/Resources/GrainsDosageTrialHelper'
+    if helper.exists():
+        check_binary(helper)
+
+
+def check_binary(bundle):
+    data = bundle.read_bytes()
     magic, count = struct.unpack_from('>II', data)
     assert magic == 0xCAFEBABE and count == 2, 'Expected universal Intel/ARM binary'
     found = set()

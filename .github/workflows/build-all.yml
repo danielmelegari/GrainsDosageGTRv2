@@ -144,6 +144,10 @@ jobs:
           else
             python3 tools/check-public-only.py "$AU" "$VST"
           fi
+          if [ "${{ matrix.edition }}" = trial ]; then
+            codesign --force --sign - --timestamp=none "$AU/Contents/Resources/plugin.vst3/Contents/Resources/GrainsDosageTrialHelper"
+            codesign --force --sign - --timestamp=none "$VST/Contents/Resources/GrainsDosageTrialHelper"
+          fi
           codesign --force --sign - --timestamp=none "$AU/Contents/Resources/plugin.vst3"
           codesign --force --sign - --timestamp=none "$AU"
           codesign --force --sign - --timestamp=none "$VST"
