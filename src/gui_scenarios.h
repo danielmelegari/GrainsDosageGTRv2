@@ -43,7 +43,25 @@ void runGuiScenarios(Controller* c,Click click,Drag drag,Scroll scroll,Page actu
  setScroll(mockup::maxScroll(rack));toggle(kInputDeclick);
  page(1);setScroll(0);rectClick(rack.position(mockup::lfoRect(2)));lfo=2;toggle(lfoID(2,lEnabled));setScroll(620);toggle(kReverbOn);r=control(kReverbMix);c->setParamNormalized(kReverbMix,.25);drag(0,r.x+r.w/2,r.y+60);drag(1,r.x+r.w/2,r.y+30);drag(2,r.x+r.w/2,r.y+30);check(val(kReverbMix)>.4,"Reverb fader binding");setScroll(mockup::maxScroll(rack));toggle(kMasterLimiter);check(control(kAudioQuality).w>0,"Output quality selector present");c->setParamNormalized(kAudioQuality,0.);rectClick(control(kAudioQuality),-1);check(val(kAudioQuality)==.5,"Quality reset selects Normal");
  page(2);setScroll(0);toggle(kXYEnable);r=rack.position(mockup::xy);click(r.x+12,r.y+12,1);check(val(kXYX)<.005&&val(kXYY)>.995,"Square Morph XY corner");c->setParamNormalized(kXYX,.5);c->setParamNormalized(kXYY,.5);
- rectClick(mockup::next);check(val(kRoutingOrder)==bankPreset(0,0)[kRoutingOrder],"Categorised preset 1");rectClick(mockup::next);check(val(kRoutingOrder)==bankPreset(0,1)[kRoutingOrder],"Categorised preset 2");
+ // CI starts with an empty user preset folder: both arrows select Default.
+ // Compare sound parameters, not monitor or one-shot UI state.
+ const auto defaults=initialParameters();
+ auto checkDefault=[&](){for(int id=0;id<kCount;++id)if(presetParameter(id)&&c->getParameterObject(ParamID(id)))
+  check(std::abs(val(ParamID(id))-defaults[id])<1e-9,"Default preset restores sound parameters");};
+ rectClick(mockup::next);checkDefault();
+ c->setParamNormalized(kSize,.73);rectClick(mockup::next);checkDefault();
+ c->setParamNormalized(kSize,.81);rectClick(mockup::previous);checkDefault();
+ // The fixed header action works on all pages, even when the body is scrolled.
+ for(int p=0;p<3;++p){page(p);setScroll(mockup::maxScroll(rack));
+  c->setParamNormalized(kGrainMix,.271);c->setParamNormalized(kMixLock0,1.);
+  c->setParamNormalized(kAudioQuality,0.);double size=val(kSize);
+  rectClick(mockup::randomAll);
+  check(val(kSize)!=size,"Header Random generates a new sound");
+  check(val(kGrainMix)==.271&&val(kMixLock0)==1.,"Header Random preserves mix locks");
+  check(val(kAudioQuality)==0.,"Header Random preserves quality");
+  check(val(kLfoWaveChoice0)>0.,"Header Random uses expanded wave library");
+ }
+ rectClick(mockup::next);checkDefault();
  page(0);setScroll(0);
 }
 }
