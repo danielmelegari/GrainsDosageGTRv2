@@ -473,3 +473,5 @@ Seed changes (including New Phrase) take effect at the next scheduled Reslice cu
 Output Quality: Draft reduces CPU with a 16-grain budget and slower filter-coefficient refresh; Normal (default) uses 64 grains; High allows 128 grains and sample-rate coefficient refresh. All modes keep the host sample rate and latency. Change Quality in the Modulation page’s Output panel; the choice is saved with projects and rack presets. Existing sounding grains finish naturally when lowering quality.
 
 The current interface uses charcoal panels, orange controls and cyan values, steps and displays throughout all three pages.
+
+Each modulator has **FROM** and **TO** beneath MOD W. to limit random wave selection to an inclusive range from **1 to 330**, matching the wave menu. For example, 123–287 selects only waves in that interval. Equal endpoints select one wave; reversed endpoints use the smaller-to-larger interval. The range is saved per modulator in presets and sessions. Older presets default to the full range. These bounds apply only when wave randomization is enabled; header RANDOM preserves them.

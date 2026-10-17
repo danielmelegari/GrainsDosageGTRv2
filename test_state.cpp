@@ -43,6 +43,12 @@ int main() {
       for(int t=0;t<6;++t) assert(actual[lfoID(i,lRoute0+t)]==.5);
     }
   }
+  // Pre-range sessions end at the old wave selectors and restore the full range.
+  {auto expected=defaults();expected[kLfoWaveChoice0]=.8;MemoryStream old;IBStreamer out(&old,kLittleEndian);out.writeInt32(0x5147314F);
+   for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);for(int i=kFreeze+1;i<kModWaveFrom0;++i)out.writeDouble(expected[i]);out.writeInt32(123456);
+   old.seek(0,IBStream::kIBSeekSet,nullptr);auto restored=defaults();assert(loadState(&old,restored)&&restored==expected);IBStreamer in(&old,kLittleEndian);int32 sentinel=0;assert(in.readInt32(sentinel)&&sentinel==123456);
+   for(int l=0;l<4;++l)assert(restored[kModWaveFrom0+l]==0.&&restored[kModWaveTo0+l]==1.);
+  }
   // The preceding release's tail ends before the new MOD W rate selectors.
   {auto expected=defaults();expected[kModWaveRnd0]=.75;MemoryStream old;IBStreamer out(&old,kLittleEndian);out.writeInt32(0x51473148);
    for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);for(int i=kFreeze+1;i<kModWaveRate0;++i)out.writeDouble(expected[i]);
@@ -233,7 +239,7 @@ int main() {
     MemoryStream rt3; assert(p2.getState(&rt3)==kResultOk);
     rt.seek(0,IBStream::kIBSeekSet,nullptr); rt3.seek(0,IBStream::kIBSeekSet,nullptr);
     int32 m1=0,m2=0;IBStreamer r1(&rt,kLittleEndian),r2(&rt3,kLittleEndian);
-    r1.readInt32(m1);r2.readInt32(m2);assert(m1==m2&&m1==0x5147314F);
+    r1.readInt32(m1);r2.readInt32(m2);assert(m1==m2&&m1==0x51473150);
     // getState layout: kParamEnd values, buffer size, freeze flag, then the tail
     // (kBypassReserved lives in this region) up to kCount.
     const int fields=kParamEnd+2+(int(kCount)-int(kFreeze)-1);

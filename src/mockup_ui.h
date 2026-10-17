@@ -149,7 +149,7 @@ inline void renderControl(Painter& p,const Control& c,const Value& value,const D
   p.text(title,{r.x+22,r.y,r.w-27,r.h},std::min(15.,r.h*.43),on?orange:muted,true);
  }else if(c.kind==Select){
   pill(p,r);double shown=v;if(c.id==kLfoWaveChoice0+lfo){int wave=modWaveSelection(value,lfo)>0?int(std::round(value(kUiModWave0+lfo)*qg::maxWave)):selectedWave(value,lfo);shown=(wave+1.)/qg::waveChoiceCount;}
-  auto label=display(c.id,shown);if(c.id>=kModWaveRate0&&c.id<kResliceAlgorithm&&v<.5/7){const char* names[]={"Off","1/1","1/2","1/4","1/8","2/1","4/1"};label=names[modWaveSelection(value,int(c.id-kModWaveRate0))];}if(c.id==kReverbSource)label=v>=.5?"RANDOM IMP.":"STEP SEQ.";
+  auto label=display(c.id,shown);if(c.id>=kModWaveFrom0&&c.id<kCount)label=std::to_string(1+int(std::round(v*qg::maxWave)));if(c.id>=kModWaveRate0&&c.id<kResliceAlgorithm&&v<.5/7){const char* names[]={"Off","1/1","1/2","1/4","1/8","2/1","4/1"};label=names[modWaveSelection(value,int(c.id-kModWaveRate0))];}if(c.id==kReverbSource)label=v>=.5?"RANDOM IMP.":"STEP SEQ.";
   if(c.id==kFilterSeqMode)label=v>=.5?"S&G":"ARP";
   const auto legacy=label.find(" (legacy)");if(legacy!=std::string::npos)label.erase(legacy);
   if(c.id==kReverbRateV2&&v<.5/6){int old=value(kReverbSource)>=.5?kReverbRandomRate:kReverbGrid;label=display(old,value(old));}

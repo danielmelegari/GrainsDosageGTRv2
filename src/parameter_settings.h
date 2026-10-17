@@ -78,7 +78,7 @@ inline qg::Settings settings(const std::array<double, kCount>& saved, double tem
   s.freeze=false; // never carried through settings(): toggled directly on the engine
   for(int i=0;i<qg::lfoCount;++i) {
     auto& l=s.lfos[i]; const int base=lfoID(i,0);
-    l.enabled=value(p,base+lEnabled)>=.5; l.wave=selectedWave([&](ParamID id){return value(p,id);},i);l.randomWaveCount=qg::tableWaveCount; // MOD RANDOM includes new waves even for Default/legacy wave selection.
+    l.enabled=value(p,base+lEnabled)>=.5; l.wave=selectedWave([&](ParamID id){return value(p,id);},i);l.randomFirst=int(std::round(value(p,kModWaveFrom0+i)*qg::maxWave));l.randomLast=int(std::round(value(p,kModWaveTo0+i)*qg::maxWave));l.randomWaveCount=qg::tableWaveCount; // MOD RANDOM includes new waves even for Default/legacy wave selection.
     l.sync=value(p,base+lSync)>=.5; l.hz=.01+value(p,base+lHz)*39.99;
     l.beats=lfoBeats[std::clamp(int(std::round(value(p,base+lGrid)*20.)),0,20)];
     l.randomSteps=1+int(std::round(value(p,kRandomSteps0+i)*63.));

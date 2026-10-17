@@ -22,6 +22,7 @@ struct LfoSettings {
   int randomSteps = 1;
   int wave = 0; // 0..127 legacy, 128/129 S&H/S&G, 130..329 new shapes
   int randomWaveCount=waveCount;
+  int randomFirst=-1,randomLast=maxWave; // Inclusive wave IDs; -1 retains legacy DSP API selection.
   double speed=1.;
   int waveRandom=0; // Off, 1/1, 1/2, 1/4, 1/8, 2/1, 4/1 (host quarter-note beats)
   double hz = 1., beats = 4., depth = 1., phase = 0., glide = 1.;
@@ -121,7 +122,9 @@ public:
     position_=position;displayCycle_=cycle;
     const double intervals[]={4.,2.,1.,.5,8.,16.};
     int wave=std::clamp(s.wave,0,maxWave);
-    if(s.waveRandom>0){int64_t step=int64_t(std::floor(beat/intervals[std::clamp(s.waveRandom-1,0,5)]+1e-9));int count=std::clamp(s.randomWaveCount,waveCount,tableWaveCount);wave=std::clamp(int((cycleNoise(step,seed_+0x57a9ULL)+1.)*.5*count),0,count-1);if(wave>=waveCount)wave+=2;}
+    if(s.waveRandom>0){int64_t step=int64_t(std::floor(beat/intervals[std::clamp(s.waveRandom-1,0,5)]+1e-9));int count=std::clamp(s.randomWaveCount,waveCount,tableWaveCount);wave=std::clamp(int((cycleNoise(step,seed_+0x57a9ULL)+1.)*.5*count),0,count-1);if(wave>=waveCount)wave+=2;
+      if(s.randomFirst>=0){int first=std::clamp(std::min(s.randomFirst,s.randomLast),0,maxWave),last=std::clamp(std::max(s.randomFirst,s.randomLast),0,maxWave);wave=first+std::min(last-first,int((cycleNoise(step,seed_+0x57a9ULL)+1.)*.5*(last-first+1)));}
+    }
     activeWave_=wave;
     if(previousWave_>=0&&previousWave_!=wave){transition_=s.waveRandom>0?0.:1.;transitionFrom_=lastOutput_;}
     previousWave_=wave;

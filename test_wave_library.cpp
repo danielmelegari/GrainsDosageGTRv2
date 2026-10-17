@@ -26,9 +26,19 @@ int main(){
   for(int mod=0;mod<4;++mod){patch[lfoID(mod,lEnabled)]=1.;patch[kModWaveRate0+mod]=(rate+1.)/7.;patch[kLfoWaveChoice0+mod]=selected;
    auto config=settings(patch,120,48000).lfos[mod];qg::Lfo l;l.prepare(17+mod);std::set<int> reached;
    for(int step=0;step<12000;++step){double value=l.process(config,step*intervals[rate-1]+.001,48000,false,0);assert(std::isfinite(value)&&value>=-1&&value<=1);reached.insert(l.wave());}
-   assert(reached.size()==qg::tableWaveCount);assert(!reached.count(128)&&!reached.count(129));
+   assert(reached.size()==qg::waveChoiceCount);
    for(int wave=130;wave<=qg::maxWave;++wave)assert(reached.count(wave));
   }
+ }
+ // Inclusive bounds, reversed endpoints, single-wave and stochastic-only ranges.
+ for(auto bounds:{std::pair<int,int>{123,287},{287,123},{330,330},{1,1},{129,130},{200,330}}){
+  auto patch=initialParameters();patch[kModWaveFrom0]=(bounds.first-1.)/qg::maxWave;patch[kModWaveTo0]=(bounds.second-1.)/qg::maxWave;
+  patch[kModWaveRate0]=2./7.;patch[lfoID(0,lEnabled)]=1.;auto config=settings(patch,120,48000).lfos[0];
+  qg::Lfo l;l.prepare(41);std::set<int> seen;int low=std::min(bounds.first,bounds.second),high=std::max(bounds.first,bounds.second);
+  for(int step=0;step<12000;++step){double v=l.process(config,step*4.+.001,48000,false,0);assert(std::isfinite(v)&&v>=-1&&v<=1);int number=l.wave()+1;assert(number>=low&&number<=high);seen.insert(number);}
+  assert(seen.size()==size_t(high-low+1));
+  std::array<double,kCount> restored;assert(decodePreset(encodePreset([&](int id){return patch[id];}),restored));assert(restored[kModWaveFrom0]==patch[kModWaveFrom0]&&restored[kModWaveTo0]==patch[kModWaveTo0]);
+  config.waveRandom=0;config.wave=7;l.process(config,0,48000,false,0);assert(l.wave()==7);
  }
  auto factory=bankPreset(1,8);auto bytes=encodePreset([&](int id){return factory[id];});assert(untouchedFactoryPreset(bankPresetName(1,8),bytes));assert(!untouchedFactoryPreset("My own sound",bytes));factory[kSize]=.123456789;bytes=encodePreset([&](int id){return factory[id];});assert(!untouchedFactoryPreset(bankPresetName(1,8),bytes));
  assert(adjacentPreset(-1,1,0)==-1);assert(adjacentPreset(-1,1,2)==0);assert(adjacentPreset(1,1,2)==-1);assert(adjacentPreset(-1,-1,2)==1);
