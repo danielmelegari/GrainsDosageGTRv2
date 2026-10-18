@@ -1,0 +1,26 @@
+name: GrainsDosage — macOS Trial only
+on:
+  workflow_dispatch:
+  push:
+    branches: [work/mockup-purple-skin]
+    paths:
+      - 'src/**'
+      - 'assets/**'
+      - 'cmake/**'
+      - 'CMakeLists.txt'
+      - 'test_*'
+      - 'tests/**'
+      - 'tools/test*'
+      - 'tools/check*'
+      - 'tools/run-au-validation.py'
+      - '.github/workflows/build-all.yml'
+permissions:
+  contents: read
+concurrency:
+  group: grains-macos-trial-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  trial:
+    uses: ./.github/workflows/build-all.yml
+    with:
+      macos_trial_only: true

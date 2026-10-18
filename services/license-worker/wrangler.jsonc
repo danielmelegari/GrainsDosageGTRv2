@@ -1,0 +1,11 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "grainsdosage-licenses",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "vars": {"GUMROAD_PRODUCT_ID": "tl1D89RY6g0H5blD-izZ3Q=="},
+  "d1_databases": [{"binding": "DB", "database_name": "dsgmachines-licenses", "database_id": "c1ba368a-eab8-444d-b86e-599e5811303a", "migrations_dir": "migrations"}],
+  "ratelimits": [{"name": "ACTIVATION_LIMITER", "namespace_id": "1001", "simple": {"limit": 10, "period": 60}}],
+  "observability": {"enabled": false}
+}

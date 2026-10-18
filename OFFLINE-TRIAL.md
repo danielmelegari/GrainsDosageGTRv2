@@ -1,39 +1,48 @@
+# Automatic 14-day Trial edition
+
+The current Trial starts automatically on first editor opening or audio activation, without a license code. It counts 14 consecutive days, displays the days remaining in the header, then fades to silence and stops wet processing. See [AUTOMATIC-TRIAL.txt](AUTOMATIC-TRIAL.txt). Build with `-DGRAINS_EDITION=trial`; no publisher key is needed.
+
+Dates persist per OS user in macOS Keychain or protected Windows storage. Ordinary restart/reinstallation preserves the deadline; rollback and invalid storage block processing. A fully offline trial cannot guarantee protection against binary modification, deletion of all state, a new OS user, or complete system restoration.
+
+## Legacy signed trials and Licensed activation
+
+The following instructions apply to earlier signed trials and the Licensed edition, not the automatic Trial download.
+
 # Registered-computer offline trials
 
 The Windows trial requires a publisher-signed license for that computer. No server,
 account, or internet connection is needed by the plugin or registration tool.
-Without a valid license the trial plugin silences output. The full edition remains
-unrestricted; distribute only the trial installer to evaluation users.
+Without a valid license the commercial plugin disables its effect and passes
+latency-aligned dry audio. Expiry uses a 20 ms fade, preserving DAW operation.
+Development builds remain unrestricted and must not be distributed as commercial
+binaries. Trial and Licensed commercial builds use the same signed activation
+system. See [the unified build guide](docs/commercial-builds.md) and
+[the native publisher app guide](docs/license-generator.md).
 
-## Publisher setup (once, on your own computer)
+## Publisher setup
 
-Install Python 3 and the signing dependency:
+This repository now includes the existing publisher public key from the three-page
+plugin, converted from `src/license_public_key.h` to
+`config/windows-trial-public.b64`. The Windows workflow uses this key by default.
+Use the matching **existing** `publisher-private.pem` from your private publisher
+kit to issue Windows trials; do not generate a replacement key for these builds.
+The private key is never included in the repository or customer installer.
 
-```text
-python -m pip install cryptography
-```
+Install Python 3 and `python -m pip install cryptography` on the issuing computer.
+The Windows issuance command below creates a machine-bound, fixed 14-day license.
+Windows trial files and macOS GDS2 activation codes use different formats; do not
+send macOS activation codes to the Windows registration tool.
 
-From a checkout of this repository, generate a private key outside the repository:
+For a new product key only, `tools/issue_trial_license.py keygen` can create a key
+and public header. Replacing a public key requires rebuilding the plugin and
+reissuing licenses. A `GRAINS_TRIAL_PUBLIC_KEY` GitHub repository variable can
+override the checked-in public key. It must contain the generated public `.b64`
+text, never the private PEM. Back up the existing private key and macOS publisher
+ledger securely outside the repository.
 
-```text
-python tools/issue_trial_license.py keygen --key ../grains-trial-private.pem --public-header ../grains-trial-public.h
-```
-
-Back up `grains-trial-private.pem` securely. Keep it on your issuing computer;
-never commit it, send it to customers, or put it in GitHub Actions. Losing it means
-you cannot issue licenses for builds signed by its public key. Replacing the key
-requires rebuilding the trial and reissuing licenses.
-
-The command also creates `grains-trial-public.b64`. In the GitHub repository,
-Settings > Secrets and variables > Actions > Variables, create the repository
-variable `GRAINS_TRIAL_PUBLIC_KEY` containing that file's text. It is a PUBLIC key,
-not a secret. Run **Windows 14-day trial** manually after setting the variable.
-Only the public key is embedded in the plugin and registration tool.
-
-For a local build, pass `-DGRAINS_TRIAL=ON` and
-`-DGRAINS_TRIAL_PUBLIC_KEY_HEADER=/absolute/path/to/grains-trial-public.h` to CMake.
-There is deliberately no default production signing key. CI can run licensing tests
-with a separate test verification key, but never publishes those test builds.
+For a local Windows build, run `python tools/configure_trial_key.py PUBLIC_HEADER`
+and pass `-DGRAINS_TRIAL=ON -DGRAINS_TRIAL_PUBLIC_KEY_HEADER=/absolute/PUBLIC_HEADER`
+to CMake. CI's separate test verification key is never distributed.
 
 ## Register a computer and issue its trial
 
@@ -45,7 +54,7 @@ with a separate test verification key, but never publishes those test builds.
 3. Issue the license on your private issuing computer:
 
    ```text
-   python tools/issue_trial_license.py issue --key ../grains-trial-private.pem --request GrainsDosage-machine-request.json --out trial.license
+   python tools/issue_trial_license.py issue --key ../publisher-private.pem --request GrainsDosage-machine-request.json --out trial.license
    ```
 
    This creates a fixed 14-day period starting when the license is issued.
@@ -71,9 +80,13 @@ state uses Windows DPAPI with copies in the current user's registry and local
 application data. Missing/corrupt single copies, inconsistent starts, and clock
 rollback beyond two minutes block the trial. Small clock corrections do not move
 the recorded time backwards. A monotonic deadline also limits each open session.
-Storage, signature checks, and DPAPI run off the audio thread. Every 30 seconds the
-plugin rechecks the license, identity, clock, and state; expiry is checked on each
-audio block. A detected failure stays blocked for that plugin instance.
+Storage, signature checks, and DPAPI run off the audio thread. At activation, the plugin verifies the license signature and machine identity.
+Every 30 seconds it checks the clock and protected state; the signed expiry and
+monotonic deadline are checked on every audio block. There is no one-hour session
+limit. A verified license is held in memory for the session rather than repeatedly
+reopening it. Temporary storage access failures are retried; three consecutive
+failures block output until the protected state can be verified again. Invalid or
+expired state blocks immediately. None of these retries extends the signed end.
 
 Deleting both state copies does not change the signed expiry. Reinstalling the
 plugin does not reset it. Existing unsigned trials must register for a signed

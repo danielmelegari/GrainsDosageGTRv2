@@ -17,7 +17,7 @@ int main() {
     }
     shapes.insert(hash); assert(table[0]==table[tableSize]);
   }
-  assert(shapes.size()==128); // 128 distinct periodic tables, not duplicate names.
+  assert(shapes.size()==tableWaveCount); // Every legacy and added periodic table must be distinct.
   Lfo a,b; a.prepare(1); b.prepare(2);
   LfoSettings s; s.enabled=true; s.wave=0; s.beats=4.;
   assert(std::abs(a.process(s,1.,48000.,false,0)-1.)<1e-6);
@@ -94,5 +94,5 @@ int main() {
     for(size_t i=0;i<base.size();++i) difference+=std::abs(base[i]-moved[i]);
     assert(difference>100.);
   }
-  std::cout<<"PASS: 128 distinct waves, bounds, sync, phase, S&H, S&G continuity, independent seeds, retrigger, free rate, bipolar routing, bypass, all-wave audio stress and audible pitch/speed/transpose modulation in all orders\n";
+  std::cout<<"PASS: "<<tableWaveCount<<" distinct waves, bounds, sync, phase, S&H, S&G continuity, independent seeds, retrigger, free rate, bipolar routing, bypass, all-wave audio stress and audible pitch/speed/transpose modulation in all orders\n";
 }

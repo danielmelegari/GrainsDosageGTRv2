@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "0.13.0"
+  #define AppVersion "0.13.15"
 #endif
 #ifndef ProjectDir
   #define ProjectDir ".."
@@ -13,6 +13,10 @@
 #endif
 #ifdef Trial
   #define EditionSuffix "-14-Day-Trial"
+  #define Commercial
+#elif defined(Licensed)
+  #define EditionSuffix "-Licensed"
+  #define Commercial
 #else
   #define EditionSuffix ""
 #endif
@@ -23,6 +27,7 @@ AppName=GrainsDosage
 AppVersion={#AppVersion}
 AppPublisher=Daniel Melegari
 DefaultDirName={autopf}\GrainsDosage
+DefaultGroupName=GrainsDosage
 DisableDirPage=yes
 DisableProgramGroupPage=yes
 ArchitecturesAllowed=x64compatible
@@ -30,7 +35,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
 PrivilegesRequired=admin
 OutputDir={#OutputDir}
-OutputBaseFilename=GrainsDosage-{#AppVersion}-Windows10-x64{#EditionSuffix}-Setup
+OutputBaseFilename=GrainsDosage-{#AppVersion}-Windows10-x64-ThreePage{#EditionSuffix}-Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -43,14 +48,23 @@ InfoBeforeFile={#ProjectDir}\installer\BEFORE-INSTALL.txt
 [Files]
 Source: "{#ProjectDir}\{#BuildDir}\VST3\Release\GrainsDosage.vst3\*"; DestDir: "{commoncf64}\VST3\GrainsDosage.vst3"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#ProjectDir}\INSTALL-WINDOWS.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#ProjectDir}\USER-MANUAL.html"; DestDir: "{app}"; Flags: ignoreversion
 
-#ifdef Trial
+#ifdef Licensed
 Source: "{#ProjectDir}\{#BuildDir}\registration\Release\GrainsDosageRegistration.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#ProjectDir}\TRIAL-REGISTRATION.txt"; DestDir: "{app}"; Flags: ignoreversion
 
+#endif
+
+#ifdef Trial
+Source: "{#ProjectDir}\AUTOMATIC-TRIAL.txt"; DestDir: "{app}"; Flags: ignoreversion
+#endif
+
 [Icons]
+#ifdef Licensed
 Name: "{group}\GrainsDosage Trial Registration"; Filename: "{app}\GrainsDosageRegistration.exe"
 #endif
+Name: "{group}\GrainsDosage User Manual"; Filename: "{app}\USER-MANUAL.html"
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

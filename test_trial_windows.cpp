@@ -15,6 +15,46 @@ int main() {
   assert(parseLicense(text, license));
   license.signature[10] ^= 1;
   assert(!signatureValid(license));
+  // A fresh in-memory test key verifies the new permanent payload through CNG.
+  // No production/test private key is persisted or packaged.
+  {
+    Algorithm rsa;CryptoKey signing;
+    assert(BCryptOpenAlgorithmProvider(&rsa.value,BCRYPT_RSA_ALGORITHM,nullptr,0)>=0);
+    assert(BCryptGenerateKeyPair(rsa.value,&signing.value,2048,0)>=0);
+    assert(BCryptFinalizeKeyPair(signing.value,0)>=0);
+    ULONG size=0;
+    assert(BCryptExportKey(signing.value,nullptr,BCRYPT_RSAPUBLIC_BLOB,nullptr,0,&size,0)>=0);
+    std::vector<BYTE> pub(size);
+    assert(BCryptExportKey(signing.value,nullptr,BCRYPT_RSAPUBLIC_BLOB,pub.data(),ULONG(pub.size()),&size,0)>=0);
+    const std::string payload="GRAINS-PERMANENT-1\n"+machineId()+"\n"+std::string(32,'a')+"\n3\n";
+    std::array<BYTE,32> hash{};assert(sha256(payload,hash));
+    BCRYPT_PKCS1_PADDING_INFO padding{BCRYPT_SHA256_ALGORITHM};std::vector<BYTE> signature(256);
+    assert(BCryptSignHash(signing.value,&padding,hash.data(),ULONG(hash.size()),signature.data(),ULONG(signature.size()),&size,BCRYPT_PAD_PKCS1)>=0);
+    std::string signedText=payload;const char* digits="0123456789abcdef";
+    for(auto b:signature){signedText+=digits[b>>4];signedText+=digits[b&15];}signedText+='\n';
+    License permanent;assert(parseLicense(signedText,permanent));assert(permanent.permanent);
+    assert(signatureValid(permanent,pub.data(),ULONG(pub.size())));
+    assert(verifyLicenseText(signedText,permanent,machineId(),wallTime(),true,pub.data(),ULONG(pub.size())));
+    // Simulate a retired signing key: current key fails, retained key succeeds.
+    assert(verifyLicenseText(signedText,permanent,machineId(),wallTime(),true,trialPublicKey,sizeof(trialPublicKey),pub.data(),ULONG(pub.size())));
+    assert(!verifyLicenseText(signedText,permanent,machineId(),wallTime(),true,trialPublicKey,sizeof(trialPublicKey),nullptr,0));
+    assert(!verifyLicenseText(signedText,permanent,std::string(64,'f'),wallTime(),true,trialPublicKey,sizeof(trialPublicKey),pub.data(),ULONG(pub.size())));
+    assert(!verifyLicenseText(signedText,permanent,std::string(64,'f'),wallTime(),true,pub.data(),ULONG(pub.size())));
+    auto altered=signedText;altered[25]^=1;assert(!verifyLicenseText(altered,permanent,machineId(),wallTime(),true,pub.data(),ULONG(pub.size())));
+    assert(!verifyLicenseText(altered,permanent,machineId(),wallTime(),true,trialPublicKey,sizeof(trialPublicKey),pub.data(),ULONG(pub.size())));
+    const Tick issued=wallTime();
+    const std::string trialPayload="GRAINS-TRIAL-1\n"+machineId()+"\n"+std::to_string(issued)+"\n"+std::to_string(issued+duration)+"\n";
+    assert(sha256(trialPayload,hash));assert(BCryptSignHash(signing.value,&padding,hash.data(),ULONG(hash.size()),signature.data(),ULONG(signature.size()),&size,BCRYPT_PAD_PKCS1)>=0);
+    std::string trialText=trialPayload;for(auto b:signature){trialText+=digits[b>>4];trialText+=digits[b&15];}trialText+='\n';
+    License signedTrial;
+    assert(verifyLicenseText(trialText,signedTrial,machineId(),issued,true,pub.data(),ULONG(pub.size())));
+    assert(verifyLicenseText(trialText,signedTrial,machineId(),issued,true,trialPublicKey,sizeof(trialPublicKey),pub.data(),ULONG(pub.size())));
+    assert(!verifyLicenseText(trialText,signedTrial,machineId(),issued+duration,true,trialPublicKey,sizeof(trialPublicKey),pub.data(),ULONG(pub.size())));
+    assert(verifyLicenseText(trialText,signedTrial,machineId(),issued+7200*second,true,pub.data(),ULONG(pub.size())));
+    assert(!verifyLicenseText(trialText,signedTrial,machineId(),issued+duration,true,pub.data(),ULONG(pub.size())));
+    assert(!verifyLicenseText(trialText,signedTrial,machineId(),issued-1,true,pub.data(),ULONG(pub.size())));
+    permanent.payload[7]^=1;assert(!signatureValid(permanent,pub.data(),ULONG(pub.size())));
+  }
   assert(machineIdValid(machineId()));
   assert(machineId() == machineId());
   assert(!readLicense(L"tests/trial_test.license", license, false)); // Wrong machine.
@@ -40,9 +80,30 @@ int main() {
   auto concurrent = [&](bool& ok) { State copy{start,start}; ok = store.refresh(start+2*second,copy,true); };
   std::thread a(concurrent,std::ref(okA)), b(concurrent,std::ref(okB)); a.join(); b.join();
   assert(okA && okB);
-  assert(store.refresh(start+300*second,state,false));
+  // Automatic trial discovers its own start, without a signed license.
+  {const auto dir=directory+L"-auto",reg=registry+L"-auto";Store automatic(reg,dir);State record{};
+   assert(automatic.check(start,record,false,0,true)==Refresh::missing);
+   assert(automatic.check(start,record,true,0,true)==Refresh::active);assert(record.start==start);
+   State restarted{};assert(automatic.check(start+second,restarted,true,0,true)==Refresh::active);assert(restarted.start==start);
+   assert(automatic.check(start+duration-1,restarted,false,0,true)==Refresh::active);
+   assert(automatic.check(start+duration,restarted,false,0,true)==Refresh::expired);
+   restarted={};assert(automatic.check(start+duration-1,restarted,true,0,true)!=Refresh::active);
+   assert(DeleteFileW((dir+L"\\licensed-state.dat").c_str()));restarted={};assert(automatic.check(start,restarted,true,0,true)!=Refresh::active);
+   RegDeleteTreeW(HKEY_CURRENT_USER,reg.c_str());DeleteFileW((dir+L"\\licensed-state.dat").c_str());RemoveDirectoryW(dir.c_str());
+  }
+  // Simulate two hours of 30-second maintenance, including many instances.
+  // No one-hour session timeout: the signed 14-day end is the only duration.
+  for(Tick elapsed=30*second;elapsed<=7200*second;elapsed+=30*second){
+    State copy{start,start};assert(store.refresh(start+elapsed,copy,false));
+  }
+  {
+    Handle busy;busy.value=CreateFileW((directory+L"\\licensed-state.dat").c_str(),GENERIC_READ,0,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);
+    assert(busy.value!=INVALID_HANDLE_VALUE);
+    assert(store.check(start+7201*second,state,false)==Refresh::unavailable);
+  }
+  assert(store.refresh(start+7201*second,state,false)); // Temporary access recovers.
   assert(!store.refresh(start,state,false)); // Clock rollback.
-  assert(store.refresh(start+301*second,state,false));
+  assert(store.refresh(start+7202*second,state,false));
   assert(!store.refresh(start+duration,state,false));
   State reloaded{start,start};
   assert(!store.refresh(start+duration-1,reloaded,true)); // Persisted expiration.

@@ -1,69 +1,10 @@
-name: Build installers
-
-permissions:
-  contents: read
-
+name: Build commercial installers
 on:
   release:
     types: [published]
   workflow_dispatch:
-
+permissions:
+  contents: read
 jobs:
-  windows-installers:
-    runs-on: windows-latest
-    timeout-minutes: 45
-    strategy:
-      matrix:
-        edition: [full, trial]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure publisher public key
-        if: matrix.edition == 'trial'
-        env:
-          GRAINS_TRIAL_PUBLIC_KEY: ${{ vars.GRAINS_TRIAL_PUBLIC_KEY }}
-        run: python tools/configure_trial_key.py "$env:RUNNER_TEMP/trial_public_key.h"
-
-      - name: Checkout VST3 SDK
-        uses: actions/checkout@v4
-        with:
-          repository: steinbergmedia/vst3sdk
-          ref: 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
-          submodules: recursive
-          path: vst3sdk
-
-      - name: Build VST3
-        shell: bash
-        run: |
-          # The trial edition adds -DGRAINS_TRIAL=ON (see src/trial_guard.h
-          # for the trial implementation).
-          if [ "${{ matrix.edition }}" = "trial" ]; then
-            cmake -B build-trial -DCMAKE_BUILD_TYPE=Release \
-              -DVST3_SDK_ROOT="$GITHUB_WORKSPACE/vst3sdk" -DGRAINS_TRIAL=ON -DGRAINS_TRIAL_PUBLIC_KEY_HEADER="$RUNNER_TEMP/trial_public_key.h" -DSMTG_CREATE_PLUGIN_LINK=OFF
-            cmake --build build-trial --config Release
-          else
-            cmake -B build -DCMAKE_BUILD_TYPE=Release \
-              -DVST3_SDK_ROOT="$GITHUB_WORKSPACE/vst3sdk" -DSMTG_CREATE_PLUGIN_LINK=OFF
-            cmake --build build --config Release
-          fi
-
-      - name: Install Inno Setup
-        run: choco install innosetup -y --no-progress
-
-      - name: Build installer
-        shell: cmd
-        run: |
-          if "%EDITION%"=="trial" (
-            "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DTrial /DBuildDir=build-trial installer\GrainsDosage.iss
-          ) else (
-            "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\GrainsDosage.iss
-          )
-        env:
-          EDITION: ${{ matrix.edition }}
-
-      - name: Upload installer
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-installer-${{ matrix.edition }}
-          path: dist/*.exe
-          if-no-files-found: error
+  commercial:
+    uses: ./.github/workflows/build-all.yml

@@ -17,6 +17,11 @@ inline int minorNote(double midi,int root,bool scale,int maxMidi=119){
 }
 class FilterSequencer {
  double current_=0.;int step_=0;
+ // Cache only identical inputs; modulation still updates at audio rate.
+ double cachedSr_=-1.,cachedGlide_=-1.,smoothing_=0.;
+ double cachedValue_=-1.,frequency_=0.;
+ double cachedMidi_=1e30;int cachedRoot_=-1,cachedScale_=-1,cachedMaximum_=-1;
+ double combFrequency_=440.;double cachedCombSr_=-1.;int maximum_=119;
 public:
  void reset(){current_=0.;step_=0;}
  int step()const{return step_;}
@@ -26,9 +31,10 @@ public:
    if(s.mode==0)value=filterPattern(s.pattern,step_);
    else{double a=cycleNoise(tick-1,0x83932),b=cycleNoise(tick,0x83932);double t=std::clamp((pos-std::floor(pos))/std::max(.01,s.glide),0.,1.);value=a+(b-a)*smooth(t);}
   }
-  double smoothing=std::exp(-1./(sr*(.002+s.glide*.08)));current_=value+smoothing*(current_-value);
-  if(comb){double midi=12.*(s.octave+1)+s.root+(cutoff-.5)*48.+current_*s.depth*24.;int maximum=int(std::floor(69.+12.*std::log2(std::min(20000.,sr*.2)/440.)));int note=minorNote(midi,s.root,s.scale!=0,maximum);return 440.*std::pow(2.,(note-69)/12.);}
-  return 20.*std::pow(1000.,std::clamp(cutoff+current_*s.depth*.4,0.,1.));
+  if(sr!=cachedSr_||s.glide!=cachedGlide_){cachedSr_=sr;cachedGlide_=s.glide;smoothing_=std::exp(-1./(sr*(.002+s.glide*.08)));}current_=value+smoothing_*(current_-value);
+  if(comb){double midi=12.*(s.octave+1)+s.root+(cutoff-.5)*48.+current_*s.depth*24.;if(sr!=cachedCombSr_){cachedCombSr_=sr;maximum_=int(std::floor(69.+12.*std::log2(std::min(20000.,sr*.2)/440.)));}
+   if(midi!=cachedMidi_||s.root!=cachedRoot_||s.scale!=cachedScale_||maximum_!=cachedMaximum_){cachedMidi_=midi;cachedRoot_=s.root;cachedScale_=s.scale;cachedMaximum_=maximum_;int note=minorNote(midi,s.root,s.scale!=0,maximum_);combFrequency_=440.*std::pow(2.,(note-69)/12.);}return combFrequency_;}
+  const double normalized=std::clamp(cutoff+current_*s.depth*.4,0.,1.);if(normalized!=cachedValue_){cachedValue_=normalized;frequency_=20.*std::pow(1000.,normalized);}return frequency_;
  }
 };
 }

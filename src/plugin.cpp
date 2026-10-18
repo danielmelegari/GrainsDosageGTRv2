@@ -1,7 +1,7 @@
 #include "engine.h"
-#ifdef GRAINS_TRIAL
-#include "trial_guard.h"
-#endif
+#include "audio_float_mode.h"
+#include "license.h"
+#include "parameter_settings.h"
 #include "declick.h"
 #include "master_fx.h"
 #include "parameters.h"
@@ -29,98 +29,21 @@ namespace {
 static const FUID processorID(0xB318D832, 0xC27E4F25, 0xBD8E13A5, 0x31470211);
 static const FUID controllerID(0xD8FDFEB3, 0xA52848AB, 0x8B8706A4, 0xDA21E077);
 using namespace aztec;
-double value(const std::array<double, kCount>& p, int id) { return std::clamp(p[id], 0., 1.); }
-qg::Settings settings(const std::array<double, kCount>& saved, double tempo, double rate) {
-  auto p=saved;
-  if(value(p,kXYEnable)>=.5) {
-    for(int axis=0;axis<2;++axis) {
-      const int target=int(std::round(value(saved,axis?kYTarget:kXTarget)*int(kXYX)))-1;
-      if(target>=0 && target<int(kXYX)) p[target]=std::clamp(p[target]+(value(saved,axis?kXYY:kXYX)*2.-1.)*(value(saved,axis?kYAmount:kXAmount)*2.-1.),0.,1.);
-    }
-  }
-  qg::Settings s; s.tempo = tempo; s.sampleRate = rate;
-  s.division = .25; // Fixed sixteenth-note density clock; no grain gate.
-  s.size = .015 + value(p, kSize) * .235;
-  s.density = 1. + value(p, kDensity) * 31.;
-  s.pitch = std::round((value(p, kPitch) - .5) * 96.);
-  s.position = .015 + value(p, kPosition) * 1.985;
-  s.chaos = value(p, kChaos); s.mix = value(p, kMix);
-  s.attack = .002;
-  s.release = .004;
-  s.feedback = 0.; s.pattern = 0;
-  s.normalize=value(p,kNormalize)>=.5;
-  s.moduleOn={{value(p,kGrainEnabled)>=.5,value(p,kGlitchEnabled)>=.5,value(p,kRepeatEnabled)>=.5}};
-  s.grainPan=value(p,kGrainPan)*2.-1.;s.panMode=int(std::round(value(p,kPanMode)*2.));
-  s.filterSequence.enabled=value(p,kFilterSeqOn)>=.5;s.filterSequence.mode=int(std::round(value(p,kFilterSeqMode)));s.filterSequence.pattern=int(std::round(value(p,kFilterSeqPattern)*63.));
-  const double filterRates[]={1.,.5,.25,.125,2.,4.};s.filterSequence.rate=filterRates[int(std::round(value(p,kFilterSeqRate)*5.))];s.filterSequence.depth=value(p,kFilterSeqDepth);s.filterSequence.glide=value(p,kFilterSeqGlide);
-  s.filterSequence.root=int(std::round(value(p,kCombRoot)*11.));s.filterSequence.octave=int(std::round(value(p,kCombOctave)*6.));s.filterSequence.scale=int(std::round(value(p,kCombScale)));
-  s.filterOn=value(p,kMasterFilter)>=.5;s.filterType=int(std::round(value(p,kFilterType)*2.));s.filterSlope=value(p,kFilterSlope)>=.5?1:0;s.filterCutoff=value(p,kFilterCutoff);s.filterResonance=value(p,kFilterResonance);s.filterDrive=value(p,kFilterDrive);
-  s.reverbModel=int(std::round(value(p,kReverbModel)*4.));s.filterModel=int(std::round(value(p,kFilterModel)*(qg::filterModelCount-1)));s.reslice.enabled=value(p,kResliceEnabled)>=.5;const double resliceLengths[]={16.,8.,4.,2.};s.reslice.beats=resliceLengths[int(std::round(value(p,kResliceLength)*3.))];s.reslice.mix=value(p,kResliceMix);s.reslice.random=value(p,kResliceRndOn)>=.5;s.reslice.randomBeats=2.*std::pow(2.,std::round(value(p,kResliceRndRate)*2.));s.gater.latch=value(p,kGaterLatch)>=.5;s.gater.tie=false; /* Tie removed from the module (LATCH kept). */ s.gater.minimumLength=.05+.90*value(p,kGaterMinLength);for(int i=0;i<16;++i){s.reslice.on[i]=value(p,kResliceStep0+i)>=.5;s.reslice.slice[i]=int(std::round(value(p,kResliceIndex0+i)*15.));if(value(p,kGaterRelease0+i)>=.5)s.gater.release|=uint16_t(1)<<i;}
-  s.gater.enabled=value(p,kGaterEnabled)>=.5;s.gater.grid=std::pow(.5,int(std::round(value(p,kGaterGrid)*3.)));s.gater.lengthRandom=value(p,kGaterLengthRnd)>=.5;s.gater.stepRandom=value(p,kGaterStepRnd)>=.5;s.gater.chance=value(p,kGaterChance);for(int i=0;i<16;++i){s.gater.state[i]=value(p,kGaterState0+i)>=.25?1:0;s.gater.length[i]=.05+.95*value(p,kGaterLength0+i);s.gater.sustain[i]=.5*value(p,kGaterSustain0+i);}
-  s.reverbKill=value(p,kReverbKill)>=.5;s.reverbRandom=value(p,kReverbSource)>=.5;s.reverbRandomGrid=std::pow(.5,int(std::round(value(p,kReverbRandomRate)*2.)));
-  s.reverbOn=value(p,kReverbOn)>=.5;s.reverbType=int(std::round(value(p,kReverbType)*4.));
-  s.reverbGrid=std::pow(.5,int(std::round(value(p,kReverbGrid)*3.)));s.reverbMix=value(p,kReverbMix);
-  s.reverbLength=.2+value(p,kReverbLength)*19.8;
-  s.reverbPattern=0;for(int i=0;i<16;++i)if(value(p,kReverbStep0+i)>=.5)s.reverbPattern|=uint16_t(1u<<i);
-  s.pattern=0xffff; // Grain gate removed; retained IDs only for old preset compatibility.
-  s.grainMix = value(p,kGrainMix); s.glitchMix = value(p,kGlitchMix);
-  s.glitchBeats = effectDivisions[std::min(15,int(std::round(value(p,kGlitchDivision)*15.)))];
-  s.glitchChance = value(p,kGlitchChance); s.glitchReverse = value(p,kGlitchReverse) >= .5;
-  s.repeatOn = value(p,kRepeatOn) >= .5; s.repeatMix = value(p,kRepeatMix);
-  s.repeatBeats = effectDivisions[std::min(15,int(std::round(value(p,kRepeatDivision)*15.)))];
-  s.glitchRandom=true;s.glitchTriggerBeats=std::pow(2.,std::round(value(p,kGlitchTriggerRate)*3.));s.glitchSequence=false; s.repeatSequence=value(p,kRepeatSeq)>=.5;
-  s.glitchPattern=s.repeatPattern=0;
-  for(int i=0;i<16;++i) {
-    if(value(p,kGlitchStep0+i)>=.5) s.glitchPattern|=uint16_t(1u<<i);
-    if(value(p,kRepeatStep0+i)>=.5) s.repeatPattern|=uint16_t(1u<<i);
-    const int rate=int(std::round(value(p,kRepeatRate0+i)*15.)); // "Global" removed; 16-entry table now.
-    s.repeatRates[i]=effectDivisions[std::clamp(rate,0,15)];
-    s.repeatPitches[i]=std::round(value(p,kRepeatPitch0+i)*96.-48.);
-  }
-  // PRESLICER: the MOVE slider was removed from the GUI; keep a fixed centred offset for old presets.
-  s.glitchMove=.5;s.glitchVariation=value(p,kGlitchVariation);
-  s.glitchRefresh=captureIntervals[int(std::round(value(p,kGlitchRefresh)*7.))];
-  s.repeatAuto=value(p,kRepeatAuto)>=.5;s.repeatInterval=captureIntervals[int(std::round(value(p,kRepeatInterval)*7.))];
-  s.repeatDuration=.25+value(p,kRepeatDuration)*7.75;s.repeatChance=value(p,kRepeatChance);
-  s.order=std::min(6,int(std::round(value(p,kModuleOrder)*6.)));
-  // Global BYPASS button removed from the plugin: kBypassReserved stays in the enum only so
-  // legacy state/preset IDs keep their positions, but it is never read anymore.
-  s.bypass=false; s.densityFlow=value(p,kDensityFlow)>=.5; s.transpose=value(p,kTranspose)*96.-48.;
-  s.stretchOn=value(p,kStretchOn)>=.5; s.stretchSpeed=.25+value(p,kStretchSpeed)*3.75;
-  // BUFFER SIZE: kGrainBuffer selects one of 1/2/4/8/16 s (live resize keeps the audible tail).
-  {const double bufferSeconds[]={1.,2.,4.,8.,16.};int bucket=int(std::clamp(value(p,kGrainBuffer)*4.,0.,4.));s.bufferSeconds=bufferSeconds[bucket];}
-  // FREEZE is momentary on screen: p_[kFreeze] carries a one-shot request that
-  // process() consumes below; the sustained state lives in the engine and is
-  // mirrored back into p_ so getState/save always capture the true frozen flag.
-  s.freeze=false; // never carried through settings(): toggled directly on the engine
-  for(int i=0;i<qg::lfoCount;++i) {
-    auto& l=s.lfos[i]; const int base=lfoID(i,0);
-    l.enabled=value(p,base+lEnabled)>=.5; l.wave=int(std::round(value(p,base+lWave)*129.));
-    l.sync=value(p,base+lSync)>=.5; l.hz=.01+value(p,base+lHz)*39.99;
-    l.beats=lfoBeats[std::clamp(int(std::round(value(p,base+lGrid)*20.)),0,20)];
-    l.randomSteps=1+int(std::round(value(p,kRandomSteps0+i)*63.));
-    l.depth=value(p,base+lDepth); l.phase=value(p,base+lPhase);
-    l.gateReset=value(p,base+lReset)>=.5; l.glide=.01+value(p,base+lGlide)*.99;
-    for(int t=0;t<8;++t) l.amount[t]=value(p,routeID(i,t))*2.-1.;
-    const double speeds[]={.25,.5,1.,2.};l.speed=speeds[int(std::round(value(p,kLfoSpeed0+i)*3.))];l.waveRandom=int(std::round(value(p,kModWaveRnd0+i)*4.));
-    for(int slot=0;slot<6;++slot){int target=int(std::round(value(p,slotTarget(i,slot))*qg::modTargetCount))-1;if(target>=0&&target<qg::modTargetCount)l.amount[target]+=value(p,slotAmount(i,slot))*2.-1.;}
-  }
-  return s;
-}
 std::array<double,kCount> defaults(){return initialParameters();}
 // Last id that is part of the plain (contiguous) parameter array region written
 // by getState; everything after it up to kCount is appended in the tail layout.
 static constexpr int kParamEnd = int(kUiFilterSeqStep) + 1;
 bool loadState(IBStream* stream, std::array<double,kCount>& p) {
   IBStreamer in(stream,kLittleEndian); int32 magic=0;
-  if(!in.readInt32(magic) || (magic!=0x51473130 && magic!=0x51473131 && magic!=0x51473132 && magic!=0x51473133 && magic!=0x51473134 && magic!=0x51473135 && magic!=0x51473136 && magic!=0x51473137 && magic!=0x51473138 && magic!=0x51473139 && magic!=0x5147313A && magic!=0x5147313B && magic!=0x5147313C && magic!=0x5147313D && magic!=0x5147313E && magic!=0x5147313F && magic!=0x51473140 && magic!=0x51473141 && magic!=0x51473142 && magic!=0x51473143 && magic!=0x51473144 && magic!=0x51473145)) return false;
+  if(!in.readInt32(magic) || (magic!=0x51473130 && magic!=0x51473131 && magic!=0x51473132 && magic!=0x51473133 && magic!=0x51473134 && magic!=0x51473135 && magic!=0x51473136 && magic!=0x51473137 && magic!=0x51473138 && magic!=0x51473139 && magic!=0x5147313A && magic!=0x5147313B && magic!=0x5147313C && magic!=0x5147313D && magic!=0x5147313E && magic!=0x5147313F && magic!=0x51473140 && magic!=0x51473141 && magic!=0x51473142 && magic!=0x51473143 && magic!=0x51473144 && magic!=0x51473145 && magic!=0x51473146 && magic!=0x51473147 && magic!=0x51473148 && magic!=0x51473149 && magic!=0x5147314A && magic!=0x5147314B && magic!=0x5147314C && magic!=0x5147314D && magic!=0x5147314E && magic!=0x5147314F && magic!=0x51473150 && magic!=0x51473151)) return false;
   auto result=defaults();
   // Layouts: legacy versions store `count` plain doubles. Current saves
   // (0x51473145, written by getState) use the same prefix plus three extra
   // fields injected after kParamEnd: buffer size, freeze flag, then the array
-  // continues at kGrainBuffer+2 through kCount-1.
-  const bool current=magic==0x51473145;
-  const int count = current ? int(kParamEnd) : magic==0x51473144 ? int(kCount) : magic==0x51473143 ? int(kResliceRndOn) : magic==0x51473130 ? int(kGrainMix) : (magic==0x51473131 ? int(kLfo0) : (magic==0x51473132 ? int(kLegacyCount) : (magic==0x51473133 ? int(kModuleOrder) : (magic==0x51473134 ? int(kExtraRoutes0) : (magic==0x51473135 ? int(kGlitchMove) : (magic==0x51473136 ? int(kMasterFilter) : (magic==0x51473137 ? int(kNormalize) : (magic==0x51473138 ? int(kReverbLength) : (magic==0x51473139 ? int(kUiWave0) : (magic==0x5147313A ? int(kLfoSlots0) : (magic==0x5147313B ? int(kModWaveRnd0) : (magic==0x5147313C ? int(kReverbSource) : (magic==0x5147313D ? int(kLimiterCeiling) : (magic==0x5147313E ? int(kGaterEnabled) : (magic==0x5147313F ? int(kInputDeclick) : (magic==0x51473140 ? int(kFilterModel) : (magic==0x51473141 ? int(kGaterMinLength) : int(kGlitchTriggerRate))))))))))))))))));
+  // continues through kCount-1. E ended before live monitors; F adds the wave library.
+  const bool current=magic>=0x51473145;
+  const int storedEnd=magic>=0x51473151?int(kCount):magic>=0x51473150?int(kPreRndCount):magic>=0x5147314F?int(kModWaveFrom0):magic>=0x5147314E?int(kUiLfoValue0):magic>=0x5147314C?int(kAudioQuality):magic==0x5147314B?int(kModuleLoopOn0):magic==0x5147314A?int(kResliceSubdivision):magic==0x51473149?int(kResliceAlgorithm):magic==0x51473148?int(kModWaveRate0):magic==0x51473147?int(kMixLock0):magic==0x51473146?int(kReverbRateV2):kLegacySkinCount;
+  const int count = current ? int(kParamEnd) : magic==0x51473144 ? kLegacySkinCount : magic==0x51473143 ? int(kResliceRndOn) : magic==0x51473130 ? int(kGrainMix) : (magic==0x51473131 ? int(kLfo0) : (magic==0x51473132 ? int(kLegacyCount) : (magic==0x51473133 ? int(kModuleOrder) : (magic==0x51473134 ? int(kExtraRoutes0) : (magic==0x51473135 ? int(kGlitchMove) : (magic==0x51473136 ? int(kMasterFilter) : (magic==0x51473137 ? int(kNormalize) : (magic==0x51473138 ? int(kReverbLength) : (magic==0x51473139 ? int(kUiWave0) : (magic==0x5147313A ? int(kLfoSlots0) : (magic==0x5147313B ? int(kModWaveRnd0) : (magic==0x5147313C ? int(kReverbSource) : (magic==0x5147313D ? int(kLimiterCeiling) : (magic==0x5147313E ? int(kGaterEnabled) : (magic==0x5147313F ? int(kInputDeclick) : (magic==0x51473140 ? int(kFilterModel) : (magic==0x51473141 ? int(kGaterMinLength) : int(kGlitchTriggerRate))))))))))))))))));
   for(int i=0;i<count;++i) {
     double v=0.; if(!in.readDouble(v) || !std::isfinite(v)) return false;
     // kBypassReserved keeps its legacy position in the stream; the global bypass
@@ -136,7 +59,7 @@ bool loadState(IBStream* stream, std::array<double,kCount>& p) {
     // FREEZE is a sustained state (the engine keeps recording stopped while it
     // holds); RANDOM ALL and the PRESET < / > slots stay momentary/inert.
     result[kFreeze]=frozen>=.5?1.:0.;
-    for(int i=kFreeze+1;i<int(kCount);++i) {
+    for(int i=kFreeze+1;i<storedEnd;++i) {
       double v=0.; if(!in.readDouble(v) || !std::isfinite(v)) return false;
       result[i]=std::clamp(v,0.,1.);
     }
@@ -156,7 +79,7 @@ bool loadState(IBStream* stream, std::array<double,kCount>& p) {
     }
     result[kGlitchSeq]=result[kRepeatSeq]=0.;
     for(int i=0;i<4;++i) {
-      result[kRandomSteps0+i]=0.;
+      result[modParam(kRandomSteps0,i)]=0.;
       if(count>int(kLfo0)) {
         result[lfoID(i,lGrid)]=std::round(result[lfoID(i,lGrid)]*17.)/20.;
         auto& density=result[lfoID(i,lRoute0+1)]; density=.5+(density-.5)*7./31.;
@@ -169,13 +92,13 @@ bool loadState(IBStream* stream, std::array<double,kCount>& p) {
   if(magic<0x5147313B)migrateRoutes(result);else if(magic<0x51473144)migrateModSlots(result);
   if(magic<0x51473140)result[kInputDeclick]=0.;
   if(magic<0x51473144&&count>kResliceLength)result[kResliceLength]=result[kResliceLength]<1./6.?2./3.:1.;
+  if(magic==0x5147314A)result[kResliceMinPhrase]=(std::pow(2.,std::round(result[kReslicePhrase]*3.))-1.)/7.;
+  if(magic<0x5147314D)migrateExpandedDestinations(result,magic>=0x51473144,count>kYTarget);
   p=result; return true;
 }
 class Processor final : public AudioEffect {
+  double licenseGain_=aztec::license::allowed.load(std::memory_order_relaxed)?1.:0.;
   qg::Engine engine_;
-#ifdef GRAINS_TRIAL
-  grains::TrialGuard trial_;
-#endif
   qg::InputDeclick declick_;
   qg::MasterFx master_;
   std::array<double, kCount> p_{};
@@ -199,24 +122,18 @@ class Processor final : public AudioEffect {
     if(id==kUiTab){p_[id]=std::clamp(v,0.,1.);return;}
   }
   void applyRandomAll() {
-    // Re-roll every control of all three modules (the same ranges the per-module
-    // RANDOM buttons use), plus master trim: dry/wet, normalize, limiter, order.
-    auto set=[&](ParamID pid,double v){p_[pid]=std::clamp(v,0.,1.);};
-    const int selected=int(std::round(p_[kUiRepeat]*15.));
-    for(int module=0;module<3;++module) aztec::randomizeModule(module,selected,randomSeed_,set);
-    set(kMix,.6+.4*nextRandom()); set(kNormalize,nextRandom()>=.5?1.:0.);
-    set(kMasterLimiter,nextRandom()>=.5?1.:0.); set(kModuleOrder,std::floor(nextRandom()*7.)/6.);
+    aztec::randomizeSound(randomSeed_,[&](ParamID id){return p_[id];},[&](ParamID id,double v){p_[id]=v;});
   }
-  double nextRandom() { randomSeed_^=randomSeed_<<13; randomSeed_^=randomSeed_>>17; randomSeed_^=randomSeed_<<5; return double(randomSeed_&0xffffff)/16777215.; }
 public:
   Processor() {
     setControllerClass(controllerID);
     p_=defaults();
-    processContextRequirements.needTempo().needProjectTimeMusic().needTransportState();
+    processContextRequirements.needTempo().needProjectTimeMusic().needTransportState().needTimeSignature();
   }
   static FUnknown* create(void*) { return static_cast<IAudioProcessor*>(new Processor); }
   tresult PLUGIN_API initialize(FUnknown* c) override {
     if(AudioEffect::initialize(c) != kResultOk) return kResultFalse;
+    aztec::license::initialize();
     addAudioInput(STR16("Stereo In"), SpeakerArr::kStereo);
     addAudioOutput(STR16("Stereo Out"), SpeakerArr::kStereo);
     return kResultOk;
@@ -237,7 +154,7 @@ public:
   }
   tresult PLUGIN_API getState(IBStream* stream) override {
     IBStreamer out(stream,kLittleEndian);
-    if(!out.writeInt32(0x51473145)) return kResultFalse;
+    if(!out.writeInt32(0x51473151)) return kResultFalse;
     for(int i=0;i<kParamEnd;++i) if(!out.writeDouble(p_[i])) return kResultFalse;
     // v0.14 additions: buffer size, freeze state, then the remaining tail ids
     // (RANDOM/PRESET slots) written like any other array entry.
@@ -257,7 +174,11 @@ public:
     return AudioEffect::setBusArrangements(in,ni,out,no);
   }
   tresult PLUGIN_API setActive(TBool active) override {
-    if(active) { engine_.prepare(rate_);declick_.prepare(rate_,p_[kInputDeclick]>=.5);master_.prepare(rate_); fallbackBeat_=0.;waveCountdown_=0; }
+    if(active) {
+#if defined(GRAINS_TRIAL) && GRAINS_TRIAL
+      aztec::license::firstOpen(); // Host lifecycle thread, never process().
+#endif
+      engine_.prepare(rate_);declick_.prepare(rate_,p_[kInputDeclick]>=.5);master_.prepare(rate_); fallbackBeat_=0.;waveCountdown_=0; }
     return AudioEffect::setActive(active);
   }
   // NOTE: Processor must NOT override setComponentState — AudioEffect does not
@@ -265,21 +186,8 @@ public:
   // compile here. The Controller below receives setComponentState and applies
   // the full parameter array through updateStates().
   tresult PLUGIN_API process(ProcessData& data) override {
-#ifdef GRAINS_TRIAL
-    if(trial_.expired()) {
-      for(int32 bus=0;bus<data.numOutputs;++bus) {
-        auto& out=data.outputs[bus];
-        out.silenceFlags=~uint64(0);
-        for(int32 ch=0;ch<out.numChannels;++ch) {
-          if(data.symbolicSampleSize==kSample32 && out.channelBuffers32 && out.channelBuffers32[ch])
-            std::memset(out.channelBuffers32[ch],0,size_t(data.numSamples)*sizeof(float));
-          else if(data.symbolicSampleSize==kSample64 && out.channelBuffers64 && out.channelBuffers64[ch])
-            std::memset(out.channelBuffers64[ch],0,size_t(data.numSamples)*sizeof(double));
-        }
-      }
-      return kResultOk;
-    }
-#endif
+    qg::ScopedAudioFloatMode audioFloatMode;
+
     // No allocations: fixed queue cursors, updated at the exact sample offset.
     std::array<IParamValueQueue*, kCount> queues{};
     std::array<int32,kCount> cursors{};std::array<int,kCount> queueIDs{};int queueCount=0;
@@ -317,7 +225,8 @@ public:
     }
     if(data.numInputs < 1 || data.numOutputs < 1 || data.inputs[0].numChannels<1 || data.outputs[0].numChannels<1) return kResultOk;
     data.outputs[0].silenceFlags=3;
-    auto s = settings(p_, tempo_, rate_);s.playing=!data.processContext||(data.processContext->state & ProcessContext::kPlaying); engine_.set(s);
+    double barBeats=4.;if(data.processContext&&(data.processContext->state&ProcessContext::kTimeSigValid)&&data.processContext->timeSigNumerator>0&&data.processContext->timeSigDenominator>0)barBeats=std::clamp(4.*data.processContext->timeSigNumerator/data.processContext->timeSigDenominator,.25,32.);
+    auto s = settings(p_, tempo_, rate_,barBeats);s.playing=!data.processContext||(data.processContext->state & ProcessContext::kPlaying); engine_.set(s);
     auto setMaster=[&](){const double ceilings[]={0.,-6.,-10.};master_.set(false,0,1000.,0.,value(p_,kMasterLimiter)>=.5,0,0.,ceilings[int(std::round(value(p_,kLimiterCeiling)*2.))]);};
     setMaster();
     // Momentary UI triggers consumed once per block (before the engine receives
@@ -329,18 +238,26 @@ public:
     if(randomAllPending_) { applyRandomAll(); randomAllPending_=false; p_[kRandomAll]=0.; }
     p_[kFreeze]=engine_.isFrozen()?1.:0.; // mirror the sustained state for save/load + readback
     const double beatIncrement = tempo_ / (60. * rate_);
-    double peak=0.;
+    double peak=0.,squareL=0.,squareR=0.;
+    const double licenseTarget=aztec::license::processingAllowed()?1.:0.;
     for(int32 n=0;n<data.numSamples;++n) {
-      if(n>0 && applyChanges(n)) { s=settings(p_,tempo_,rate_);s.playing=!data.processContext||(data.processContext->state & ProcessContext::kPlaying); engine_.set(s);setMaster(); }
+      licenseGain_+=std::clamp(licenseTarget-licenseGain_,-1./(.02*rate_),1./(.02*rate_));
+      if(n>0 && applyChanges(n)) { s=settings(p_,tempo_,rate_,barBeats);s.playing=!data.processContext||(data.processContext->state & ProcessContext::kPlaying); engine_.set(s);setMaster(); }
       const double beat = fallbackBeat_ + n * beatIncrement;
       if(data.symbolicSampleSize == kSample32) {
         auto& in = data.inputs[0]; auto& out = data.outputs[0];
         float l = (in.silenceFlags & 1) ? 0.f : in.channelBuffers32[0][n], r = in.numChannels > 1 ? ((in.silenceFlags & 2) ? 0.f : in.channelBuffers32[1][n]) : l;
-        aztec::modCell().packed.store(engine_.lastModPacked_.load(std::memory_order_relaxed),std::memory_order_relaxed);
-        double dl=l,dr=r;declick_.process(dl,dr,value(p_,kInputDeclick)>=.5,value(p_,kDeclickSensitivity),s.bypass);l=float(dl);r=float(dr);
-        float a,b; engine_.process(l,r,beat,a,b);
-        if(s.bypass) { a=l; b=r; }else master_.process(a,b);
+        double dl=l,dr=r;declick_.process(dl,dr,value(p_,kInputDeclick)>=.5,value(p_,kDeclickSensitivity),s.bypass||licenseGain_<=0.);l=float(dl);r=float(dr);
+        const float rawL=float(declick_.dry(0)),rawR=float(declick_.dry(1));
+        float a=l,b=r;if(licenseGain_>0.)engine_.process(l,r,beat,a,b);
+        if(s.bypass) { a=l; b=r; }else if(licenseGain_>0.)master_.process(a,b);
+#if defined(GRAINS_TRIAL) && GRAINS_TRIAL
+        a=float(a*licenseGain_);b=float(b*licenseGain_);
+#else
+        if(licenseGain_<1.){a=float(rawL+licenseGain_*(double(a)-rawL));b=float(rawR+licenseGain_*(double(b)-rawR));}
+#endif
         peak=std::max({peak,std::abs(double(a)),std::abs(double(b))});
+        squareL+=double(a)*a;squareR+=double(b)*b;
         out.channelBuffers32[0][n] = a;
         if(a!=0.f) out.silenceFlags &= ~uint64(1);
         if(b!=0.f) out.silenceFlags &= ~uint64(2);
@@ -349,17 +266,28 @@ public:
         auto& in = data.inputs[0]; auto& out = data.outputs[0];
         double l = (in.silenceFlags & 1) ? 0. : in.channelBuffers64[0][n];
         double r = in.numChannels>1 ? ((in.silenceFlags & 2) ? 0. : in.channelBuffers64[1][n]) : l;
-        declick_.process(l,r,value(p_,kInputDeclick)>=.5,value(p_,kDeclickSensitivity),s.bypass);
-        float a,b; engine_.process(float(l),float(r),beat,a,b);
-        if(!s.bypass)master_.process(a,b);
-        peak=std::max({peak,std::abs(s.bypass?l:double(a)),std::abs(s.bypass?r:double(b))});
-        out.channelBuffers64[0][n] = s.bypass ? l : a;
-        if(out.numChannels > 1) out.channelBuffers64[1][n] = s.bypass ? r : b;
-        if(out.channelBuffers64[0][n]!=0.) out.silenceFlags &= ~uint64(1);
-        if(out.numChannels>1 && out.channelBuffers64[1][n]!=0.) out.silenceFlags &= ~uint64(2);
+        declick_.process(l,r,value(p_,kInputDeclick)>=.5,value(p_,kDeclickSensitivity),s.bypass||licenseGain_<=0.);
+        const double rawL=declick_.dry(0),rawR=declick_.dry(1);
+        float a=float(l),b=float(r);if(licenseGain_>0.)engine_.process(float(l),float(r),beat,a,b);
+        if(!s.bypass&&licenseGain_>0.)master_.process(a,b);
+        const double wetL=s.bypass?l:double(a),wetR=s.bypass?r:double(b);
+#if defined(GRAINS_TRIAL) && GRAINS_TRIAL
+        const double finalL=wetL*licenseGain_,finalR=wetR*licenseGain_;
+#else
+        const double finalL=licenseGain_<1.?rawL+licenseGain_*(wetL-rawL):wetL;
+        const double finalR=licenseGain_<1.?rawR+licenseGain_*(wetR-rawR):wetR;
+#endif
+        peak=std::max({peak,std::abs(finalL),std::abs(finalR)});
+        squareL+=finalL*finalL;squareR+=finalR*finalR;
+        out.channelBuffers64[0][n]=finalL;
+        if(out.numChannels>1)out.channelBuffers64[1][n]=finalR;
+        if(finalL!=0.)out.silenceFlags&=~uint64(1);
+        if(out.numChannels>1&&finalR!=0.)out.silenceFlags&=~uint64(2);
       }
     }
+    aztec::modCell().packed.store(engine_.lastModPacked_.load(std::memory_order_relaxed),std::memory_order_relaxed);
     if(data.outputParameterChanges&&data.numSamples>0){
+      for(int ch=0;ch<2;++ch){int32 index=0;auto* q=data.outputParameterChanges->addParameterData(ParamID(kUiOutputL+ch),index);if(q)q->addPoint(data.numSamples-1,std::clamp(std::sqrt((ch?squareR:squareL)/data.numSamples),0.,1.),index);}
       const double beat=fallbackBeat_+(data.numSamples-1)*beatIncrement;
       const int step=int((int64_t(std::floor(beat/.25))%16+16)%16);
       const double meters[]={step/15.,(!s.bypass&&engine_.glitchRunning())?1.:0.,(!s.bypass&&engine_.repeatRunning())?1.:0.,std::clamp(peak,0.,1.),double((int64_t(std::floor(beat/s.reverbGrid))%16+16)%16)/15.};
@@ -369,8 +297,12 @@ public:
     if(data.outputParameterChanges&&data.numSamples>0&&waveCountdown_<=0){
       waveCountdown_=std::max(1,int(rate_/30.));auto wave=engine_.grainView();
       auto emit=[&](int id,double v){int32 index=0;auto* q=data.outputParameterChanges->addParameterData(ParamID(id),index);if(q)q->addPoint(data.numSamples-1,v,index);};
+      emit(kUiRndEnvelope,engine_.rndEnvelope());
+      emit(kUiModulationActive,!s.bypass&&licenseGain_>0.?1.:0.);
+      for(int i=0;i<qg::lfoCount;++i)emit(modParam(kUiLfoValue0,i),(engine_.lfoOutput(i)+1.)*.5);
       for(int i=0;i<128;++i)emit(kUiWave0+i,wave.amplitude[i]);
-      for(int i=0;i<16;++i)emit(kUiResliceSource0+i,engine_.resliceSource(i)/15.);emit(kUiFilterSeqStep,engine_.filterSequenceStep()/31.);emit(kUiResliceStep,engine_.resliceStep()/15.);emit(kUiResliceActive,engine_.resliceActive()?1.:0.);emit(kUiGaterStep,engine_.gaterStep()/15.);for(int i=0;i<16;++i){emit(kUiGaterState0+i,engine_.gaterState(i)?1.:0.);emit(kUiGaterLength0+i,engine_.gaterLength(i));}emit(kUiReverbGate,!s.bypass&&engine_.reverbGate()?1.:0.);emit(kUiGrainStart,wave.start);emit(kUiGrainEnd,wave.end);emit(kUiGrainHead,wave.head);emit(kUiGrainActive,!s.bypass&&wave.active?1.:0.);emit(kUiWaveSeconds,wave.seconds/16.);for(int i=0;i<4;++i){emit(kUiModWave0+i,engine_.lfoWave(i)/129.);emit(kUiLfoPhase0+i,engine_.lfoPhase(i));emit(kUiLfoCycle0+i,std::clamp((double(engine_.lfoCycle(i))+2147483648.)/4294967295.,0.,1.));emit(kUiLfoEpoch0+i,std::clamp((double(engine_.lfoEpoch(i))+2147483648.)/4294967295.,0.,1.));}
+      for(int i=0;i<waveformBins;++i){emit(kUiWaveLow0+i,(wave.low[i]+1.)*.5);emit(kUiWaveHigh0+i,(wave.high[i]+1.)*.5);}
+      for(int i=0;i<16;++i)emit(kUiResliceSource0+i,engine_.resliceSource(i)/15.);emit(kUiFilterSeqStep,engine_.filterSequenceStep()/31.);emit(kUiResliceStep,engine_.resliceStep()/15.);emit(kUiResliceActive,engine_.resliceActive()?1.:0.);emit(kUiGaterStep,engine_.gaterStep()/15.);emit(kUiGaterPhase,engine_.gaterPhase());for(int i=0;i<16;++i){emit(kUiGaterState0+i,engine_.gaterState(i)?1.:0.);emit(kUiGaterLength0+i,engine_.gaterLength(i));}emit(kUiReverbGate,!s.bypass&&engine_.reverbGate()?1.:0.);emit(kUiGrainStart,wave.start);emit(kUiGrainEnd,wave.end);emit(kUiGrainHead,wave.head);emit(kUiGrainActive,!s.bypass&&wave.active?1.:0.);emit(kUiWaveSeconds,wave.seconds/16.);for(int i=0;i<qg::lfoCount;++i){emit(modParam(kUiModWave0,i),engine_.lfoWave(i)/double(qg::maxWave));emit(modParam(kUiLfoPhase0,i),engine_.lfoPhase(i));emit(modParam(kUiLfoCycle0,i),std::clamp((double(engine_.lfoCycle(i))+2147483648.)/4294967295.,0.,1.));emit(modParam(kUiLfoEpoch0,i),std::clamp((double(engine_.lfoEpoch(i))+2147483648.)/4294967295.,0.,1.));}
     }
     fallbackBeat_ += data.numSamples * beatIncrement;
     return kResultOk;
@@ -383,7 +315,9 @@ public:
   ParamValue toNormalized(ParamValue v)const override{return std::log(std::clamp(v,20.,20000.)/20.)/std::log(1000.);}
 };
 class Controller final : public EditController {
+  std::shared_ptr<aztec::EditorState> editorState_=std::make_shared<aztec::EditorState>();
 public:
+  std::shared_ptr<aztec::EditorState> editorState()const{return editorState_;}
   static FUnknown* create(void*) { return static_cast<IEditController*>(new Controller); }
   tresult PLUGIN_API initialize(FUnknown* c) override {
     if(EditController::initialize(c) != kResultOk) return kResultFalse;
@@ -452,6 +386,10 @@ public:
       waves->appendString(STR16("S&H - Sample & Hold"));
       waves->appendString(STR16("S&G - Sample & Glide"));
       parameters.addParameter(waves);
+      auto* choices=new StringListParameter(title("Wave Library"),ParamID(modParam(kLfoWaveChoice0,i)));choices->appendString(STR16("Saved Wave (compatible)"));
+      for(int w=0;w<qg::waveChoiceCount;++w){String128 label{};if(w<130){waves->toString(w/129.,label);}else UString(label,128).fromAscii(qg::extraWaveName(w).c_str());choices->appendString(label);}parameters.addParameter(choices);
+      range(title("Random Wave From"),modParam(kModWaveFrom0,i),nullptr,1,qg::waveChoiceCount,1,qg::maxWave);
+      range(title("Random Wave To"),modParam(kModWaveTo0,i),nullptr,1,qg::waveChoiceCount,qg::waveChoiceCount,qg::maxWave);
       toggle(title("Tempo Sync"),lfoID(i,lSync),1.);
       range(title("Free Rate"),lfoID(i,lHz),STR16("Hz"),.01,40.,1.);
       auto* rates=new StringListParameter(title("Sync Rate"),lfoID(i,lGrid));
@@ -478,17 +416,21 @@ public:
     for(int i=0;i<16;++i) { String128 n{}; stepTitle("Repeat Division",i,n); effectGrid(n,kRepeatRate0+i,1./15.); }
     for(int i=0;i<16;++i) { String128 n{}; stepTitle("Repeat Pitch",i,n); range(n,kRepeatPitch0+i,STR16("st"),-48,48,0,96); }
     toggle(STR16("Free Stretch"),kStretchOn,0.);
-    range(STR16("Stretch Speed"),kStretchSpeed,STR16("%"),25,400,100);
-    for(int i=0;i<4;++i) { String128 n{}; stepTitle("Mod Random Points",i,n); range(n,kRandomSteps0+i,STR16("points"),1,64,16,63); }
+    range(STR16("Input Stretch Speed"),kStretchSpeed,STR16("%"),25,400,100);
+    for(int i=0;i<qg::lfoCount;++i) { String128 n{}; stepTitle("Mod Random Points",i,n); range(n,modParam(kRandomSteps0,i),STR16("points"),1,64,16,63); }
     toggle(STR16("Density Flow"),kDensityFlow,1.);
-    range(STR16("Final Transpose"),kTranspose,STR16("st"),-48,48,0,96);
+    range(STR16("Input Transpose"),kTranspose,STR16("st"),-48,48,0,96);
     range(STR16("XY X"),kXYX,STR16("%"),0,100,50);
     range(STR16("XY Y"),kXYY,STR16("%"),0,100,50);
     toggle(STR16("XY Enable"),kXYEnable,0.);
     for(int axis=0;axis<2;++axis) {
       auto* route=new StringListParameter(axis?STR16("Y Destination"):STR16("X Destination"),axis?kYTarget:kXTarget);
       route->appendString(STR16("None"));
-      for(int id=0;id<int(kXYX);++id) { ParameterInfo info{}; getParameterInfo(id,info); route->appendString(info.title); }
+      for(int id=0;id<int(kXYX);++id) { auto* parameter=getParameterObject(ParamID(id));route->appendString(parameter?parameter->getInfo().title:STR16("Reserved")); }
+      route->appendString(STR16("Reslice Mix"));route->appendString(STR16("Reslice Window"));
+#define GRAINS_XY_LABEL(id,label) {String128 text{};UString(text,128).fromAscii(label);route->appendString(text);}
+      GRAINS_RESLICE_DESTINATIONS(GRAINS_XY_LABEL)
+#undef GRAINS_XY_LABEL
       const double def=defaults()[axis?kYTarget:kXTarget]; route->getInfo().defaultNormalizedValue=def; route->setNormalized(def); parameters.addParameter(route);
     }
     range(STR16("X Amount"),kXAmount,STR16("%"),-100,100,50);
@@ -499,7 +441,7 @@ public:
                    STR16("Repeat → Grain → Glitch"),STR16("Repeat → Glitch → Grain"),
                    STR16("Legacy Parallel")}) order->appendString(name);
     parameters.addParameter(order);
-    for(int i=0;i<4;++i) for(int t=6;t<8;++t) {
+    for(int i=0;i<qg::lfoCount;++i) for(int t=6;t<8;++t) {
       char ascii[64]; String128 name{};
       std::snprintf(ascii,sizeof(ascii),"Mod %d To %s",i+1,targetNames[t]);
       UString(name,128).fromAscii(ascii);
@@ -522,7 +464,7 @@ public:
     toggle(STR16("Normalize Wet"),kNormalize,0.);
     auto* slope=new StringListParameter(STR16("Filter Slope"),kFilterSlope);slope->appendString(STR16("12 dB"));slope->appendString(STR16("24 dB"));parameters.addParameter(slope);
     range(STR16("Filter Drive"),kFilterDrive,STR16("dB"),0,24,0);
-    toggle(STR16("Grain Enabled"),kGrainEnabled,1.);toggle(STR16("Glitch Enabled"),kGlitchEnabled,1.);toggle(STR16("Repeater Enabled"),kRepeatEnabled,1.);
+    toggle(STR16("Grain Enabled"),kGrainEnabled,1.);toggle(STR16("Glitch Enabled"),kGlitchEnabled,0.);toggle(STR16("Repeater Enabled"),kRepeatEnabled,1.);
     range(STR16("Grain Pan"),kGrainPan,STR16("L/R"),-100,100,0);
     auto* pan=new StringListParameter(STR16("Grain Pan Mode"),kPanMode);for(auto name:{STR16("Manual"),STR16("Alternate L/R"),STR16("Random L/R")})pan->appendString(name);parameters.addParameter(pan);
     toggle(STR16("Reverb On"),kReverbOn,0.);
@@ -533,15 +475,25 @@ public:
     auto* revMeter=new RangeParameter(STR16("Reverb Step Monitor"),kUiReverb,nullptr,0,1,0);revMeter->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(revMeter);
     range(STR16("Reverb Length"),kReverbLength,STR16("s"),.2,20.,2.8);
     for(int id=kUiWave0;id<=kUiWaveSeconds;++id){char ascii[40];std::snprintf(ascii,sizeof(ascii),"Grain Display %d",id-kUiWave0);String128 name{};UString(name,128).fromAscii(ascii);auto* monitor=new RangeParameter(name,id,nullptr,0,1,0);monitor->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(monitor);}
-    for(int l=0;l<4;++l)for(int slot=0;slot<6;++slot){
+    for(int l=0;l<qg::lfoCount;++l)for(int slot=0;slot<6;++slot){
       char ascii[64];String128 name{};std::snprintf(ascii,sizeof(ascii),"Mod %d Destination %d",l+1,slot+1);UString(name,128).fromAscii(ascii);auto* destination=new StringListParameter(name,slotTarget(l,slot));destination->appendString(STR16("None"));for(auto title:modNames){String128 text{};UString(text,128).fromAscii(title);destination->appendString(text);}parameters.addParameter(destination);
       std::snprintf(ascii,sizeof(ascii),"Mod %d Amount %d",l+1,slot+1);UString(name,128).fromAscii(ascii);range(name,slotAmount(l,slot),STR16("%"),-100,100,0.);
     }
-    for(int l=0;l<4;++l){char ascii[32];String128 name{};std::snprintf(ascii,sizeof(ascii),"Mod %d Speed",l+1);UString(name,128).fromAscii(ascii);auto* speed=new StringListParameter(name,kLfoSpeed0+l);for(auto title:{STR16("0.25x"),STR16("0.5x"),STR16("1x"),STR16("2x")})speed->appendString(title);speed->getInfo().defaultNormalizedValue=2./3.;speed->setNormalized(2./3.);parameters.addParameter(speed);}
+    for(int l=0;l<qg::lfoCount;++l){char ascii[32];String128 name{};std::snprintf(ascii,sizeof(ascii),"Mod %d Speed",l+1);UString(name,128).fromAscii(ascii);auto* speed=new StringListParameter(name,modParam(kLfoSpeed0,l));for(auto title:{STR16("0.25x"),STR16("0.5x"),STR16("1x"),STR16("2x")})speed->appendString(title);speed->getInfo().defaultNormalizedValue=2./3.;speed->setNormalized(2./3.);parameters.addParameter(speed);}
+    auto* rndSource=new StringListParameter(STR16("RND Trigger Source"),kRndSource);rndSource->appendString(STR16("Random key Root trigger"));rndSource->appendString(STR16("Gater steps"));parameters.addParameter(rndSource);
+    auto* rndRoot=new StringListParameter(STR16("RND Root"),kRndRoot);for(auto n:{STR16("C"),STR16("C#"),STR16("D"),STR16("D#"),STR16("E"),STR16("F"),STR16("F#"),STR16("G"),STR16("G#"),STR16("A"),STR16("A#"),STR16("B")})rndRoot->appendString(n);parameters.addParameter(rndRoot);
+    auto* rndChord=new StringListParameter(STR16("RND Chord"),kRndMinor);rndChord->appendString(STR16("Major"));rndChord->appendString(STR16("Minor"));parameters.addParameter(rndChord);
+    range(STR16("RND Lowest Note"),kRndNoteMin,STR16("MIDI"),0,127,48,127);range(STR16("RND Highest Note"),kRndNoteMax,STR16("MIDI"),0,127,72,127);
+    range(STR16("RND Minimum Length"),kRndLengthMin,STR16("ms"),5,2000,50);range(STR16("RND Maximum Length"),kRndLengthMax,STR16("ms"),5,2000,250);
+    range(STR16("RND Gater Every"),kRndGateEvery,STR16("steps"),1,16,1,15);
+    for(auto id:{modParam(kUiLfoPhase0,4),modParam(kUiLfoCycle0,4),modParam(kUiLfoEpoch0,4),modParam(kUiLfoValue0,4),ParamID(kUiRndEnvelope)}){auto* monitor=new RangeParameter(STR16("RND Display"),id,nullptr,0,1,defaults()[id]);monitor->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(monitor);}
     toggle(STR16("Reverb Kill Dry"),kReverbKill,0.);
+    for(int i=0;i<5;++i){auto* monitor=new RangeParameter(STR16("Live Modulation"),ParamID(kUiLfoValue0+i),nullptr,0,1,i<4?.5:0.);monitor->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(monitor);}
     for(int l=0;l<12;++l){auto* phase=new RangeParameter(STR16("Mod Display"),kUiLfoPhase0+l,nullptr,0,1,l<4?0.:2147483648./4294967295.);phase->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(phase);}
-    for(int l=0;l<4;++l){char ascii[48];String128 name{};std::snprintf(ascii,sizeof(ascii),"Mod %d Wave RND",l+1);UString(name,128).fromAscii(ascii);auto* rnd=new StringListParameter(name,kModWaveRnd0+l);for(auto label:{STR16("Off"),STR16("1/1"),STR16("1/2"),STR16("1/4"),STR16("1/8")})rnd->appendString(label);parameters.addParameter(rnd);}
-    for(int l=0;l<4;++l){auto* monitor=new RangeParameter(STR16("Mod Active Wave"),kUiModWave0+l,nullptr,0,1,0);monitor->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(monitor);}
+    for(int l=0;l<qg::lfoCount;++l){char ascii[48];String128 name{};std::snprintf(ascii,sizeof(ascii),"Mod %d Wave RND",l+1);UString(name,128).fromAscii(ascii);auto* rnd=new StringListParameter(name,modParam(kModWaveRnd0,l));for(auto label:{STR16("Off"),STR16("1/1"),STR16("1/2"),STR16("1/4"),STR16("1/8")})rnd->appendString(label);parameters.addParameter(rnd);}
+    for(int l=0;l<qg::lfoCount;++l){char ascii[48];String128 name{};std::snprintf(ascii,sizeof(ascii),"Mod %d Wave Quantize",l+1);UString(name,128).fromAscii(ascii);auto* rnd=new StringListParameter(name,modParam(kModWaveRate0,l));for(auto label:{STR16("Saved rate"),STR16("Off"),STR16("1/1"),STR16("1/2"),STR16("1/4"),STR16("1/8"),STR16("2/1"),STR16("4/1")})rnd->appendString(label);parameters.addParameter(rnd);}
+
+    for(int l=0;l<qg::lfoCount;++l){auto* monitor=new RangeParameter(STR16("Mod Active Wave"),modParam(kUiModWave0,l),nullptr,0,1,0);monitor->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(monitor);}
     auto* source=new StringListParameter(STR16("Reverb Trigger Source"),kReverbSource);source->appendString(STR16("Step Sequencer"));source->appendString(STR16("Random Impulse"));parameters.addParameter(source);
     auto* randomRate=new StringListParameter(STR16("Reverb Random Rate"),kReverbRandomRate);for(auto label:{STR16("1/4"),STR16("1/8"),STR16("1/16")})randomRate->appendString(label);randomRate->getInfo().defaultNormalizedValue=1.;randomRate->setNormalized(1.);parameters.addParameter(randomRate);
     auto* sendGate=new RangeParameter(STR16("Reverb Send Monitor"),kUiReverbGate,nullptr,0,1,0);sendGate->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(sendGate);
@@ -554,6 +506,20 @@ public:
     for(int i=kUiGaterStep;i<kInputDeclick;++i){auto* monitor=new RangeParameter(STR16("Gater Display"),i,nullptr,0,1,0);monitor->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(monitor);}
     toggle(STR16("Input De-click"),kInputDeclick,1.);range(STR16("De-click Sensitivity"),kDeclickSensitivity,STR16("%"),0,100,50);
     auto* model=new StringListParameter(STR16("Filter Model"),kFilterModel);for(auto label:qg::filterModels){String128 name{};UString(name,128).fromAscii(label);model->appendString(name);}parameters.addParameter(model);
+    auto* cutter=new StringListParameter(STR16("Reslice Algorithm"),kResliceAlgorithm);for(auto label:{STR16("CutDSG"),STR16("WarpDSG"),STR16("PushDSG")})cutter->appendString(label);parameters.addParameter(cutter);
+    auto* phrase=new StringListParameter(STR16("Reslice Phrase"),kReslicePhrase);for(auto label:{STR16("1 bar"),STR16("2 bars"),STR16("4 bars"),STR16("8 bars")})phrase->appendString(label);phrase->getInfo().defaultNormalizedValue=2./3.;phrase->setNormalized(2./3.);parameters.addParameter(phrase);
+    range(STR16("Reslice Repeat"),kResliceRepeat,STR16("%"),0,100,45);
+    range(STR16("Reslice Variation"),kResliceVariation,STR16("%"),0,100,50);
+    range(STR16("Reslice Fill"),kResliceFill,STR16("%"),0,100,50);
+    range(STR16("Reslice Reverse"),kResliceReverse,STR16("%"),0,100,10);
+    range(STR16("Reslice Seed"),kResliceSeed,nullptr,1,65535,1,65534);
+    const char* loopNames[]={"Granulizer","Beat Repeater","Reslice","Gater"};
+    for(int i=0;i<4;++i){String128 title{};UString(title,128).fromAscii((std::string(loopNames[i])+" Loop").c_str());toggle(title,moduleLoopOn(i),0.);UString(title,128).fromAscii((std::string(loopNames[i])+" Loop Window").c_str());auto* window=new StringListParameter(title,moduleLoopWindow(i));for(auto label:{STR16("2/1"),STR16("1/1"),STR16("1/2"),STR16("1/4")})window->appendString(label);parameters.addParameter(window);}
+    for(const auto& spec:resliceControlSpecs){
+      if(spec.id==kResliceCombType){auto* type=new StringListParameter(STR16("Reslice Comb Type"),spec.id);type->appendString(STR16("Feedforward"));type->appendString(STR16("Feedback"));parameters.addParameter(type);continue;}
+      String128 name{},unit{};std::string title="Reslice "+std::string(spec.name);UString(name,128).fromAscii(title.c_str());UString(unit,128).fromAscii(spec.unit);
+      range(name,spec.id,unit,spec.lo,spec.hi,spec.initial,spec.steps);
+    }
     toggle(STR16("Reslice On"),kResliceEnabled,0.);
     auto* length=new StringListParameter(STR16("Reslice Window"),kResliceLength);for(auto label:{STR16("4/1"),STR16("2/1"),STR16("1/1"),STR16("1/2")})length->appendString(label);length->getInfo().defaultNormalizedValue=2./3.;length->setNormalized(2./3.);parameters.addParameter(length);
     range(STR16("Reslice Mix"),kResliceMix,STR16("%"),0,100,100);
@@ -578,6 +544,7 @@ public:
     auto* rndRate=new StringListParameter(STR16("Reslice Random Rate"),kResliceRndRate);for(auto label:{STR16("1/2"),STR16("1/1"),STR16("2/1")})rndRate->appendString(label);parameters.addParameter(rndRate);
     toggle(STR16("Filter Sequencer"),kFilterSeqOn,0.);
     auto list=[&](const TChar* name,ParamID id,std::initializer_list<const TChar*> labels,double def=0.){auto* param=new StringListParameter(name,id);for(auto title:labels)param->appendString(title);param->getInfo().defaultNormalizedValue=def;param->setNormalized(def);parameters.addParameter(param);};
+    list(STR16("Audio Quality"),kAudioQuality,{STR16("Draft"),STR16("Normal"),STR16("High")},.5);
     list(STR16("Filter Sequencer Mode"),kFilterSeqMode,{STR16("Arp - Original"),STR16("Sample & Glide")});
     auto* arp=new StringListParameter(STR16("Filter Pattern"),kFilterSeqPattern);const char* families[]={"Rise","Fall","Triangle","Bounce","Stairs","Sine","Scatter","Pulse"};
     for(int i=0;i<64;++i){char label[64];String128 title{};std::snprintf(label,sizeof(label),"%02d %s %d",i+1,families[i/8],i%8+1);UString(title,128).fromAscii(label);arp->appendString(title);}parameters.addParameter(arp);
@@ -614,8 +581,26 @@ public:
      tab->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;
      parameters.addParameter(tab);}
     for(int id=kUiResliceSource0;id<=kUiFilterSeqStep;++id){auto* monitor=new RangeParameter(STR16("Sequencer Display"),id,nullptr,0,1,0);monitor->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(monitor);}
-    for(int l=0;l<4;++l)for(int t=0;t<8;++t)getParameterObject(routeID(l,t))->getInfo().flags=ParameterInfo::kIsHidden;
+    for(int l=0;l<qg::lfoCount;++l)for(int slot=0;slot<6;++slot){
+      char ascii[64];String128 name{};std::snprintf(ascii,sizeof(ascii),"Mod %d Polarity %d",l+1,slot+1);UString(name,128).fromAscii(ascii);
+      auto* polarity=new StringListParameter(name,slotPolarity(l,slot));
+      polarity->appendString(STR16("+/-"));polarity->appendString(STR16("+"));polarity->appendString(STR16("-"));parameters.addParameter(polarity);
+    }
+    {auto* routing=new StringListParameter(STR16("Five Module Routing"),kRoutingOrder);
+      routing->appendString(STR16("Preset / legacy routing"));
+      const char* names[]={"Granulizer","Preslicer","BeatRepeater","Reslice","Gater"};
+      for(int i=0;i<120;++i){std::string label;for(int stage:fiveModuleOrder(i)){if(!label.empty())label+=" > ";label+=names[stage];}String128 name{};UString(name,128).fromAscii(label.c_str());routing->appendString(name);}parameters.addParameter(routing);}
+    for(int id=kUiWaveLow0;id<int(kReverbRateV2);++id){auto* monitor=new RangeParameter(STR16("Waveform Envelope"),id,nullptr,0,1,.5);monitor->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(monitor);}
+    {auto* rate=new StringListParameter(STR16("Reverb Rate"),kReverbRateV2);
+      for(auto name:{STR16("Preset rate"),STR16("1/4"),STR16("1/8"),STR16("1/16"),STR16("1/32"),STR16("1/4D"),STR16("1/8D")})rate->appendString(name);parameters.addParameter(rate);}
+    {auto* phase=new RangeParameter(STR16("Gater Note Position"),kUiGaterPhase,nullptr,0,1,0);phase->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(phase);}
+    for(int ch=0;ch<2;++ch){auto* meter=new RangeParameter(ch?STR16("Output R RMS"):STR16("Output L RMS"),kUiOutputL+ch,nullptr,0,1,0);meter->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(meter);}
+    {const char* titles[]={"Granulizer Mix Lock","Preslicer Mix Lock","BeatRepeater Mix Lock","Reslice Mix Lock","Reverb Amount Lock","Output Mix Lock"};
+      for(int i=0;i<6;++i){String128 name{};UString(name,128).fromAscii(titles[i]);toggle(name,kMixLock0+i,0.);}}
+    for(int l=0;l<qg::lfoCount;++l)for(int t=0;t<8;++t)getParameterObject(routeID(l,t))->getInfo().flags=ParameterInfo::kIsHidden;
     getParameterObject(kFeedback)->getInfo().flags=ParameterInfo::kIsHidden;
+    for(int i=0;i<16;++i){getParameterObject(kResliceStep0+i)->getInfo().flags|=ParameterInfo::kIsHidden;getParameterObject(kResliceIndex0+i)->getInfo().flags|=ParameterInfo::kIsHidden;}
+    for(int id:{int(kResliceRndOn),int(kResliceRndRate)})getParameterObject(id)->getInfo().flags|=ParameterInfo::kIsHidden;
 
     for(int id:{int(kDivision),int(kAttack),int(kRelease)})getParameterObject(id)->getInfo().flags=ParameterInfo::kIsHidden;
     for(int i=0;i<16;++i)getParameterObject(kStep0+i)->getInfo().flags=ParameterInfo::kIsHidden;
@@ -623,7 +608,7 @@ public:
   }
   IPlugView* PLUGIN_API createView(FIDString name) override {
 #if defined(__APPLE__) || defined(_WIN32)
-    if(name && std::strcmp(name,ViewType::kEditor)==0) return aztec::createEditor(this);
+    if(name && std::strcmp(name,ViewType::kEditor)==0) return aztec::createEditor(this,editorState_);
 #endif
     return nullptr;
   }
@@ -643,7 +628,8 @@ public:
 
 BEGIN_FACTORY_DEF("Daniel Melegari", "", "")
 DEF_CLASS2(INLINE_UID_FROM_FUID(processorID), PClassInfo::kManyInstances, kVstAudioEffectClass,
-           "GrainsDosage", Vst::kDistributable, "Fx|Granular", "0.13.0", kVstVersionString, Processor::create)
+           "GrainsDosage", Vst::kDistributable, "Fx|Granular", GRAINS_PLUGIN_VERSION, kVstVersionString, Processor::create)
 DEF_CLASS2(INLINE_UID_FROM_FUID(controllerID), PClassInfo::kManyInstances, kVstComponentControllerClass,
-           "GrainsDosage Controller", 0, "", "0.13.0", kVstVersionString, Controller::create)
+           "GrainsDosage Controller", 0, "", GRAINS_PLUGIN_VERSION, kVstVersionString, Controller::create)
 END_FACTORY
+

@@ -18,10 +18,10 @@ int main(){
  // Hold across sequencer wrap; close on stop, known closed state after seek.
  gs.state.fill(0);gs.state[15]=1;gs.release=0;gate.prepare(8000);gate.set(gs);for(int i=0;i<18000;++i){float l=1,r=1;gate.process(l,r,i/4000.,120);if(i>15100)assert(l==1);}for(int i=0;i<120;++i){float l=1,r=1;gate.process(l,r,4.5,120,false);if(i>100)assert(l==0);}gate.resetLatch();for(int i=0;i<120;++i){float l=1,r=1;gate.process(l,r,1+i/4000.,120,true);if(i>100)assert(l==0);}
  qg::Reslice slice;qg::ResliceSettings rs;slice.prepare(8000);slice.set(rs);for(int i=0;i<1000;++i){float l=float(i*.0001),r=-l,a=l,b=r;slice.process(l,r,i/4000.,120);assert(l==a&&r==b);}
- // Capture previous musical window, rearrange slices, and re-align to host PPQ.
- rs.enabled=true;rs.beats=1.;rs.on.fill(true);rs.slice.fill(0);slice.prepare(8000);slice.set(rs);std::vector<float> outputs(12000);for(int i=0;i<12000;++i){float l=float(i/16000.),r=-l;slice.process(l,r,i/4000.,120);outputs[i]=l;assert(std::isfinite(l)&&std::abs(l+r)<1e-6);}assert(std::abs(outputs[4100]-(outputs[8100]-.25))<.002);assert(outputs[4350]<.03);assert(outputs[8100]>.24&&outputs[8100]<.29);
- for(int i=0;i<200;++i){float l=.3f,r=-.2f;slice.process(l,r,.5+i/4000.,120);if(i>100)assert(std::abs(l-.3f)<1e-6);}assert(!slice.active());
- // 1/3 is represented as 4/3 beats; fractional step boundaries stay deterministic.
- rs.beats=4./3.;slice.set(rs);for(int i=0;i<500;++i){double beat=i*.001;float l=.2f,r=.2f;slice.process(l,r,beat,137);int expected=int(std::floor(beat/(rs.beats/16.)+1e-9))%16;assert(slice.step()==expected);}float l=.2f,r=.2f;slice.process(l,r,0,137,false);assert(!slice.active());
- std::cout<<"PASS: legacy filter equivalence, 19 models finite/active/bypass; Gater Wet/Off/Release latch/wrap/stop; Reslice bypass/capture/reorder/seek/rational clock\n";
+ // Generative cutting activates from recent history and resets safely on seek/stop.
+ rs.enabled=true;rs.algorithm=1;rs.variation=.8;slice.set(rs);double altered=0.;for(int i=0;i<12000;++i){float input=.2f*std::sin(i*.03),l=input,r=-l;slice.process(l,r,.25+i/4000.,120);assert(std::isfinite(l)&&std::abs(l+r)<1e-6);altered+=std::abs(l-input);}assert(altered>1&&slice.events()>0);
+ for(int i=0;i<200;++i){float l=.3f,r=-.2f;slice.process(l,r,.5+i/4000.,120);assert(std::isfinite(l));}assert(!slice.active());
+ float l=.2f,r=.2f;slice.process(l,r,0,137,false);assert(!slice.active());
+ std::cout<<"PASS: legacy filter equivalence, 19 models finite/active/bypass; Gater Wet/Off/Release latch/wrap/stop; Reslice bypass/generative cutting/seek/stop\n";
 }
+

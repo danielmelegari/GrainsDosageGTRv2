@@ -1,0 +1,67 @@
+#include "preset_banks.h"
+#pragma once
+// Real native input scenarios shared by Cocoa and Win32 smoke runners.
+#include "mockup_ui.h"
+#include "factory_presets.h"
+#include <stdexcept>
+#include <cmath>
+namespace aztec {
+template<class Click,class Drag,class Scroll,class Page>
+void runGuiScenarios(Controller* c,Click click,Drag drag,Scroll scroll,Page actualPage){
+ auto check=[](bool ok,const char* msg){if(!ok)throw std::runtime_error(msg);};
+ mockup::RackState rack;auto val=[&](ParamID id){return c->getParamNormalized(id);};int lfo=0;
+ auto rectClick=[&](mockup::Rect r,int count=1){click(r.x+r.w/2,r.y+r.h/2,count);};
+ auto page=[&](int p){rectClick(mockup::pageRect(p));rack.page=p;check(actualPage()==p,"Fixed page navigation");};
+ auto setScroll=[&](double d){rack.scroll[rack.page]=std::clamp(d,0.,mockup::maxScroll(rack));scroll(rack.offset());};
+ auto focus=[&](int stage){page(0);setScroll(0);auto r=mockup::moduleRect(stage,val,rack);setScroll(r.y-220);};
+ auto control=[&](ParamID id){for(auto c:mockup::controls(val,0,lfo,0,0,0,rack))if(c.id==id)return c.r;throw std::runtime_error("Control missing from page: parameter "+std::to_string(id));};
+ auto toggle=[&](ParamID id){auto r=control(id);double before=val(id);rectClick(r);check(val(id)==(before>=.5?0.:1.),"Visible toggle binding");c->setParamNormalized(id,before);};
+ for(int stage:{0,2,3,4}){focus(stage);toggle(mockup::stageEnabled[stage]);toggle(moduleLoopOn(moduleLoopIndex(stage)));check(control(moduleLoopWindow(moduleLoopIndex(stage))).w>0,"Per-module loop window selector");}
+ focus(0);toggle(kFreeze);toggle(kMixLock0);auto r=control(kSize);c->setParamNormalized(kSize,.25);drag(0,r.x+r.w/2,r.y+r.h/2);drag(1,r.x+r.w/2,r.y+r.h/2-45);drag(2,r.x+r.w/2,r.y+r.h/2-45);check(std::abs(val(kSize)-.5)<.015,"Round knob drag");rectClick(r,-1);check(std::abs(val(kSize)-.25)<1e-6,"Shift click default");c->setParamNormalized(kSize,.8);rectClick(r,2);check(std::abs(val(kSize)-.25)<1e-6,"Double click knob resets without a dialog");
+ c->setParamNormalized(kGrainMix,.271);c->setParamNormalized(kMixLock0,0);rectClick(control(kMixLock0));rectClick(mockup::randomRect(0,val,rack));check(val(kGrainMix)==.271,"Mix lock survives Random");rectClick(control(kMixLock0));rectClick(mockup::randomRect(0,val,rack));check(val(kGrainMix)!=.271,"Unlocked mix randomises");
+ focus(3);
+ // Exercise the compact knobs through native input before opening advanced controls.
+ for(auto id:{kResliceSubdivision,kResliceSeed,kResliceVariation,kResliceReverse,kResliceMix}){
+  double saved=val(id);c->setParamNormalized(id,.25);auto knob=control(id);
+  drag(0,knob.x+knob.w/2,knob.y+knob.h/2);drag(1,knob.x+knob.w/2,knob.y+knob.h/2-45);drag(2,knob.x+knob.w/2,knob.y+knob.h/2-45);
+  check(val(id)>.4,"Compact Reslice knob binding");c->setParamNormalized(id,saved);
+ }
+ auto advance=[&](){focus(3);auto button=mockup::resliceAdvanceRect(val,rack);rectClick(button);check(mockup::toggleResliceAdvance(button.x+button.w/2,button.y+button.h/2,val,rack),"Reslice Advance button geometry");};
+ advance();
+ double savedMode=val(kResliceAlgorithm);const ParamID modeSliders[]={kResliceStutter,kResliceStraight,kResliceActivity};
+ for(int mode=0;mode<3;++mode){c->setParamNormalized(kResliceAlgorithm,mode*.5);auto id=modeSliders[mode];double saved=val(id);c->setParamNormalized(id,.25);auto slider=control(id);drag(0,slider.x+20,slider.y+29);drag(1,slider.x+20+slider.w*.25,slider.y+29);drag(2,slider.x+20+slider.w*.25,slider.y+29);check(std::abs(val(id)-.5)<.015,"Selected algorithm horizontal fader");rectClick(slider,-1);double defaultValue=val(id);c->setParamNormalized(id,.9);click(slider.x+20,slider.y+29,2);check(val(id)==defaultValue,"Double click fader resets without a dialog");c->setParamNormalized(id,saved);check(control(kResliceFade).w>0&&control(kResliceMix).w>0,"Shared controls and fixed bottom knobs");}
+ c->setParamNormalized(kResliceAlgorithm,savedMode);
+ focus(3);auto rmode=control(kResliceAlgorithm);check(rmode.w>0,"Generative mode selector");setScroll(rack.offset()+250.);toggle(kResliceCrushOn);toggle(kResliceCombOn);double before=val(kResliceSeed);rectClick(mockup::reslicePhraseRect(val,rack));check(val(kResliceSeed)!=before,"New procedural phrase seed");
+ c->setParamNormalized(kResliceMix,.271);c->setParamNormalized(kMixLock0+3,1);rectClick(mockup::randomRect(3,val,rack));check(val(kResliceMix)==.271,"Reslice Random preserves locked mix");c->setParamNormalized(kMixLock0+3,0);rectClick(mockup::randomRect(3,val,rack));check(val(kResliceMix)!=.271,"Reslice Random changes unlocked mix");
+
+ advance(); // Return to compact mode, including its shorter scroll range.
+ focus(3);double compactMix=val(kResliceMix);c->setParamNormalized(kResliceMix,.25);r=control(kResliceMix);drag(0,r.x+r.w/2,r.y+r.h/2);drag(1,r.x+r.w/2,r.y+r.h/2-45);drag(2,r.x+r.w/2,r.y+r.h/2-45);check(std::abs(val(kResliceMix)-.5)<.015,"Collapsed Reslice knob remains interactive");c->setParamNormalized(kResliceMix,compactMix);
+ focus(4);r=mockup::stepRect(0,4,val,rack);before=val(kGaterState0);rectClick(r);check(val(kGaterState0)==(before>.25?0.:1.),"Gater sequencer after scroll");
+ auto original=mockup::routeChain(val);focus(original[3]);r=mockup::headerRect(original[3],val,rack);drag(0,r.x+20,r.y+20);setScroll(0);r=mockup::headerRect(original[0],val,rack);drag(1,r.x+20,r.y+15);drag(2,r.x+20,r.y+15);auto moved=mockup::routeChain(val);check(moved[0]==original[3]&&moved[1]==original[0],"Vertical routing from bottom to first across scrolling");
+ focus(moved[0]);r=mockup::headerRect(moved[0],val,rack);drag(0,r.x+20,r.y+20);setScroll(mockup::maxScroll(rack));r=mockup::moduleRect(moved[3],val,rack);drag(1,r.x+80,r.y+r.h-10);drag(2,r.x+80,r.y+r.h-10);check(mockup::routeChain(val)==original,"Vertical routing first to last across scrolling");
+ focus(original[0]);r=mockup::headerRect(original[0],val,rack);before=val(kRoutingOrder);drag(0,r.x+20,r.y+20);drag(1,200,100);drag(2,200,100);check(val(kRoutingOrder)==before,"Drop over fixed header cancels");
+ setScroll(mockup::maxScroll(rack));toggle(kInputDeclick);
+ page(1);setScroll(0);rectClick(rack.position(mockup::lfoRect(2)));lfo=2;toggle(lfoID(2,lEnabled));setScroll(620);toggle(kReverbOn);r=control(kReverbMix);c->setParamNormalized(kReverbMix,.25);drag(0,r.x+r.w/2,r.y+60);drag(1,r.x+r.w/2,r.y+30);drag(2,r.x+r.w/2,r.y+30);check(val(kReverbMix)>.4,"Reverb fader binding");setScroll(mockup::maxScroll(rack));toggle(kMasterLimiter);check(control(kAudioQuality).w>0,"Output quality selector present");c->setParamNormalized(kAudioQuality,0.);rectClick(control(kAudioQuality),-1);check(val(kAudioQuality)==.5,"Quality reset selects Normal");
+ page(2);setScroll(0);toggle(kXYEnable);r=rack.position(mockup::xy);click(r.x+12,r.y+12,1);check(val(kXYX)<.005&&val(kXYY)>.995,"Square Morph XY corner");c->setParamNormalized(kXYX,.5);c->setParamNormalized(kXYY,.5);
+ // CI starts with an empty user preset folder: both arrows select Default.
+ // Compare sound parameters, not monitor or one-shot UI state.
+ const auto defaults=initialParameters();
+ auto checkDefault=[&](){for(int id=0;id<kCount;++id)if(presetParameter(id)&&c->getParameterObject(ParamID(id)))
+  check(std::abs(val(ParamID(id))-defaults[id])<1e-9,"Default preset restores sound parameters");};
+ rectClick(mockup::next);checkDefault();
+ c->setParamNormalized(kSize,.73);rectClick(mockup::next);checkDefault();
+ c->setParamNormalized(kSize,.81);rectClick(mockup::previous);checkDefault();
+ // The fixed header action works on all pages, even when the body is scrolled.
+ for(int p=0;p<3;++p){page(p);setScroll(mockup::maxScroll(rack));
+  c->setParamNormalized(kGrainMix,.271);c->setParamNormalized(kMixLock0,1.);
+  c->setParamNormalized(kAudioQuality,0.);double size=val(kSize);
+  rectClick(mockup::randomAll);
+  check(val(kSize)!=size,"Header Random generates a new sound");
+  check(val(kGrainMix)==.271&&val(kMixLock0)==1.,"Header Random preserves mix locks");
+  check(val(kAudioQuality)==0.,"Header Random preserves quality");
+  check(val(kLfoWaveChoice0)>0.,"Header Random uses expanded wave library");
+ }
+ rectClick(mockup::next);checkDefault();
+ page(0);setScroll(0);
+}
+}

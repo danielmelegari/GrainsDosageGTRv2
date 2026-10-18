@@ -5,3 +5,19 @@
 205 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/assets/sprites/header-left.png"
 206 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/assets/sprites/header-right.png"
 207 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/assets/sprites/xy-nebula.png"
+
+208 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/assets/mockup/knob.png"
+
+209 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/assets/approved-rack/backplate.png"
+210 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/assets/approved-rack/controls.png"
+
+211 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/assets/module-skins/granulizer.png"
+212 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/assets/module-skins/beatrepeater.png"
+213 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/assets/module-skins/reslice.png"
+214 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/assets/module-skins/gater.png"
+
+215 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/assets/module-skins/input-options.png"
+
+216 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/assets/approved-rack/logo.png"
+
+217 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/assets/approved-rack/cables.png"

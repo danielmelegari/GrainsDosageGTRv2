@@ -5,6 +5,7 @@
 #error "Configure the publisher public key before building licensed trial targets"
 #endif
 #include GRAINS_TRIAL_PUBLIC_KEY_HEADER
+#include "trial_legacy_public_key.h"
 #include <bcrypt.h>
 #include <filesystem>
 #include <fstream>
@@ -71,15 +72,25 @@ inline std::wstring licenseDirectory() {
   CoTaskMemFree(path);
   return result + L"\\GrainsDosage-Trial";
 }
+inline bool verifyLicenseText(const std::string& text, License& license,
+                              const std::string& expectedMachine, Tick now, bool checkTime=true,
+                              const BYTE* key=trialPublicKey,ULONG keySize=sizeof(trialPublicKey),
+                              const BYTE* previousKey=legacyTrialPublicKey,ULONG previousKeySize=sizeof(legacyTrialPublicKey)) {
+  License parsed;
+  if(!machineIdValid(expectedMachine)||!parseLicense(text,parsed)||
+     parsed.machine!=expectedMachine)return false;
+  if(!signatureValid(parsed,key,keySize)&&
+     !(previousKey&&previousKeySize&&signatureValid(parsed,previousKey,previousKeySize)))return false;
+  if(checkTime&&!parsed.permanent&&(now<parsed.start||now>=parsed.end))return false;
+  license=std::move(parsed);return true;
+}
 inline bool readLicense(const std::wstring& path, License& license, bool checkTime = true) {
   std::ifstream input(std::filesystem::path(path), std::ios::binary);
   if (!input) return false;
   std::string text(2049, '\0');
   input.read(text.data(), std::streamsize(text.size()));
   text.resize(static_cast<size_t>(input.gcount()));
-  if (!parseLicense(text, license) || !signatureValid(license) || license.machine != machineId()) return false;
-  const Tick now = wallTime();
-  return !checkTime || (now >= license.start && now < license.end);
+  return verifyLicenseText(text,license,machineId(),wallTime(),checkTime);
 }
 inline bool loadLicense(License& license) {
   const auto directory = licenseDirectory();

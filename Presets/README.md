@@ -1,9 +1,9 @@
-# GrainsDosage factory presets
+# GrainsDosage presets
 
-This folder ships the same 30 parameter-only `.gdspreset` files installed by the plugin.
-
-- 01–10: original factory starting points.
-- 11–19: imported user patches from the upgrade discussion. Original parameter values are preserved; new modules default off.
-- 20–30: patches demonstrating Reslice, Gater Latch, new filter models, and new reverbs.
-
-The original names, parameter counts, and SHA-256 hashes for the nine imported preset files are recorded in `USER-PRESET-ORIGINS.json`. The host plugin installs missing factory files without overwriting user files.
+Default is the only bundled preset. The plugin offers it directly in the menu;
+it does not copy, overwrite, upgrade or delete files in user preset folders.
+Existing user presets remain available under Saved Presets and through Load.
+Untouched old factory-bank files are hidden from the menu, but remain on disk.
+USER-PRESET-ORIGINS.json retains the historical provenance of previously bundled
+user-contributed patches; their removal from this distribution does not remove
+any user's installed copies.

@@ -15,13 +15,14 @@ struct GaterSettings {
 };
 class Gater {
  GaterSettings settings_;
+ bool trigger_=false;int64_t triggerTick_=INT64_MIN;
  double sr_=48000.,wet_=1.,releaseStep_=0.;
  int step_=0,latched_=0,lastWetStep_=0;
  int64_t latchTick_=INT64_MIN,cycle_=INT64_MIN;
  bool latchPlaying_=true,gateWasOpen_=true,dirty_=true,haveBeat_=false;
  std::array<int,16> states_{};
  std::array<double,16> lengths_{},sustains_{};
- double lastBeat_=0.;uint64_t epoch_=0;
+ double phase_=0.;double lastBeat_=0.;uint64_t epoch_=0;
  static double noise(int64_t cycle,int step,uint64_t seed){uint64_t h=uint64_t(cycle)*16+uint64_t(step)+seed;h=(h^(h>>30))*0xbf58476d1ce4e5b9ULL;h=(h^(h>>27))*0x94d049bb133111ebULL;h^=h>>31;return double(h>>11)/9007199254740992.;}
  void pattern(int64_t cycle){
   const double minimum=std::clamp(settings_.minimumLength,.05,.95);
@@ -35,16 +36,18 @@ class Gater {
   cycle_=cycle;dirty_=false;
  }
 public:
- void prepare(double sr){sr_=std::max(8000.,sr);wet_=1.;releaseStep_=0.;cycle_=INT64_MIN;dirty_=true;haveBeat_=false;epoch_=0;latched_=0;lastWetStep_=0;latchTick_=INT64_MIN;latchPlaying_=true;gateWasOpen_=true;}
- void resetLatch(){latched_=0;latchTick_=INT64_MIN;}
+ bool trigger()const{return trigger_;}
+ void prepare(double sr){trigger_=false;triggerTick_=INT64_MIN;phase_=0.;sr_=std::max(8000.,sr);wet_=1.;releaseStep_=0.;cycle_=INT64_MIN;dirty_=true;haveBeat_=false;epoch_=0;latched_=0;lastWetStep_=0;latchTick_=INT64_MIN;latchPlaying_=true;gateWasOpen_=true;}
+ void resetLatch(){latched_=0;latchTick_=INT64_MIN;trigger_=false;triggerTick_=INT64_MIN;}
  void set(const GaterSettings& s){if(s.latch!=settings_.latch||s.enabled!=settings_.enabled)resetLatch();if(s.enabled!=settings_.enabled||s.lengthRandom!=settings_.lengthRandom||s.stepRandom!=settings_.stepRandom||s.grid!=settings_.grid||s.chance!=settings_.chance||s.minimumLength!=settings_.minimumLength||s.state!=settings_.state||s.length!=settings_.length||s.sustain!=settings_.sustain)dirty_=true;settings_=s;}
  void process(float& l,float& r,double beat,double tempo,bool playing=true){
   if(haveBeat_&&beat<lastBeat_-1e-6){++epoch_;dirty_=true;}lastBeat_=beat;haveBeat_=true;
   double grid=std::max(.03125,settings_.grid),position=beat/grid;
   int64_t tick=int64_t(std::floor(position+1e-10));step_=int((tick%16+16)%16);
   int64_t cycle=int64_t(std::floor(double(tick)/16.));if(dirty_||cycle!=cycle_)pattern(cycle);
-  double phase=std::clamp(position-double(tick),0.,1.),length=lengths_[step_];
+  double phase=std::clamp(position-double(tick),0.,1.),length=lengths_[step_];phase_=settings_.enabled&&playing?phase:0.;
   int state=states_[step_];bool targetOpen;
+  trigger_=settings_.enabled&&playing&&state==1&&!(settings_.latch&&(settings_.release&(uint16_t(1)<<step_)))&&tick!=triggerTick_;triggerTick_=playing?tick:INT64_MIN;
   if(settings_.latch){
    if(!playing){resetLatch();latchPlaying_=false;}
    else {if(!latchPlaying_){resetLatch();latchPlaying_=true;}if(tick!=latchTick_){if(settings_.release&(uint16_t(1)<<step_))latched_=0;else if(state!=0)latched_=1;latchTick_=tick;}}
@@ -67,5 +70,7 @@ public:
  int step()const{return step_;}int state(int i)const{return states_[i];}
  double length(int i)const{return lengths_[i];}double sustain(int i)const{return sustains_[i];}
  double envelope()const{return wet_;}
+ double phase()const{return phase_;}
 };
 }
+

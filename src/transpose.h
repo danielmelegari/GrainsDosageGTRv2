@@ -24,6 +24,8 @@ public:
     // Slew the pitch before changing delay-head speed; preserve head phase.
     const double targetPitch=std::clamp(semitones,-48.,48.);
     pitch_=targetPitch+pitchSmoothing_*(pitch_-targetPitch);
+    // Keep recording while neutral, but skip unused pitch-head interpolation.
+    if(targetPitch==0. && std::abs(pitch_)<1e-12 && blend_<1e-12){pitch_=blend_=0.;++write_;return;}
     double ratio=std::pow(2.,pitch_/12.);
     double target=std::abs(pitch_)>.001 ? 1. : 0.; blend_=target+smooth_*(blend_-target);
     double p=phase_,q=std::fmod(p+.5,1.);

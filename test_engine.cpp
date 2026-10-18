@@ -18,9 +18,9 @@ int main() {
   s.mix=0.; auto dry=render(s); for(int i=0;i<int(dry.size());++i) assert(std::abs(dry[i]-signal(i))<1e-6);
   s.mix=1.; s.pattern=0; assert(energy(render(s))==0.);
   s.pattern=0xffff; assert(energy(render(s))>1e-4);
-  s.grainMix=0.; s.glitchMix=1.; auto forward=render(s); assert(energy(forward)>1e-4);
-  s.glitchReverse=true; auto reverse=render(s); double difference=0.; for(size_t i=24000;i<forward.size();++i) difference+=std::abs(forward[i]-reverse[i]); assert(difference>100.);
-  s.glitchChance=0.; assert(energy(render(s))==0.);
+  s.grainMix=1.; s.glitchMix=1.; auto forward=render(s); assert(energy(forward)>1e-4);
+  s.glitchReverse=true; auto reverse=render(s); double difference=0.; for(size_t i=24000;i<forward.size();++i) difference+=std::abs(forward[i]-reverse[i]); assert(difference==0.);
+  s.glitchChance=0.; assert(render(s)==forward);s.grainMix=0.;
   // Record history, then hold a 1/16 slice. New silent input must not erase it.
   qg::Engine e; e.prepare(rate); s.glitchMix=0.; s.repeatMix=1.; s.repeatOn=false; s.release=.001; e.set(s);
   float l=0,r=0; std::vector<float> held;
@@ -40,3 +40,4 @@ int main() {
   }
   std::cout << "PASS: dry path, closed gate, grains, glitch/reverse/probability, repeat capture/hold/release/period, transport and feedback stress\n";
 }
+

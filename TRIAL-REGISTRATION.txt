@@ -1,16 +1,19 @@
-GRAINSDOSAGE - REGISTERED WINDOWS TRIAL
+GrainsDosage — offline trial and permanent activation
 
-This trial works only with a signed license for your computer.
+In the plugin, click ACTIVATE. Copy the complete Machine ID and send it to the
+publisher. Trial activation does not require a License ID. Paste the FULL text
+from GrainsDosage-Trial-Key.txt or GrainsDosage-Permanent-Key.txt, then click
+Activate. Processing is enabled without restarting the DAW.
 
-1. Open "GrainsDosage Trial Registration" from the Start menu.
-2. Choose Yes to save your machine request on the Desktop.
-3. Send GrainsDosage-machine-request.json to the publisher.
-4. After receiving trial.license, open the registration tool again.
-5. Choose No, select your license, and reload the plugin in your DAW.
+The header shows TRIAL ACTIVE and remaining calendar days, TRIAL EXPIRED,
+or LICENSED. A trial lasts 14 days from the signed issuance date. It has no
+one-hour session limit. Expiry fades the effect to dry over 20 ms without
+interrupting the DAW or altering saved settings.
 
-The license has a fixed start date and expires exactly 14 days later.
-The registration tool shows both dates. Before activation or after expiry,
-the trial plugin produces no audio. It does not close or modify your DAW.
-A license issued for another computer will not work here.
+The optional Start-menu Registration tool can export a JSON request (Yes)
+or install the publisher TXT / legacy .license file (No). Reload the plugin
+after using that external tool. Dates displayed by Registration are UTC.
 
-No internet connection is required. Reinstalling does not extend the trial.
+Activation is offline and specific to the registered machine. Do not change
+the system clock or edit the signed code. The private signing key stays with
+the publisher and is never needed on the customer's computer.

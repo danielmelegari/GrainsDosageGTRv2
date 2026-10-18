@@ -1,0 +1,26 @@
+name: GrainsDosage License Generator — Mojave Intel
+on:
+  workflow_dispatch:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  mojave-intel:
+    runs-on: macos-15-intel
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test persistent ledger and concurrent device limit
+        run: |
+          clang++ -std=c++17 -O2 -arch x86_64 -mmacosx-version-min=10.14 tools/license-generator/test_ledger.cpp -lsqlite3 -pthread -o "$RUNNER_TEMP/test-generator-ledger"
+          "$RUNNER_TEMP/test-generator-ledger"
+      - name: Test real RSA signatures against plugin verification
+        run: bash tools/test-license-mac.sh
+      - name: Build Mojave Intel app (public key only)
+        run: bash tools/license-generator/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GrainsDosage-License-Generator-macOS-Mojave-Intel
+          path: build-license-generator/GrainsDosage-License-Generator-Mojave-Intel.zip
+          if-no-files-found: error
+          retention-days: 30
