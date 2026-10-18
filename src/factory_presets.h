@@ -9,9 +9,9 @@ inline std::array<double,kCount> initialParametersBeforeRemoval() {
   std::array<double,kCount> p{};for(int i=kUiWaveLow0;i<int(kReverbRateV2);++i)p[i]=.5;p[kResliceLength]=2./3.;p[kFilterSeqDepth]=.5;p[kFilterSeqGlide]=.2;p[kFilterSeqRate]=2./5.;p[kCombOctave]=2./6.;p[kResliceMix]=1.;for(int i=0;i<16;++i)p[kResliceIndex0+i]=i/15.;p[kInputDeclick]=1.;p[kDeclickSensitivity]=.5;p[kReverbRandomRate]=1.;p[kGaterGrid]=2./3.;p[kGaterChance]=.5;p[kGaterMinLength]=0.;p[kGaterTie]=0.;for(int i=0;i<16;++i){p[kGaterState0+i]=1.;p[kGaterLength0+i]=(.75-.05)/.95;p[kGaterSustain0+i]=.1;}
   // Reslice starts with all steps enabled but the module itself stays off (kResliceEnabled default 0).
   for(int i=0;i<16;++i)p[kResliceStep0+i]=1.;
-  for(int l=0;l<4;++l){p[kUiLfoCycle0+l]=p[kUiLfoEpoch0+l]=2147483648./4294967295.;p[kLfoSpeed0+l]=2./3.;for(int slot=0;slot<6;++slot)p[slotAmount(l,slot)]=.5;}
-  p[kAudioQuality]=.5;for(int i=0;i<4;++i)p[kModWaveTo0+i]=1.;
-  for(int i=0;i<4;++i)p[kUiLfoValue0+i]=.5;
+  for(int l=0;l<qg::lfoCount;++l){p[modParam(kUiLfoCycle0,l)]=p[modParam(kUiLfoEpoch0,l)]=2147483648./4294967295.;p[modParam(kLfoSpeed0,l)]=2./3.;for(int slot=0;slot<6;++slot)p[slotAmount(l,slot)]=.5;}
+  p[kAudioQuality]=.5;for(int i=0;i<qg::lfoCount;++i)p[modParam(kModWaveTo0,i)]=1.;
+  for(int i=0;i<qg::lfoCount;++i)p[modParam(kUiLfoValue0,i)]=.5;
   p[kReverbLength]=(2.8-.2)/19.8;
   p[kGrainEnabled]=p[kGlitchEnabled]=p[kRepeatEnabled]=1.;p[kGrainPan]=.5;p[kReverbGrid]=2./3.;p[kReverbMix]=.25;
   for(int i=0;i<16;i+=4)p[kReverbStep0+i]=1.;
@@ -28,9 +28,10 @@ inline std::array<double,kCount> initialParametersBeforeRemoval() {
   for(int i=0;i<16;++i) p[kStep0+i] = 1.;
   for(int i=0;i<qg::lfoCount;++i) {
     const int base=lfoID(i,0); p[base+lSync]=1.; p[base+lHz]=.99/39.99;
-    p[base+lGrid]=3./20.; p[kRandomSteps0+i]=15./63.; p[base+lDepth]=1.; p[base+lGlide]=1.;
+    p[base+lGrid]=3./20.; p[modParam(kRandomSteps0,i)]=15./63.; p[base+lDepth]=1.; p[base+lGlide]=1.;
     for(int t=0;t<8;++t) p[routeID(i,t)]=.5;
   }
+  p[kRndNoteMin]=48./127.;p[kRndNoteMax]=72./127.;p[kRndLengthMin]=(.05-.005)/1.995;p[kRndLengthMax]=(.25-.005)/1.995;
   return p;
 }
 inline std::array<double,kCount> initialParameters(){auto p=initialParametersBeforeRemoval();p[kGlitchEnabled]=p[kGlitchMix]=0.;p[kReslicePhrase]=2./3.;p[kResliceRepeat]=.45;p[kResliceVariation]=.5;p[kResliceFill]=.5;p[kResliceReverse]=.1;resliceDefaults(p);return p;}

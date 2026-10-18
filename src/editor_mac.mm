@@ -492,7 +492,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   std::array<int,5> selection{{[self tab],selectedLfo,selectedRepeat,selectedGate,selectedReslice}};
   if(selection!=sceneSelection){sceneSelection=selection;rebuild=true;}
   for(int id=0;id<kCount;++id)if(!isMonitor(id)){double v=owner->value(id);if(sceneValues[id]!=v){sceneValues[id]=v;changedControls.push_back(ParamID(id));if(id==lfoID(selectedLfo,lWave))rebuild=true;}}
-  const int activeWave=kUiModWave0+selectedLfo;
+  const int activeWave=modParam(kUiModWave0,selectedLfo);
   if(modWaveSelection([&](ParamID id){return owner->value(id);},selectedLfo)>0&&sceneValues[activeWave]!=owner->value(activeWave)){sceneValues[activeWave]=owner->value(activeWave);rebuild=true;}
   std::vector<mockup::Control> patches;
   if(!rebuild&&!changedControls.empty()){
@@ -699,7 +699,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
       NSMenu* menu=[[NSMenu alloc] initWithTitle:@"Select"];NSMenu* destination=menu;int n=owner->info(c.id).stepCount;
       for(int i=0;i<=n;++i){
         if(!aztec::availableMenuOption(c.id,i))continue;
-        if(c.id==aztec::kLfoWaveChoice0+selectedLfo)if(const char* groupName=aztec::waveMenuGroup(i)){NSString* title=[NSString stringWithUTF8String:groupName];NSMenuItem* group=[[NSMenuItem alloc] initWithTitle:title action:nullptr keyEquivalent:@""];destination=[[NSMenu alloc] initWithTitle:title];group.submenu=destination;[menu addItem:group];}
+        if(c.id==aztec::modParam(aztec::kLfoWaveChoice0,selectedLfo))if(const char* groupName=aztec::waveMenuGroup(i)){NSString* title=[NSString stringWithUTF8String:groupName];NSMenuItem* group=[[NSMenuItem alloc] initWithTitle:title action:nullptr keyEquivalent:@""];destination=[[NSMenu alloc] initWithTitle:title];group.submenu=destination;[menu addItem:group];}
         NSMenuItem* item=[[NSMenuItem alloc] initWithTitle:owner->display(c.id,double(i)/std::max(1,n),false) action:@selector(choose:) keyEquivalent:@""];
         item.target=self;item.tag=i;item.representedObject=@(c.id);item.state=int(std::round(owner->value(c.id)*n))==i?NSControlStateValueOn:NSControlStateValueOff;[destination addItem:item];
       }[NSMenu popUpContextMenu:menu withEvent:event forView:self];

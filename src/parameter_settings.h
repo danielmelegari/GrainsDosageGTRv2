@@ -78,16 +78,18 @@ inline qg::Settings settings(const std::array<double, kCount>& saved, double tem
   s.freeze=false; // never carried through settings(): toggled directly on the engine
   for(int i=0;i<qg::lfoCount;++i) {
     auto& l=s.lfos[i]; const int base=lfoID(i,0);
-    l.enabled=value(p,base+lEnabled)>=.5; l.wave=selectedWave([&](ParamID id){return value(p,id);},i);l.randomFirst=int(std::round(value(p,kModWaveFrom0+i)*qg::maxWave));l.randomLast=int(std::round(value(p,kModWaveTo0+i)*qg::maxWave));l.randomWaveCount=qg::tableWaveCount; // MOD RANDOM includes new waves even for Default/legacy wave selection.
+    l.enabled=value(p,base+lEnabled)>=.5; l.wave=selectedWave([&](ParamID id){return value(p,id);},i);l.randomFirst=int(std::round(value(p,modParam(kModWaveFrom0,i))*qg::maxWave));l.randomLast=int(std::round(value(p,modParam(kModWaveTo0,i))*qg::maxWave));l.randomWaveCount=qg::tableWaveCount; // MOD RANDOM includes new waves even for Default/legacy wave selection.
     l.sync=value(p,base+lSync)>=.5; l.hz=.01+value(p,base+lHz)*39.99;
     l.beats=lfoBeats[std::clamp(int(std::round(value(p,base+lGrid)*20.)),0,20)];
-    l.randomSteps=1+int(std::round(value(p,kRandomSteps0+i)*63.));
+    l.randomSteps=1+int(std::round(value(p,modParam(kRandomSteps0,i))*63.));
     l.depth=value(p,base+lDepth); l.phase=value(p,base+lPhase);
     l.gateReset=value(p,base+lReset)>=.5; l.glide=.01+value(p,base+lGlide)*.99;
     for(int t=0;t<8;++t) l.amount[t]=value(p,routeID(i,t))*2.-1.;
-    const double speeds[]={.25,.5,1.,2.};l.speed=speeds[int(std::round(value(p,kLfoSpeed0+i)*3.))];l.waveRandom=modWaveSelection([&](ParamID id){return value(p,id);},i);
+    const double speeds[]={.25,.5,1.,2.};l.speed=speeds[int(std::round(value(p,modParam(kLfoSpeed0,i))*3.))];l.waveRandom=modWaveSelection([&](ParamID id){return value(p,id);},i);
     for(int slot=0;slot<6;++slot){int target=int(std::round(value(p,slotTarget(i,slot))*qg::modTargetCount))-1;if(target>=0&&target<qg::modTargetCount){double amount=value(p,slotAmount(i,slot))*2.-1.;int polarity=int(std::round(value(p,slotPolarity(i,slot))*2.));if(polarity==1)l.positive[target]+=std::abs(amount);else if(polarity==2)l.negative[target]+=std::abs(amount);else l.amount[target]+=amount;}}
   }
+  auto& rnd=s.lfos[4];rnd.rndSource=int(std::round(value(p,kRndSource)));rnd.rndRoot=int(std::round(value(p,kRndRoot)*11));rnd.rndMinor=value(p,kRndMinor)>=.5;
+  rnd.rndNoteMin=int(std::round(value(p,kRndNoteMin)*127));rnd.rndNoteMax=int(std::round(value(p,kRndNoteMax)*127));rnd.rndMin=.005+value(p,kRndLengthMin)*1.995;rnd.rndMax=.005+value(p,kRndLengthMax)*1.995;rnd.rndEvery=1+int(std::round(value(p,kRndGateEvery)*15));
   for(int i=0;i<extendedResliceCount;++i)s.resliceModBase[i]=value(p,extendedResliceIds[i]);
   return s;
 }

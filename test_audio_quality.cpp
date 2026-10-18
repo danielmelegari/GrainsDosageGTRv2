@@ -16,7 +16,7 @@ int main(){
  // Sparse routes must exactly match the original dense accumulation, including
  // duplicate destinations, signed/unipolar amounts, and disabled LFOs.
  qg::Modulation sparse;sparse.prepare();std::array<qg::Lfo,4> reference;
- std::array<qg::LfoSettings,4> lfos{};qg::ModValues base{};
+ std::array<qg::LfoSettings,qg::lfoCount> lfos{};qg::ModValues base{};
  for(int i=0;i<4;++i){reference[i].prepare(0x13579BDFULL+uint64_t(i)*104729);lfos[i].enabled=i!=2;lfos[i].wave=i*40;lfos[i].depth=.7;
   lfos[i].amount[4]=.2;lfos[i].amount[101+i]=-.3;lfos[i].positive[6]=.4;lfos[i].negative[6]=.1;}
  base.fill(.5);sparse.configure(lfos);

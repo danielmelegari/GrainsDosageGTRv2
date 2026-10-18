@@ -21,10 +21,10 @@ template<class Getter> std::array<double,kCount> modulationDisplayValues(Getter 
   if(id>=0)p[id]=std::clamp(p[id]+(saved[axis?kXYY:kXYX]*2.-1.)*(saved[axis?kYAmount:kXAmount]*2.-1.),0.,1.);
  }
  auto result=p;
- if(saved[kUiModulationActive]>=.5)for(int l=0;l<4;++l){
+ if(saved[kUiModulationActive]>=.5)for(int l=0;l<qg::lfoCount;++l){
   if(p[lfoID(l,lEnabled)]<.5)continue;
-  double sample=saved[kUiLfoValue0+l]*2.-1.;
-  double unipolar=(sample+p[lfoID(l,lDepth)])*.5;
+  double sample=saved[modParam(kUiLfoValue0,l)]*2.-1.;
+  double unipolar=(sample+(l==4?saved[kUiRndEnvelope]*p[lfoID(l,lDepth)]:p[lfoID(l,lDepth)]))*.5;
   auto add=[&](int target,double amount){int id=modulationParameter(target);if(id>=0&&!retiredPreslicerParam(id))result[id]+=amount;};
   for(int t=0;t<8;++t)add(t,sample*(p[routeID(l,t)]*2.-1.));
   for(int slot=0;slot<6;++slot){int target=int(std::round(p[slotTarget(l,slot)]*qg::modTargetCount))-1;double amount=p[slotAmount(l,slot)]*2.-1.;int polarity=int(std::round(p[slotPolarity(l,slot)]*2.));
