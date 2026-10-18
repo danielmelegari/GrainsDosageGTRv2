@@ -12,7 +12,6 @@ permissions:
   contents: read
 jobs:
   trial:
-    if: vars.GRAINS_TRIAL_PUBLIC_KEY != ''
     strategy:
       fail-fast: false
       matrix:
@@ -37,10 +36,17 @@ jobs:
           submodules: recursive
           path: vst3sdk
       - name: Generate publisher public key header
+        if: env.GRAINS_TRIAL_PUBLIC_KEY != ''
         shell: bash
         env:
           GRAINS_TRIAL_PUBLIC_KEY: ${{ vars.GRAINS_TRIAL_PUBLIC_KEY }}
         run: python tools/configure_trial_key.py "$RUNNER_TEMP/trial_public_key.h"
+      - name: Use test-only public key when publisher key is unset
+        if: env.GRAINS_TRIAL_PUBLIC_KEY == ''
+        shell: bash
+        run: |
+          cp tests/trial_test_public_key.h "$RUNNER_TEMP/trial_public_key.h"
+          echo 'WARNING: test-key build. Not for customers or distribution.' >> "$GITHUB_STEP_SUMMARY"
       - name: Configure Windows trial
         if: runner.os == 'Windows'
         shell: pwsh
@@ -76,7 +82,7 @@ jobs:
       - name: Upload candidate for manual Ableton Live tests
         uses: actions/upload-artifact@v4
         with:
-          name: GrainsDosage-Trial-${{ matrix.label }}-VST3-test
+          name: GrainsDosage-Trial-${{ matrix.label }}-VST3-UNVERIFIED
           path: dist/*.zip
           if-no-files-found: error
           retention-days: 14
