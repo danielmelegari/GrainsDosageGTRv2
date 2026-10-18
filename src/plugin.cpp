@@ -315,8 +315,27 @@ public:
         fallbackBeat_=beat;
       }
     }
-    if(data.numInputs < 1 || data.numOutputs < 1 || data.inputs[0].numChannels<1 || data.outputs[0].numChannels<1) return kResultOk;
-    data.outputs[0].silenceFlags=3;
+    // Hosts may call process() with missing buses, zero samples or null channel
+    // buffers during configuration. Never dereference those pointers blindly.
+    if(data.numSamples <= 0) return kResultOk;
+    if(data.numInputs < 1 || data.numOutputs < 1 || !data.inputs || !data.outputs)
+      return kResultFalse;
+    auto& inputBus = data.inputs[0];
+    auto& outputBus = data.outputs[0];
+    if(inputBus.numChannels < 1 || outputBus.numChannels < 1)
+      return kResultFalse;
+    if(data.symbolicSampleSize == kSample32) {
+      if(!inputBus.channelBuffers32 || !outputBus.channelBuffers32 ||
+         !outputBus.channelBuffers32[0] ||
+         (outputBus.numChannels > 1 && !outputBus.channelBuffers32[1]))
+        return kResultFalse;
+    } else if(data.symbolicSampleSize == kSample64) {
+      if(!inputBus.channelBuffers64 || !outputBus.channelBuffers64 ||
+         !outputBus.channelBuffers64[0] ||
+         (outputBus.numChannels > 1 && !outputBus.channelBuffers64[1]))
+        return kResultFalse;
+    } else return kResultFalse;
+    outputBus.silenceFlags=outputBus.numChannels > 1 ? 3 : 1;
     auto s = settings(p_, tempo_, rate_);s.playing=!data.processContext||(data.processContext->state & ProcessContext::kPlaying); engine_.set(s);
     auto setMaster=[&](){const double ceilings[]={0.,-6.,-10.};master_.set(false,0,1000.,0.,value(p_,kMasterLimiter)>=.5,0,0.,ceilings[int(std::round(value(p_,kLimiterCeiling)*2.))]);};
     setMaster();
@@ -335,7 +354,7 @@ public:
       const double beat = fallbackBeat_ + n * beatIncrement;
       if(data.symbolicSampleSize == kSample32) {
         auto& in = data.inputs[0]; auto& out = data.outputs[0];
-        float l = (in.silenceFlags & 1) ? 0.f : in.channelBuffers32[0][n], r = in.numChannels > 1 ? ((in.silenceFlags & 2) ? 0.f : in.channelBuffers32[1][n]) : l;
+        float l = ((in.silenceFlags & 1) || !in.channelBuffers32[0]) ? 0.f : in.channelBuffers32[0][n], r = in.numChannels > 1 ? (((in.silenceFlags & 2) || !in.channelBuffers32[1]) ? 0.f : in.channelBuffers32[1][n]) : l;
         aztec::modCell().packed.store(engine_.lastModPacked_.load(std::memory_order_relaxed),std::memory_order_relaxed);
         double dl=l,dr=r;declick_.process(dl,dr,value(p_,kInputDeclick)>=.5,value(p_,kDeclickSensitivity),s.bypass);l=float(dl);r=float(dr);
         float a,b; engine_.process(l,r,beat,a,b);
@@ -347,8 +366,8 @@ public:
         if(out.numChannels > 1) out.channelBuffers32[1][n] = b;
       } else if(data.symbolicSampleSize == kSample64) {
         auto& in = data.inputs[0]; auto& out = data.outputs[0];
-        double l = (in.silenceFlags & 1) ? 0. : in.channelBuffers64[0][n];
-        double r = in.numChannels>1 ? ((in.silenceFlags & 2) ? 0. : in.channelBuffers64[1][n]) : l;
+        double l = ((in.silenceFlags & 1) || !in.channelBuffers64[0]) ? 0. : in.channelBuffers64[0][n];
+        double r = in.numChannels>1 ? (((in.silenceFlags & 2) || !in.channelBuffers64[1]) ? 0. : in.channelBuffers64[1][n]) : l;
         declick_.process(l,r,value(p_,kInputDeclick)>=.5,value(p_,kDeclickSensitivity),s.bypass);
         float a,b; engine_.process(float(l),float(r),beat,a,b);
         if(!s.bypass)master_.process(a,b);
@@ -488,7 +507,7 @@ public:
     for(int axis=0;axis<2;++axis) {
       auto* route=new StringListParameter(axis?STR16("Y Destination"):STR16("X Destination"),axis?kYTarget:kXTarget);
       route->appendString(STR16("None"));
-      for(int id=0;id<int(kXYX);++id) { ParameterInfo info{}; getParameterInfo(id,info); route->appendString(info.title); }
+      for(int id=0;id<int(kXYX);++id) { ParameterInfo info{}; if(getParameterInfo(id,info)==kResultOk) route->appendString(info.title); else route->appendString(STR16("Reserved")); }
       const double def=defaults()[axis?kYTarget:kXTarget]; route->getInfo().defaultNormalizedValue=def; route->setNormalized(def); parameters.addParameter(route);
     }
     range(STR16("X Amount"),kXAmount,STR16("%"),-100,100,50);
