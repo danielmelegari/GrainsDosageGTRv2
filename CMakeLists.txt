@@ -91,6 +91,10 @@ smtg_add_vst3plugin(GrainsDosage
   src/parameters.h
   src/editor.h
 )
+option(GRAINS_DISABLE_HOST_TELEMETRY "Diagnostic build: suppress GUI monitor output, keep audio processing" OFF)
+if(GRAINS_DISABLE_HOST_TELEMETRY)
+  target_compile_definitions(GrainsDosage PRIVATE GRAINS_DISABLE_HOST_TELEMETRY=1)
+endif()
 option(GRAINS_TRIAL "Build the Windows 14-day trial" OFF)
 if(GRAINS_EDITION STREQUAL "unlocked")
   if(GRAINS_TRIAL)
@@ -353,7 +357,7 @@ if(GRAINS_BUILD_TESTS)
   endif()
   add_executable(grains_export_presets tools/export_factory_presets.cpp)
   set_target_properties(grains_export_presets PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/preset-bank/$<CONFIG>")
-  foreach(suite rnd_regressions random_trigger audio_quality wave_library modulation_display module_preset reslice_destinations audio_float_mode module_loop input_options reslice_controls reslice_dsg bank_collection modwave_rate buffer_memory engine modulation features rhythm random master upgrade gater declick expansion state glitch_trigger musical gui_layout knob_rotation routing_polarity ui_motion preset_bank trial)
+  foreach(suite host_buffers rnd_regressions random_trigger audio_quality wave_library modulation_display module_preset reslice_destinations audio_float_mode module_loop input_options reslice_controls reslice_dsg bank_collection modwave_rate buffer_memory engine modulation features rhythm random master upgrade gater declick expansion state glitch_trigger musical gui_layout knob_rotation routing_polarity ui_motion preset_bank trial)
     add_executable(grains_test_${suite} test_${suite}.cpp)
     target_include_directories(grains_test_${suite} PRIVATE "${VST3_SDK_ROOT}")
     if(MSVC)
@@ -363,7 +367,7 @@ if(GRAINS_BUILD_TESTS)
     endif()
     # parameters.h uses Steinberg::Vst::ParamID only when built against the SDK;
     # standalone DSP tests get a binary-identical uint32 fallback instead.
-    if(suite STREQUAL "state")
+    if(suite STREQUAL "state" OR suite STREQUAL "host_buffers")
       target_compile_definitions(grains_test_${suite} PRIVATE GRAINS_HAVE_VST3_SDK)
       target_sources(grains_test_${suite} PRIVATE
         "${VST3_SDK_ROOT}/public.sdk/source/common/memorystream.cpp"

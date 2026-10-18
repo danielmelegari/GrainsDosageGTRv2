@@ -170,7 +170,7 @@ public:
     return size==kSample32 || size==kSample64 ? kResultTrue : kResultFalse;
   }
   tresult PLUGIN_API setBusArrangements(SpeakerArrangement* in,int32 ni,SpeakerArrangement* out,int32 no) override {
-    if(ni!=1 || no!=1 || in[0]!=SpeakerArr::kStereo || out[0]!=SpeakerArr::kStereo) return kResultFalse;
+    if(ni!=1 || no!=1 || !in || !out || in[0]!=SpeakerArr::kStereo || out[0]!=SpeakerArr::kStereo) return kResultFalse;
     return AudioEffect::setBusArrangements(in,ni,out,no);
   }
   tresult PLUGIN_API setActive(TBool active) override {
@@ -223,8 +223,20 @@ public:
         fallbackBeat_=beat;
       }
     }
-    if(data.numInputs < 1 || data.numOutputs < 1 || data.inputs[0].numChannels<1 || data.outputs[0].numChannels<1) return kResultOk;
-    data.outputs[0].silenceFlags=3;
+    // Hosts may flush automation without audio during scanning or activation.
+    if(data.numSamples <= 0) return kResultOk;
+    if(data.numInputs < 1 || data.numOutputs < 1) return kResultOk;
+    if(!data.inputs || !data.outputs) return kResultFalse;
+    auto& inputBus=data.inputs[0];auto& outputBus=data.outputs[0];
+    if(inputBus.numChannels<1 || outputBus.numChannels<1) return kResultOk;
+    if(data.symbolicSampleSize==kSample32) {
+      if(!outputBus.channelBuffers32 || !outputBus.channelBuffers32[0] ||
+         (outputBus.numChannels>1 && !outputBus.channelBuffers32[1])) return kResultFalse;
+    } else if(data.symbolicSampleSize==kSample64) {
+      if(!outputBus.channelBuffers64 || !outputBus.channelBuffers64[0] ||
+         (outputBus.numChannels>1 && !outputBus.channelBuffers64[1])) return kResultFalse;
+    } else return kResultFalse;
+    outputBus.silenceFlags=outputBus.numChannels>1?3:1;
     double barBeats=4.;if(data.processContext&&(data.processContext->state&ProcessContext::kTimeSigValid)&&data.processContext->timeSigNumerator>0&&data.processContext->timeSigDenominator>0)barBeats=std::clamp(4.*data.processContext->timeSigNumerator/data.processContext->timeSigDenominator,.25,32.);
     auto s = settings(p_, tempo_, rate_,barBeats);s.playing=!data.processContext||(data.processContext->state & ProcessContext::kPlaying); engine_.set(s);
     auto setMaster=[&](){const double ceilings[]={0.,-6.,-10.};master_.set(false,0,1000.,0.,value(p_,kMasterLimiter)>=.5,0,0.,ceilings[int(std::round(value(p_,kLimiterCeiling)*2.))]);};
@@ -246,7 +258,7 @@ public:
       const double beat = fallbackBeat_ + n * beatIncrement;
       if(data.symbolicSampleSize == kSample32) {
         auto& in = data.inputs[0]; auto& out = data.outputs[0];
-        float l = (in.silenceFlags & 1) ? 0.f : in.channelBuffers32[0][n], r = in.numChannels > 1 ? ((in.silenceFlags & 2) ? 0.f : in.channelBuffers32[1][n]) : l;
+        float l = ((in.silenceFlags & 1) || !in.channelBuffers32 || !in.channelBuffers32[0]) ? 0.f : in.channelBuffers32[0][n], r = in.numChannels > 1 ? (((in.silenceFlags & 2) || !in.channelBuffers32 || !in.channelBuffers32[1]) ? 0.f : in.channelBuffers32[1][n]) : l;
         double dl=l,dr=r;declick_.process(dl,dr,value(p_,kInputDeclick)>=.5,value(p_,kDeclickSensitivity),s.bypass||licenseGain_<=0.);l=float(dl);r=float(dr);
         const float rawL=float(declick_.dry(0)),rawR=float(declick_.dry(1));
         float a=l,b=r;if(licenseGain_>0.)engine_.process(l,r,beat,a,b);
@@ -260,12 +272,12 @@ public:
         squareL+=double(a)*a;squareR+=double(b)*b;
         out.channelBuffers32[0][n] = a;
         if(a!=0.f) out.silenceFlags &= ~uint64(1);
-        if(b!=0.f) out.silenceFlags &= ~uint64(2);
+        if(out.numChannels>1 && b!=0.f) out.silenceFlags &= ~uint64(2);
         if(out.numChannels > 1) out.channelBuffers32[1][n] = b;
       } else if(data.symbolicSampleSize == kSample64) {
         auto& in = data.inputs[0]; auto& out = data.outputs[0];
-        double l = (in.silenceFlags & 1) ? 0. : in.channelBuffers64[0][n];
-        double r = in.numChannels>1 ? ((in.silenceFlags & 2) ? 0. : in.channelBuffers64[1][n]) : l;
+        double l = ((in.silenceFlags & 1) || !in.channelBuffers64 || !in.channelBuffers64[0]) ? 0. : in.channelBuffers64[0][n];
+        double r = in.numChannels>1 ? (((in.silenceFlags & 2) || !in.channelBuffers64 || !in.channelBuffers64[1]) ? 0. : in.channelBuffers64[1][n]) : l;
         declick_.process(l,r,value(p_,kInputDeclick)>=.5,value(p_,kDeclickSensitivity),s.bypass||licenseGain_<=0.);
         const double rawL=declick_.dry(0),rawR=declick_.dry(1);
         float a=float(l),b=float(r);if(licenseGain_>0.)engine_.process(float(l),float(r),beat,a,b);
@@ -286,6 +298,7 @@ public:
       }
     }
     aztec::modCell().packed.store(engine_.lastModPacked_.load(std::memory_order_relaxed),std::memory_order_relaxed);
+#ifndef GRAINS_DISABLE_HOST_TELEMETRY
     if(data.outputParameterChanges&&data.numSamples>0){
       for(int ch=0;ch<2;++ch){int32 index=0;auto* q=data.outputParameterChanges->addParameterData(ParamID(kUiOutputL+ch),index);if(q)q->addPoint(data.numSamples-1,std::clamp(std::sqrt((ch?squareR:squareL)/data.numSamples),0.,1.),index);}
       const double beat=fallbackBeat_+(data.numSamples-1)*beatIncrement;
@@ -295,7 +308,7 @@ public:
     }
     waveCountdown_-=data.numSamples;
     if(data.outputParameterChanges&&data.numSamples>0&&waveCountdown_<=0){
-      waveCountdown_=std::max(1,int(rate_/30.));auto wave=engine_.grainView();
+      waveCountdown_=std::max(1,int(rate_/10.));auto wave=engine_.grainView();
       auto emit=[&](int id,double v){int32 index=0;auto* q=data.outputParameterChanges->addParameterData(ParamID(id),index);if(q)q->addPoint(data.numSamples-1,v,index);};
       emit(kUiRndEnvelope,engine_.rndEnvelope());
       emit(kUiModulationActive,!s.bypass&&licenseGain_>0.?1.:0.);
@@ -304,6 +317,7 @@ public:
       for(int i=0;i<waveformBins;++i){emit(kUiWaveLow0+i,(wave.low[i]+1.)*.5);emit(kUiWaveHigh0+i,(wave.high[i]+1.)*.5);}
       for(int i=0;i<16;++i)emit(kUiResliceSource0+i,engine_.resliceSource(i)/15.);emit(kUiFilterSeqStep,engine_.filterSequenceStep()/31.);emit(kUiResliceStep,engine_.resliceStep()/15.);emit(kUiResliceActive,engine_.resliceActive()?1.:0.);emit(kUiGaterStep,engine_.gaterStep()/15.);emit(kUiGaterPhase,engine_.gaterPhase());for(int i=0;i<16;++i){emit(kUiGaterState0+i,engine_.gaterState(i)?1.:0.);emit(kUiGaterLength0+i,engine_.gaterLength(i));}emit(kUiReverbGate,!s.bypass&&engine_.reverbGate()?1.:0.);emit(kUiGrainStart,wave.start);emit(kUiGrainEnd,wave.end);emit(kUiGrainHead,wave.head);emit(kUiGrainActive,!s.bypass&&wave.active?1.:0.);emit(kUiWaveSeconds,wave.seconds/16.);for(int i=0;i<qg::lfoCount;++i){emit(modParam(kUiModWave0,i),engine_.lfoWave(i)/double(qg::maxWave));emit(modParam(kUiLfoPhase0,i),engine_.lfoPhase(i));emit(modParam(kUiLfoCycle0,i),std::clamp((double(engine_.lfoCycle(i))+2147483648.)/4294967295.,0.,1.));emit(modParam(kUiLfoEpoch0,i),std::clamp((double(engine_.lfoEpoch(i))+2147483648.)/4294967295.,0.,1.));}
     }
+#endif
     fallbackBeat_ += data.numSamples * beatIncrement;
     return kResultOk;
   }

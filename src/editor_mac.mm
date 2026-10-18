@@ -330,7 +330,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
       if(image)editableModuleSkins[@(stage)]=image;
     }
     self.toolTip=@"Drag knobs vertically; Double-click knobs/faders to reset; double-click a value readout to type; Shift-click restores its default. Scroll each page. Drag module headers vertically to change audio order. Option-scroll edits a knob.";
-    timer=[NSTimer timerWithTimeInterval:1./30. target:self selector:@selector(tick:) userInfo:nil repeats:YES];
+    timer=[NSTimer timerWithTimeInterval:1./15. target:self selector:@selector(tick:) userInfo:nil repeats:YES];
     timer.tolerance=.003;
     [[NSRunLoop mainRunLoop] addTimer:timer forMode:NSRunLoopCommonModes];
   }return self;
