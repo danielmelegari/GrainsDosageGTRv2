@@ -1,6 +1,7 @@
 // Exercise the actual plugin state reader and controller parameter definitions.
 #include "src/plugin.cpp"
 #include "src/value_entry.h"
+#include "src/preset_catalog.h"
 #include "public.sdk/source/common/memorystream.h"
 #include <cassert>
 #include <iostream>
@@ -142,6 +143,16 @@ int main() {
   }
   static_assert(kGlitchMove==185,"0.6.3 IDs stable");
   Controller controller; assert(controller.initialize(nullptr)==kResultOk);
+  // Closing an editor releases only its reference; the controller retains the
+  // selected preset independently of parameter edits and other plugin instances.
+  {Controller other;auto firstWindow=controller.editorState();
+   firstWindow->presetName="Bass 07 – C minor";firstWindow.reset();
+   auto reopened=controller.editorState();assert(reopened->presetName=="Bass 07 – C minor");
+   assert(other.editorState()->presetName=="PRESETS ▾");
+   std::vector<std::string> list={"Bass 06","Bass 07 – C minor","Bass 08"};int current=-1;
+   for(int i=0;i<int(list.size());++i)if(list[i]==reopened->presetName)current=i;
+   assert(adjacentPreset(current,1,int(list.size()))==2);assert(adjacentPreset(current,-1,int(list.size()))==0);
+  }
   assert(controller.getParameterObject(kAudioQuality)->getInfo().stepCount==2);
   assert(controller.getParameterObject(kAudioQuality)->getInfo().defaultNormalizedValue==.5);
   // The global BYPASS button was removed: kBypassReserved keeps its legacy enum slot

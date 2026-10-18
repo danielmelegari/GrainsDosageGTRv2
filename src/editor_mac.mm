@@ -36,9 +36,11 @@ enum Kind {Knob,Slider,Toggle,Select,Pad,Pan,PanMode,VSlider};
 struct Control {ParamID id;NSRect rect;Kind kind;std::string label;};
 class Editor final:public CPluginView {
   EditController* controller_;
+  std::shared_ptr<EditorState> editorState_;
   __strong GrainsSurface* surface_=nil;
 public:
-  explicit Editor(EditController* c);
+  explicit Editor(EditController* c,std::shared_ptr<EditorState> state);
+  void rememberPresetName(NSString* name){editorState_->presetName=name.UTF8String?name.UTF8String:"";}
   ~Editor() override;
   tresult PLUGIN_API isPlatformTypeSupported(FIDString type) override;
   tresult PLUGIN_API attached(void* parent,FIDString type) override;
@@ -180,6 +182,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
 - (void)setFullRedrawForInspection:(BOOL)enabled;
 - (void)preset:(BOOL)save;
 - (void)stepPreset:(int)direction;
+- (void)restorePresetName:(NSString*)name;
 - (NSURL*)presetFolder;
 - (BOOL)loadPresetURL:(NSURL*)url;
 - (void)presetMenu:(NSEvent*)event;
@@ -197,6 +200,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
 - (void)chooseZoom:(NSMenuItem*)item;
 @end
 @implementation GrainsSurface
+- (void)restorePresetName:(NSString*)name {presetName=[name copy];}
 - (instancetype)initWithFrame:(NSRect)frame {
   self=[super initWithFrame:frame];if(self){
     scenePage=-1;sceneScroll=-1;dragScroll=false;scrollOrigin=0;presetName=@"PRESETS ▾";sceneValues.fill(-1.);sceneSelection.fill(-1);animationFrames=0;staticBuilds=0;textCache=[NSMutableDictionary dictionary];rasterSlices=[NSMutableDictionary dictionary];
@@ -564,9 +568,9 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   NSData* data=[NSData dataWithContentsOfURL:url];std::array<double,aztec::kCount> p{};
   if(!data||!data.length||!aztec::decodePreset(std::string((const char*)data.bytes,data.length),p))return NO;
   for(int id=0;id<aztec::kCount;++id)if(aztec::presetParameter(id))owner->edit(id,p[id]);
-  presetName=[[url lastPathComponent] stringByDeletingPathExtension];[self setNeedsDisplay:YES];return YES;
+  presetName=[[url lastPathComponent] stringByDeletingPathExtension];owner->rememberPresetName(presetName);[self setNeedsDisplay:YES];return YES;
 }
-- (void)defaultPreset {auto p=aztec::initialParameters();for(int id=0;id<aztec::kCount;++id)if(aztec::presetParameter(id))owner->edit(id,p[id]);presetName=@"Default";[self setNeedsDisplay:YES];}
+- (void)defaultPreset {auto p=aztec::initialParameters();for(int id=0;id<aztec::kCount;++id)if(aztec::presetParameter(id))owner->edit(id,p[id]);presetName=@"Default";owner->rememberPresetName(presetName);[self setNeedsDisplay:YES];}
 - (NSArray<NSURL*>*)savedPresetFiles:(NSURL*)folder {
   NSArray<NSURL*>* files=[[NSFileManager defaultManager] contentsOfDirectoryAtURL:folder includingPropertiesForKeys:nil options:NSDirectoryEnumerationSkipsHiddenFiles error:nil];NSMutableArray<NSURL*>* saved=[NSMutableArray array];
   for(NSURL* url in files){if(![url.pathExtension.lowercaseString isEqualToString:@"gdspreset"])continue;std::string stem(url.lastPathComponent.stringByDeletingPathExtension.UTF8String);BOOL hide=NO;
@@ -624,7 +628,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   if(!owner)return;NSURL* folder=module<0?[self presetFolder]:[self modulePresetFolder:module];if(!folder)return;NSError* error=nil;bool ok=false;
   if(save){NSSavePanel* panel=[NSSavePanel savePanel];panel.allowedFileTypes=module<0?@[@"gdspreset"]:@[@"gdmodule"];panel.nameFieldStringValue=module<0?@"GrainsDosage.gdspreset":[[NSString stringWithUTF8String:aztec::mockup::moduleNames[module]] stringByAppendingPathExtension:@"gdmodule"];panel.directoryURL=folder;
     if([panel runModal]!=NSModalResponseOK)return;
-    auto get=[&](int id){return owner->value(id);};auto text=module<0?aztec::encodePreset(get):aztec::encodeModulePreset(module,get);NSData* data=[NSData dataWithBytes:text.data() length:text.size()];ok=[data writeToURL:panel.URL options:NSDataWritingAtomic error:&error];if(ok&&module<0)presetName=[panel.URL.lastPathComponent stringByDeletingPathExtension];
+    auto get=[&](int id){return owner->value(id);};auto text=module<0?aztec::encodePreset(get):aztec::encodeModulePreset(module,get);NSData* data=[NSData dataWithBytes:text.data() length:text.size()];ok=[data writeToURL:panel.URL options:NSDataWritingAtomic error:&error];if(ok&&module<0){presetName=[panel.URL.lastPathComponent stringByDeletingPathExtension];owner->rememberPresetName(presetName);}
   }else{NSOpenPanel* panel=[NSOpenPanel openPanel];panel.allowedFileTypes=module<0?@[@"gdspreset"]:@[@"gdmodule"];panel.allowsMultipleSelection=NO;panel.canChooseDirectories=NO;panel.directoryURL=folder;
     if([panel runModal]!=NSModalResponseOK)return;
     if(module<0)ok=[self loadPresetURL:panel.URL];else ok=[self loadModulePresetURL:panel.URL module:module];
@@ -748,7 +752,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
 namespace aztec {
 // No "using namespace qg" here: inside this namespace an unqualified qg would
 // find aztec::qg first (shadowing), so global qg names must stay ::qg-qualified.
-Editor::Editor(EditController* c):controller_(c){controller_->addRef();rect=ViewRect(0,0,int(mockup::width*.90),int(mockup::height*.90));(void)::qg::waveBank();}
+Editor::Editor(EditController* c,std::shared_ptr<EditorState> state):controller_(c),editorState_(state?state:std::make_shared<EditorState>()){controller_->addRef();rect=ViewRect(0,0,int(mockup::width*.90),int(mockup::height*.90));(void)::qg::waveBank();}
 Editor::~Editor(){removed();controller_->release();}
 NSString* Editor::display(ParamID id,double v,bool units) const {
   String128 text{};controller_->getParamStringByValue(id,v,text);
@@ -768,13 +772,13 @@ tresult Editor::attached(void* parent,FIDString type){
   auto result=CPluginView::attached(parent,type);if(result!=kResultOk)return result;
   aztec::license::firstOpen();
   static bool skinRestored=false;if(!skinRestored){skinRestored=true;aztec::theme::loadSkinFile(aztec::theme::defaultPath());}
-  surface_=[[GrainsSurface alloc] initWithFrame:NSMakeRect(0,0,rect.getWidth(),rect.getHeight())];surface_->owner=this;
+  surface_=[[GrainsSurface alloc] initWithFrame:NSMakeRect(0,0,rect.getWidth(),rect.getHeight())];surface_->owner=this;[surface_ restorePresetName:[NSString stringWithUTF8String:editorState_->presetName.c_str()]];
   [(__bridge NSView*)parent addSubview:surface_];[surface_ setNeedsDisplay:YES];zoom(.90);return kResultOk;
 }
 tresult Editor::removed(){if(surface_){[surface_ stop];surface_->owner=nullptr;[surface_ removeFromSuperview];surface_=nil;}return CPluginView::removed();}
 tresult Editor::onSize(ViewRect* size){if(!size)return kInvalidArgument;auto result=CPluginView::onSize(size);if(surface_){[surface_ setFrameSize:NSMakeSize(size->getWidth(),size->getHeight())];[surface_ setNeedsDisplay:YES];}return result;}
 tresult Editor::checkSizeConstraint(ViewRect* size){if(!size)return kInvalidArgument;double scale=std::clamp(double(size->getWidth())/canvasW,.5,1.);size->right=size->left+int32(std::round(canvasW*scale));size->bottom=size->top+int32(std::round(canvasH*scale));return kResultTrue;}
 void Editor::zoom(double scale){if(plugFrame){ViewRect next(0,0,int32(canvasW*scale),int32(canvasH*scale));plugFrame->resizeView(this,&next);}}
-IPlugView* createEditor(EditController* controller){return new Editor(controller);}
+IPlugView* createEditor(EditController* controller,std::shared_ptr<EditorState> state){return new Editor(controller,state);}
 }
 

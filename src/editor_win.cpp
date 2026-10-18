@@ -243,7 +243,9 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
     if(msg==WM_CLOSE){EndDialog(dialog,0);return TRUE;}return FALSE;
   }
   void activationDialog(){alignas(DLGTEMPLATE) unsigned char storage[128]{};auto* t=reinterpret_cast<DLGTEMPLATE*>(storage);t->style=WS_POPUP|WS_CAPTION|WS_SYSMENU|DS_MODALFRAME|DS_CENTER;t->cx=360;t->cy=230;DialogBoxIndirectParamW(GetModuleHandleW(nullptr),t,window,licenseDialogProc,0);InvalidateRect(window,nullptr,FALSE);}
+  std::shared_ptr<EditorState> editorState_;
   std::wstring presetName=L"PRESETS ▾";
+  void rememberPresetName(){editorState_->presetName=utf8(presetName);}
   void loadSkinArt(){aztec::theme::loadSkinFile(aztec::theme::defaultPath());}
   void saveSkin(){aztec::theme::saveSkinFile(aztec::theme::defaultPath());}
   void skinMenu(){
@@ -268,8 +270,8 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
     folder+=L"\\Presets";if(!CreateDirectoryW(folder.c_str(),nullptr)&&GetLastError()!=ERROR_ALREADY_EXISTS)return {};
     return folder;
   }
-  void setPresetName(const std::wstring& path){auto pos=path.find_last_of(L"\\/");presetName=path.substr(pos==std::wstring::npos?0:pos+1);auto dot=presetName.find_last_of(L'.');if(dot!=std::wstring::npos)presetName.resize(dot);}
-  void defaultPreset(){auto p=initialParameters();for(int id=0;id<kCount;++id)if(presetParameter(id))edit(id,p[id]);presetName=L"Default";}
+  void setPresetName(const std::wstring& path){auto pos=path.find_last_of(L"\\/");presetName=path.substr(pos==std::wstring::npos?0:pos+1);auto dot=presetName.find_last_of(L'.');if(dot!=std::wstring::npos)presetName.resize(dot);rememberPresetName();}
+  void defaultPreset(){auto p=initialParameters();for(int id=0;id<kCount;++id)if(presetParameter(id))edit(id,p[id]);presetName=L"Default";rememberPresetName();}
   std::vector<std::wstring> savedPresetNames(const std::wstring& folder){
     auto names=presetFilesIn(folder);
     names.erase(std::remove_if(names.begin(),names.end(),[&](const std::wstring& name){
@@ -479,7 +481,7 @@ public:
     if(plugFrame)return plugFrame->resizeView(this,&wanted);
     return onSize(&wanted);
   }
-  explicit WinEditor(EditController* c):controller(c){controller->addRef();rect=ViewRect(0,0,int(mockup::width*.90),int(mockup::height*.90));seed=uint32_t(GetTickCount64())^uint32_t(reinterpret_cast<uintptr_t>(this));seed|=1;loadSkin();}
+  explicit WinEditor(EditController* c,std::shared_ptr<EditorState> state):controller(c){editorState_=state?state:std::make_shared<EditorState>();presetName=wide(editorState_->presetName);controller->addRef();rect=ViewRect(0,0,int(mockup::width*.90),int(mockup::height*.90));seed=uint32_t(GetTickCount64())^uint32_t(reinterpret_cast<uintptr_t>(this));seed|=1;loadSkin();}
   ~WinEditor()override{removed();for(auto& image:moduleImages)image.reset();mockupKnob.reset();rackBackplate.reset();rackAtlas.reset();rackLogo.reset();rackCables.reset();if(skinDC){SelectObject(skinDC,oldSkin);DeleteDC(skinDC);}if(skin)DeleteObject(skin);for(size_t i=0;i<sprites.size();++i){if(spriteDC[i]){SelectObject(spriteDC[i],oldSprite[i]);DeleteDC(spriteDC[i]);}if(sprites[i])DeleteObject(sprites[i]);}if(imaging)Gdiplus::GdiplusShutdown(imaging);controller->release();}
   tresult PLUGIN_API isPlatformTypeSupported(FIDString type)override{return type&&std::strcmp(type,kPlatformTypeHWND)==0?kResultTrue:kResultFalse;}
   tresult PLUGIN_API attached(void* parent,FIDString type)override{if(!parent||window||isPlatformTypeSupported(type)!=kResultTrue)return kResultFalse;HINSTANCE instance=nullptr;GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,reinterpret_cast<LPCWSTR>(&proc),&instance);WNDCLASSW wc{};wc.style=CS_DBLCLKS;wc.lpfnWndProc=proc;wc.hInstance=instance;wc.hCursor=LoadCursor(nullptr,IDC_ARROW);wc.lpszClassName=L"GrainsDosage070";RegisterClassW(&wc);window=CreateWindowExW(0,wc.lpszClassName,L"GrainsDosage",WS_CHILD|WS_VISIBLE,0,0,rect.getWidth(),rect.getHeight(),static_cast<HWND>(parent),nullptr,instance,this);if(!window)return kResultFalse;license::firstOpen();SetTimer(window,1,33,nullptr);auto result=CPluginView::attached(parent,type);userZoom=.90;ViewRect opening(0,0,int(std::round(mockup::width*userZoom*contentScale)),int(std::round(mockup::height*userZoom*contentScale)));if(plugFrame)plugFrame->resizeView(this,&opening);alignToParent();PostMessageW(window,WM_APP+74,0,0);return result;}
@@ -488,6 +490,6 @@ public:
   tresult PLUGIN_API canResize()override{return kResultTrue;}
   tresult PLUGIN_API checkSizeConstraint(ViewRect* r)override{if(!r)return kInvalidArgument;double f=std::clamp(r->getWidth()/(mockup::width*contentScale),.5,1.);r->right=r->left+int(std::round(mockup::width*f*contentScale));r->bottom=r->top+int(std::round(mockup::height*f*contentScale));return kResultTrue;}
 };
-IPlugView* createEditor(EditController* controller){return new WinEditor(controller);}
+IPlugView* createEditor(EditController* controller,std::shared_ptr<EditorState> state){return new WinEditor(controller,state);}
 }
 

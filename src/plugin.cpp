@@ -315,7 +315,9 @@ public:
   ParamValue toNormalized(ParamValue v)const override{return std::log(std::clamp(v,20.,20000.)/20.)/std::log(1000.);}
 };
 class Controller final : public EditController {
+  std::shared_ptr<aztec::EditorState> editorState_=std::make_shared<aztec::EditorState>();
 public:
+  std::shared_ptr<aztec::EditorState> editorState()const{return editorState_;}
   static FUnknown* create(void*) { return static_cast<IEditController*>(new Controller); }
   tresult PLUGIN_API initialize(FUnknown* c) override {
     if(EditController::initialize(c) != kResultOk) return kResultFalse;
@@ -606,7 +608,7 @@ public:
   }
   IPlugView* PLUGIN_API createView(FIDString name) override {
 #if defined(__APPLE__) || defined(_WIN32)
-    if(name && std::strcmp(name,ViewType::kEditor)==0) return aztec::createEditor(this);
+    if(name && std::strcmp(name,ViewType::kEditor)==0) return aztec::createEditor(this,editorState_);
 #endif
     return nullptr;
   }

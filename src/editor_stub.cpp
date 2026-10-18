@@ -4,5 +4,5 @@
 // keeps the link valid and preserves the documented "no editor" behaviour.
 #include "editor.h"
 namespace aztec {
-Steinberg::IPlugView* createEditor(Steinberg::Vst::EditController* /*controller*/) { return nullptr; }
+Steinberg::IPlugView* createEditor(Steinberg::Vst::EditController* /*controller*/, std::shared_ptr<EditorState> /*state*/) { return nullptr; }
 }
