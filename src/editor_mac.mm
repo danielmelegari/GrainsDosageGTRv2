@@ -287,7 +287,7 @@ inline void tabRectAt(int i,double& x,double& y,double& w,double& h){
          knobFace=[[NSImage alloc] initWithContentsOfFile:probe];
          seedSkin(@"knob",probe);}}}
     self.toolTip=@"Drag a knob vertically; Shift gives fine control. Double-click resets. Drag module headers to change audio order.";
-    timer=[NSTimer timerWithTimeInterval:1./30. target:self selector:@selector(tick:) userInfo:nil repeats:YES];
+    timer=[NSTimer timerWithTimeInterval:1./15. target:self selector:@selector(tick:) userInfo:nil repeats:YES];
     [[NSRunLoop mainRunLoop] addTimer:timer forMode:NSRunLoopCommonModes];
   }return self;
 }
