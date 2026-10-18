@@ -35,14 +35,14 @@ std::array<double,kCount> defaults(){return initialParameters();}
 static constexpr int kParamEnd = int(kUiFilterSeqStep) + 1;
 bool loadState(IBStream* stream, std::array<double,kCount>& p) {
   IBStreamer in(stream,kLittleEndian); int32 magic=0;
-  if(!in.readInt32(magic) || (magic!=0x51473130 && magic!=0x51473131 && magic!=0x51473132 && magic!=0x51473133 && magic!=0x51473134 && magic!=0x51473135 && magic!=0x51473136 && magic!=0x51473137 && magic!=0x51473138 && magic!=0x51473139 && magic!=0x5147313A && magic!=0x5147313B && magic!=0x5147313C && magic!=0x5147313D && magic!=0x5147313E && magic!=0x5147313F && magic!=0x51473140 && magic!=0x51473141 && magic!=0x51473142 && magic!=0x51473143 && magic!=0x51473144 && magic!=0x51473145 && magic!=0x51473146 && magic!=0x51473147 && magic!=0x51473148 && magic!=0x51473149 && magic!=0x5147314A && magic!=0x5147314B && magic!=0x5147314C && magic!=0x5147314D && magic!=0x5147314E && magic!=0x5147314F && magic!=0x51473150)) return false;
+  if(!in.readInt32(magic) || (magic!=0x51473130 && magic!=0x51473131 && magic!=0x51473132 && magic!=0x51473133 && magic!=0x51473134 && magic!=0x51473135 && magic!=0x51473136 && magic!=0x51473137 && magic!=0x51473138 && magic!=0x51473139 && magic!=0x5147313A && magic!=0x5147313B && magic!=0x5147313C && magic!=0x5147313D && magic!=0x5147313E && magic!=0x5147313F && magic!=0x51473140 && magic!=0x51473141 && magic!=0x51473142 && magic!=0x51473143 && magic!=0x51473144 && magic!=0x51473145 && magic!=0x51473146 && magic!=0x51473147 && magic!=0x51473148 && magic!=0x51473149 && magic!=0x5147314A && magic!=0x5147314B && magic!=0x5147314C && magic!=0x5147314D && magic!=0x5147314E && magic!=0x5147314F && magic!=0x51473150 && magic!=0x51473151)) return false;
   auto result=defaults();
   // Layouts: legacy versions store `count` plain doubles. Current saves
   // (0x51473145, written by getState) use the same prefix plus three extra
   // fields injected after kParamEnd: buffer size, freeze flag, then the array
   // continues through kCount-1. E ended before live monitors; F adds the wave library.
   const bool current=magic>=0x51473145;
-  const int storedEnd=magic>=0x51473150?int(kCount):magic>=0x5147314F?int(kModWaveFrom0):magic>=0x5147314E?int(kUiLfoValue0):magic>=0x5147314C?int(kAudioQuality):magic==0x5147314B?int(kModuleLoopOn0):magic==0x5147314A?int(kResliceSubdivision):magic==0x51473149?int(kResliceAlgorithm):magic==0x51473148?int(kModWaveRate0):magic==0x51473147?int(kMixLock0):magic==0x51473146?int(kReverbRateV2):kLegacySkinCount;
+  const int storedEnd=magic>=0x51473151?int(kCount):magic>=0x51473150?int(kPreRndCount):magic>=0x5147314F?int(kModWaveFrom0):magic>=0x5147314E?int(kUiLfoValue0):magic>=0x5147314C?int(kAudioQuality):magic==0x5147314B?int(kModuleLoopOn0):magic==0x5147314A?int(kResliceSubdivision):magic==0x51473149?int(kResliceAlgorithm):magic==0x51473148?int(kModWaveRate0):magic==0x51473147?int(kMixLock0):magic==0x51473146?int(kReverbRateV2):kLegacySkinCount;
   const int count = current ? int(kParamEnd) : magic==0x51473144 ? kLegacySkinCount : magic==0x51473143 ? int(kResliceRndOn) : magic==0x51473130 ? int(kGrainMix) : (magic==0x51473131 ? int(kLfo0) : (magic==0x51473132 ? int(kLegacyCount) : (magic==0x51473133 ? int(kModuleOrder) : (magic==0x51473134 ? int(kExtraRoutes0) : (magic==0x51473135 ? int(kGlitchMove) : (magic==0x51473136 ? int(kMasterFilter) : (magic==0x51473137 ? int(kNormalize) : (magic==0x51473138 ? int(kReverbLength) : (magic==0x51473139 ? int(kUiWave0) : (magic==0x5147313A ? int(kLfoSlots0) : (magic==0x5147313B ? int(kModWaveRnd0) : (magic==0x5147313C ? int(kReverbSource) : (magic==0x5147313D ? int(kLimiterCeiling) : (magic==0x5147313E ? int(kGaterEnabled) : (magic==0x5147313F ? int(kInputDeclick) : (magic==0x51473140 ? int(kFilterModel) : (magic==0x51473141 ? int(kGaterMinLength) : int(kGlitchTriggerRate))))))))))))))))));
   for(int i=0;i<count;++i) {
     double v=0.; if(!in.readDouble(v) || !std::isfinite(v)) return false;
@@ -79,7 +79,7 @@ bool loadState(IBStream* stream, std::array<double,kCount>& p) {
     }
     result[kGlitchSeq]=result[kRepeatSeq]=0.;
     for(int i=0;i<4;++i) {
-      result[kRandomSteps0+i]=0.;
+      result[modParam(kRandomSteps0,i)]=0.;
       if(count>int(kLfo0)) {
         result[lfoID(i,lGrid)]=std::round(result[lfoID(i,lGrid)]*17.)/20.;
         auto& density=result[lfoID(i,lRoute0+1)]; density=.5+(density-.5)*7./31.;
@@ -154,7 +154,7 @@ public:
   }
   tresult PLUGIN_API getState(IBStream* stream) override {
     IBStreamer out(stream,kLittleEndian);
-    if(!out.writeInt32(0x51473150)) return kResultFalse;
+    if(!out.writeInt32(0x51473151)) return kResultFalse;
     for(int i=0;i<kParamEnd;++i) if(!out.writeDouble(p_[i])) return kResultFalse;
     // v0.14 additions: buffer size, freeze state, then the remaining tail ids
     // (RANDOM/PRESET slots) written like any other array entry.
@@ -297,11 +297,12 @@ public:
     if(data.outputParameterChanges&&data.numSamples>0&&waveCountdown_<=0){
       waveCountdown_=std::max(1,int(rate_/30.));auto wave=engine_.grainView();
       auto emit=[&](int id,double v){int32 index=0;auto* q=data.outputParameterChanges->addParameterData(ParamID(id),index);if(q)q->addPoint(data.numSamples-1,v,index);};
+      emit(kUiRndEnvelope,engine_.rndEnvelope());
       emit(kUiModulationActive,!s.bypass&&licenseGain_>0.?1.:0.);
-      for(int i=0;i<4;++i)emit(kUiLfoValue0+i,(engine_.lfoOutput(i)+1.)*.5);
+      for(int i=0;i<qg::lfoCount;++i)emit(modParam(kUiLfoValue0,i),(engine_.lfoOutput(i)+1.)*.5);
       for(int i=0;i<128;++i)emit(kUiWave0+i,wave.amplitude[i]);
       for(int i=0;i<waveformBins;++i){emit(kUiWaveLow0+i,(wave.low[i]+1.)*.5);emit(kUiWaveHigh0+i,(wave.high[i]+1.)*.5);}
-      for(int i=0;i<16;++i)emit(kUiResliceSource0+i,engine_.resliceSource(i)/15.);emit(kUiFilterSeqStep,engine_.filterSequenceStep()/31.);emit(kUiResliceStep,engine_.resliceStep()/15.);emit(kUiResliceActive,engine_.resliceActive()?1.:0.);emit(kUiGaterStep,engine_.gaterStep()/15.);emit(kUiGaterPhase,engine_.gaterPhase());for(int i=0;i<16;++i){emit(kUiGaterState0+i,engine_.gaterState(i)?1.:0.);emit(kUiGaterLength0+i,engine_.gaterLength(i));}emit(kUiReverbGate,!s.bypass&&engine_.reverbGate()?1.:0.);emit(kUiGrainStart,wave.start);emit(kUiGrainEnd,wave.end);emit(kUiGrainHead,wave.head);emit(kUiGrainActive,!s.bypass&&wave.active?1.:0.);emit(kUiWaveSeconds,wave.seconds/16.);for(int i=0;i<4;++i){emit(kUiModWave0+i,engine_.lfoWave(i)/double(qg::maxWave));emit(kUiLfoPhase0+i,engine_.lfoPhase(i));emit(kUiLfoCycle0+i,std::clamp((double(engine_.lfoCycle(i))+2147483648.)/4294967295.,0.,1.));emit(kUiLfoEpoch0+i,std::clamp((double(engine_.lfoEpoch(i))+2147483648.)/4294967295.,0.,1.));}
+      for(int i=0;i<16;++i)emit(kUiResliceSource0+i,engine_.resliceSource(i)/15.);emit(kUiFilterSeqStep,engine_.filterSequenceStep()/31.);emit(kUiResliceStep,engine_.resliceStep()/15.);emit(kUiResliceActive,engine_.resliceActive()?1.:0.);emit(kUiGaterStep,engine_.gaterStep()/15.);emit(kUiGaterPhase,engine_.gaterPhase());for(int i=0;i<16;++i){emit(kUiGaterState0+i,engine_.gaterState(i)?1.:0.);emit(kUiGaterLength0+i,engine_.gaterLength(i));}emit(kUiReverbGate,!s.bypass&&engine_.reverbGate()?1.:0.);emit(kUiGrainStart,wave.start);emit(kUiGrainEnd,wave.end);emit(kUiGrainHead,wave.head);emit(kUiGrainActive,!s.bypass&&wave.active?1.:0.);emit(kUiWaveSeconds,wave.seconds/16.);for(int i=0;i<qg::lfoCount;++i){emit(modParam(kUiModWave0,i),engine_.lfoWave(i)/double(qg::maxWave));emit(modParam(kUiLfoPhase0,i),engine_.lfoPhase(i));emit(modParam(kUiLfoCycle0,i),std::clamp((double(engine_.lfoCycle(i))+2147483648.)/4294967295.,0.,1.));emit(modParam(kUiLfoEpoch0,i),std::clamp((double(engine_.lfoEpoch(i))+2147483648.)/4294967295.,0.,1.));}
     }
     fallbackBeat_ += data.numSamples * beatIncrement;
     return kResultOk;
@@ -383,10 +384,10 @@ public:
       waves->appendString(STR16("S&H - Sample & Hold"));
       waves->appendString(STR16("S&G - Sample & Glide"));
       parameters.addParameter(waves);
-      auto* choices=new StringListParameter(title("Wave Library"),ParamID(kLfoWaveChoice0+i));choices->appendString(STR16("Saved Wave (compatible)"));
+      auto* choices=new StringListParameter(title("Wave Library"),ParamID(modParam(kLfoWaveChoice0,i)));choices->appendString(STR16("Saved Wave (compatible)"));
       for(int w=0;w<qg::waveChoiceCount;++w){String128 label{};if(w<130){waves->toString(w/129.,label);}else UString(label,128).fromAscii(qg::extraWaveName(w).c_str());choices->appendString(label);}parameters.addParameter(choices);
-      range(title("Random Wave From"),kModWaveFrom0+i,nullptr,1,qg::waveChoiceCount,1,qg::maxWave);
-      range(title("Random Wave To"),kModWaveTo0+i,nullptr,1,qg::waveChoiceCount,qg::waveChoiceCount,qg::maxWave);
+      range(title("Random Wave From"),modParam(kModWaveFrom0,i),nullptr,1,qg::waveChoiceCount,1,qg::maxWave);
+      range(title("Random Wave To"),modParam(kModWaveTo0,i),nullptr,1,qg::waveChoiceCount,qg::waveChoiceCount,qg::maxWave);
       toggle(title("Tempo Sync"),lfoID(i,lSync),1.);
       range(title("Free Rate"),lfoID(i,lHz),STR16("Hz"),.01,40.,1.);
       auto* rates=new StringListParameter(title("Sync Rate"),lfoID(i,lGrid));
@@ -414,7 +415,7 @@ public:
     for(int i=0;i<16;++i) { String128 n{}; stepTitle("Repeat Pitch",i,n); range(n,kRepeatPitch0+i,STR16("st"),-48,48,0,96); }
     toggle(STR16("Free Stretch"),kStretchOn,0.);
     range(STR16("Input Stretch Speed"),kStretchSpeed,STR16("%"),25,400,100);
-    for(int i=0;i<4;++i) { String128 n{}; stepTitle("Mod Random Points",i,n); range(n,kRandomSteps0+i,STR16("points"),1,64,16,63); }
+    for(int i=0;i<qg::lfoCount;++i) { String128 n{}; stepTitle("Mod Random Points",i,n); range(n,modParam(kRandomSteps0,i),STR16("points"),1,64,16,63); }
     toggle(STR16("Density Flow"),kDensityFlow,1.);
     range(STR16("Input Transpose"),kTranspose,STR16("st"),-48,48,0,96);
     range(STR16("XY X"),kXYX,STR16("%"),0,100,50);
@@ -438,7 +439,7 @@ public:
                    STR16("Repeat → Grain → Glitch"),STR16("Repeat → Glitch → Grain"),
                    STR16("Legacy Parallel")}) order->appendString(name);
     parameters.addParameter(order);
-    for(int i=0;i<4;++i) for(int t=6;t<8;++t) {
+    for(int i=0;i<qg::lfoCount;++i) for(int t=6;t<8;++t) {
       char ascii[64]; String128 name{};
       std::snprintf(ascii,sizeof(ascii),"Mod %d To %s",i+1,targetNames[t]);
       UString(name,128).fromAscii(ascii);
@@ -472,18 +473,25 @@ public:
     auto* revMeter=new RangeParameter(STR16("Reverb Step Monitor"),kUiReverb,nullptr,0,1,0);revMeter->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(revMeter);
     range(STR16("Reverb Length"),kReverbLength,STR16("s"),.2,20.,2.8);
     for(int id=kUiWave0;id<=kUiWaveSeconds;++id){char ascii[40];std::snprintf(ascii,sizeof(ascii),"Grain Display %d",id-kUiWave0);String128 name{};UString(name,128).fromAscii(ascii);auto* monitor=new RangeParameter(name,id,nullptr,0,1,0);monitor->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(monitor);}
-    for(int l=0;l<4;++l)for(int slot=0;slot<6;++slot){
+    for(int l=0;l<qg::lfoCount;++l)for(int slot=0;slot<6;++slot){
       char ascii[64];String128 name{};std::snprintf(ascii,sizeof(ascii),"Mod %d Destination %d",l+1,slot+1);UString(name,128).fromAscii(ascii);auto* destination=new StringListParameter(name,slotTarget(l,slot));destination->appendString(STR16("None"));for(auto title:modNames){String128 text{};UString(text,128).fromAscii(title);destination->appendString(text);}parameters.addParameter(destination);
       std::snprintf(ascii,sizeof(ascii),"Mod %d Amount %d",l+1,slot+1);UString(name,128).fromAscii(ascii);range(name,slotAmount(l,slot),STR16("%"),-100,100,0.);
     }
-    for(int l=0;l<4;++l){char ascii[32];String128 name{};std::snprintf(ascii,sizeof(ascii),"Mod %d Speed",l+1);UString(name,128).fromAscii(ascii);auto* speed=new StringListParameter(name,kLfoSpeed0+l);for(auto title:{STR16("0.25x"),STR16("0.5x"),STR16("1x"),STR16("2x")})speed->appendString(title);speed->getInfo().defaultNormalizedValue=2./3.;speed->setNormalized(2./3.);parameters.addParameter(speed);}
+    for(int l=0;l<qg::lfoCount;++l){char ascii[32];String128 name{};std::snprintf(ascii,sizeof(ascii),"Mod %d Speed",l+1);UString(name,128).fromAscii(ascii);auto* speed=new StringListParameter(name,modParam(kLfoSpeed0,l));for(auto title:{STR16("0.25x"),STR16("0.5x"),STR16("1x"),STR16("2x")})speed->appendString(title);speed->getInfo().defaultNormalizedValue=2./3.;speed->setNormalized(2./3.);parameters.addParameter(speed);}
+    auto* rndSource=new StringListParameter(STR16("RND Trigger Source"),kRndSource);rndSource->appendString(STR16("Random key Root trigger"));rndSource->appendString(STR16("Gater steps"));parameters.addParameter(rndSource);
+    auto* rndRoot=new StringListParameter(STR16("RND Root"),kRndRoot);for(auto n:{STR16("C"),STR16("C#"),STR16("D"),STR16("D#"),STR16("E"),STR16("F"),STR16("F#"),STR16("G"),STR16("G#"),STR16("A"),STR16("A#"),STR16("B")})rndRoot->appendString(n);parameters.addParameter(rndRoot);
+    auto* rndChord=new StringListParameter(STR16("RND Chord"),kRndMinor);rndChord->appendString(STR16("Major"));rndChord->appendString(STR16("Minor"));parameters.addParameter(rndChord);
+    range(STR16("RND Lowest Note"),kRndNoteMin,STR16("MIDI"),0,127,48,127);range(STR16("RND Highest Note"),kRndNoteMax,STR16("MIDI"),0,127,72,127);
+    range(STR16("RND Minimum Length"),kRndLengthMin,STR16("ms"),5,2000,50);range(STR16("RND Maximum Length"),kRndLengthMax,STR16("ms"),5,2000,250);
+    range(STR16("RND Gater Every"),kRndGateEvery,STR16("steps"),1,16,1,15);
+    for(auto id:{modParam(kUiLfoPhase0,4),modParam(kUiLfoCycle0,4),modParam(kUiLfoEpoch0,4),modParam(kUiLfoValue0,4),ParamID(kUiRndEnvelope)}){auto* monitor=new RangeParameter(STR16("RND Display"),id,nullptr,0,1,defaults()[id]);monitor->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(monitor);}
     toggle(STR16("Reverb Kill Dry"),kReverbKill,0.);
     for(int i=0;i<5;++i){auto* monitor=new RangeParameter(STR16("Live Modulation"),ParamID(kUiLfoValue0+i),nullptr,0,1,i<4?.5:0.);monitor->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(monitor);}
     for(int l=0;l<12;++l){auto* phase=new RangeParameter(STR16("Mod Display"),kUiLfoPhase0+l,nullptr,0,1,l<4?0.:2147483648./4294967295.);phase->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(phase);}
-    for(int l=0;l<4;++l){char ascii[48];String128 name{};std::snprintf(ascii,sizeof(ascii),"Mod %d Wave RND",l+1);UString(name,128).fromAscii(ascii);auto* rnd=new StringListParameter(name,kModWaveRnd0+l);for(auto label:{STR16("Off"),STR16("1/1"),STR16("1/2"),STR16("1/4"),STR16("1/8")})rnd->appendString(label);parameters.addParameter(rnd);}
-    for(int l=0;l<4;++l){char ascii[48];String128 name{};std::snprintf(ascii,sizeof(ascii),"Mod %d Wave Quantize",l+1);UString(name,128).fromAscii(ascii);auto* rnd=new StringListParameter(name,kModWaveRate0+l);for(auto label:{STR16("Saved rate"),STR16("Off"),STR16("1/1"),STR16("1/2"),STR16("1/4"),STR16("1/8"),STR16("2/1"),STR16("4/1")})rnd->appendString(label);parameters.addParameter(rnd);}
+    for(int l=0;l<qg::lfoCount;++l){char ascii[48];String128 name{};std::snprintf(ascii,sizeof(ascii),"Mod %d Wave RND",l+1);UString(name,128).fromAscii(ascii);auto* rnd=new StringListParameter(name,modParam(kModWaveRnd0,l));for(auto label:{STR16("Off"),STR16("1/1"),STR16("1/2"),STR16("1/4"),STR16("1/8")})rnd->appendString(label);parameters.addParameter(rnd);}
+    for(int l=0;l<qg::lfoCount;++l){char ascii[48];String128 name{};std::snprintf(ascii,sizeof(ascii),"Mod %d Wave Quantize",l+1);UString(name,128).fromAscii(ascii);auto* rnd=new StringListParameter(name,modParam(kModWaveRate0,l));for(auto label:{STR16("Saved rate"),STR16("Off"),STR16("1/1"),STR16("1/2"),STR16("1/4"),STR16("1/8"),STR16("2/1"),STR16("4/1")})rnd->appendString(label);parameters.addParameter(rnd);}
 
-    for(int l=0;l<4;++l){auto* monitor=new RangeParameter(STR16("Mod Active Wave"),kUiModWave0+l,nullptr,0,1,0);monitor->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(monitor);}
+    for(int l=0;l<qg::lfoCount;++l){auto* monitor=new RangeParameter(STR16("Mod Active Wave"),modParam(kUiModWave0,l),nullptr,0,1,0);monitor->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(monitor);}
     auto* source=new StringListParameter(STR16("Reverb Trigger Source"),kReverbSource);source->appendString(STR16("Step Sequencer"));source->appendString(STR16("Random Impulse"));parameters.addParameter(source);
     auto* randomRate=new StringListParameter(STR16("Reverb Random Rate"),kReverbRandomRate);for(auto label:{STR16("1/4"),STR16("1/8"),STR16("1/16")})randomRate->appendString(label);randomRate->getInfo().defaultNormalizedValue=1.;randomRate->setNormalized(1.);parameters.addParameter(randomRate);
     auto* sendGate=new RangeParameter(STR16("Reverb Send Monitor"),kUiReverbGate,nullptr,0,1,0);sendGate->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(sendGate);
@@ -571,7 +579,7 @@ public:
      tab->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;
      parameters.addParameter(tab);}
     for(int id=kUiResliceSource0;id<=kUiFilterSeqStep;++id){auto* monitor=new RangeParameter(STR16("Sequencer Display"),id,nullptr,0,1,0);monitor->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(monitor);}
-    for(int l=0;l<4;++l)for(int slot=0;slot<6;++slot){
+    for(int l=0;l<qg::lfoCount;++l)for(int slot=0;slot<6;++slot){
       char ascii[64];String128 name{};std::snprintf(ascii,sizeof(ascii),"Mod %d Polarity %d",l+1,slot+1);UString(name,128).fromAscii(ascii);
       auto* polarity=new StringListParameter(name,slotPolarity(l,slot));
       polarity->appendString(STR16("+/-"));polarity->appendString(STR16("+"));polarity->appendString(STR16("-"));parameters.addParameter(polarity);
@@ -587,7 +595,7 @@ public:
     for(int ch=0;ch<2;++ch){auto* meter=new RangeParameter(ch?STR16("Output R RMS"):STR16("Output L RMS"),kUiOutputL+ch,nullptr,0,1,0);meter->getInfo().flags=ParameterInfo::kIsReadOnly|ParameterInfo::kIsHidden;parameters.addParameter(meter);}
     {const char* titles[]={"Granulizer Mix Lock","Preslicer Mix Lock","BeatRepeater Mix Lock","Reslice Mix Lock","Reverb Amount Lock","Output Mix Lock"};
       for(int i=0;i<6;++i){String128 name{};UString(name,128).fromAscii(titles[i]);toggle(name,kMixLock0+i,0.);}}
-    for(int l=0;l<4;++l)for(int t=0;t<8;++t)getParameterObject(routeID(l,t))->getInfo().flags=ParameterInfo::kIsHidden;
+    for(int l=0;l<qg::lfoCount;++l)for(int t=0;t<8;++t)getParameterObject(routeID(l,t))->getInfo().flags=ParameterInfo::kIsHidden;
     getParameterObject(kFeedback)->getInfo().flags=ParameterInfo::kIsHidden;
     for(int i=0;i<16;++i){getParameterObject(kResliceStep0+i)->getInfo().flags|=ParameterInfo::kIsHidden;getParameterObject(kResliceIndex0+i)->getInfo().flags|=ParameterInfo::kIsHidden;}
     for(int id:{int(kResliceRndOn),int(kResliceRndRate)})getParameterObject(id)->getInfo().flags|=ParameterInfo::kIsHidden;

@@ -22,7 +22,7 @@ int main(){
   for(int n=0;n<16000;++n){float l,r;float x=float(.2*std::sin(n*.137)+.1*std::sin(n*.017));e.process(x,x,n/4000.,l,r);if(n>8000)out.push_back(l);}return out;
  };
  auto a=render({0,1,4,2,3}),b=render({0,1,2,4,3});double difference=0;for(size_t i=0;i<a.size();++i)difference+=std::abs(a[i]-b[i]);assert(difference>.01);
- std::array<qg::LfoSettings,4> lfos{};qg::ModValues base{};base.fill(.5);
+ std::array<qg::LfoSettings,qg::lfoCount> lfos{};qg::ModValues base{};base.fill(.5);
  lfos[0].enabled=true;lfos[0].wave=0;lfos[0].beats=1;lfos[0].depth=.6;
  for(int polarity=0;polarity<3;++polarity){qg::Modulation mod;mod.prepare();lfos[0].amount[0]=polarity==0?.4:0;lfos[0].positive[0]=polarity==1?.4:0;lfos[0].negative[0]=polarity==2?.4:0;
   double lo=1,hi=0;for(int n=0;n<1000;++n){double v=mod.process(lfos,base,n/1000.,48000,false,0)[0];lo=std::min(lo,v);hi=std::max(hi,v);}

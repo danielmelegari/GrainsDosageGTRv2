@@ -43,6 +43,11 @@ int main() {
       for(int t=0;t<6;++t) assert(actual[lfoID(i,lRoute0+t)]==.5);
     }
   }
+  // The pre-RND state ends at its original boundary and leaves RND disabled.
+  {auto expected=defaults();expected[kLfoWaveChoice0]=.7;MemoryStream old;IBStreamer out(&old,kLittleEndian);out.writeInt32(0x51473150);
+   for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);for(int i=kFreeze+1;i<kPreRndCount;++i)out.writeDouble(expected[i]);out.writeInt32(123456);
+   old.seek(0,IBStream::kIBSeekSet,nullptr);auto restored=defaults();assert(loadState(&old,restored)&&restored==expected);IBStreamer in(&old,kLittleEndian);int32 sentinel=0;assert(in.readInt32(sentinel)&&sentinel==123456);assert(restored[lfoID(4,lEnabled)]==0.);
+  }
   // Pre-range sessions end at the old wave selectors and restore the full range.
   {auto expected=defaults();expected[kLfoWaveChoice0]=.8;MemoryStream old;IBStreamer out(&old,kLittleEndian);out.writeInt32(0x5147314F);
    for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);for(int i=kFreeze+1;i<kModWaveFrom0;++i)out.writeDouble(expected[i]);out.writeInt32(123456);
@@ -239,7 +244,7 @@ int main() {
     MemoryStream rt3; assert(p2.getState(&rt3)==kResultOk);
     rt.seek(0,IBStream::kIBSeekSet,nullptr); rt3.seek(0,IBStream::kIBSeekSet,nullptr);
     int32 m1=0,m2=0;IBStreamer r1(&rt,kLittleEndian),r2(&rt3,kLittleEndian);
-    r1.readInt32(m1);r2.readInt32(m2);assert(m1==m2&&m1==0x51473150);
+    r1.readInt32(m1);r2.readInt32(m2);assert(m1==m2&&m1==0x51473151);
     // getState layout: kParamEnd values, buffer size, freeze flag, then the tail
     // (kBypassReserved lives in this region) up to kCount.
     const int fields=kParamEnd+2+(int(kCount)-int(kFreeze)-1);

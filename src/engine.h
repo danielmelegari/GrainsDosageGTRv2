@@ -591,6 +591,7 @@ public:
   bool reverbGate()const{return reverb_.gateOpen();}
   std::atomic<uint64_t> lastModPacked_{0}; // live Size/Density/Pitch/Chaos magnitudes (aztec-packed) for the UI knob bars
 public:
+  double rndEnvelope()const{return modulation_.rndEnvelope();}
   int lfoWave(int i)const{return modulation_.wave(i);}
   double lfoOutput(int i)const{return modulation_.output(i);}
   double lfoPhase(int i)const{return modulation_.phase(i);}
@@ -605,7 +606,7 @@ public:
     const int64_t step = int64_t(std::floor(beat / std::max(.015625, settings_.division) + 1e-8));
     const bool activeStep = (settings_.pattern & (1u << ((step % steps + steps) % steps))) != 0;
     ModValues values;values=modulation_.process(settings_.lfos,modBase_,beat,settings_.sampleRate,
-                                          step!=lastStep_ && activeStep,step,true);
+                                          step!=lastStep_ && activeStep,step,true,gater_.trigger());
     publishModulation(values);
     applyExtended(values);
     // Input Options feed every downstream capture and processor.
@@ -770,7 +771,7 @@ public:
     const bool gateTrigger=step!=lastStep_,rhythmTrigger=rhythm!=lastRhythm_;
     bool glitchOpen=settings_.glitchSequence ? (settings_.glitchPattern&(1u<<slot))!=0 : activeStep;
     const bool repeatOpen=settings_.repeatSequence ? (settings_.repeatPattern&(1u<<slot))!=0 : activeStep;
-    ModValues values;values=modulation_.process(settings_.lfos,modBase_,beat,settings_.sampleRate,gateTrigger&&activeStep,step,true);
+    ModValues values;values=modulation_.process(settings_.lfos,modBase_,beat,settings_.sampleRate,gateTrigger&&activeStep,step,true,gater_.trigger());
     publishModulation(values);
     applyExtended(values);
     // Input Options feed every downstream capture and processor.

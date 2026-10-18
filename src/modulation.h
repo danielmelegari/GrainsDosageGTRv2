@@ -8,7 +8,7 @@
 #include <memory>
 
 namespace qg {
-constexpr int lfoCount = 4;
+constexpr int lfoCount = 5;
 
 constexpr int waveCount = 128; // Legacy periodic shapes; persistent IDs stay unchanged.
 constexpr int extraWaveCount=200, tableWaveCount=waveCount+extraWaveCount, waveChoiceCount=tableWaveCount+2, maxWave=waveChoiceCount-1;
@@ -19,6 +19,8 @@ constexpr double tau = 6.28318530717958647692;
 // Destination order is persistent: Size, Density, Pitch, Lookback, Chaos, Granular Mix, Speed, Transpose.
 struct LfoSettings {
   bool enabled = false, sync = true, gateReset = false;
+  int rndSource=0,rndRoot=0,rndNoteMin=48,rndNoteMax=72,rndEvery=1;
+  bool rndMinor=false;double rndMin=.05,rndMax=.25;
   int randomSteps = 1;
   int wave = 0; // 0..127 legacy, 128/129 S&H/S&G, 130..329 new shapes
   int randomWaveCount=waveCount;
@@ -104,7 +106,7 @@ public:
   double phase()const{return position_;}
   int64_t cycle()const{return displayCycle_;}
   int64_t epoch()const{return gateEpoch_;}
-  double process(const LfoSettings& s,double beat,double sampleRate,bool gateTrigger,int64_t gateStep) {
+  double process(const LfoSettings& s,double beat,double sampleRate,bool gateTrigger,int64_t gateStep,bool unitDepth=false) {
     if(!s.enabled){position_=0.;return 0.;}
     if(s.gateReset && gateTrigger) {
       gateBeat_=beat; freePhase_=0.; freeCycle_=0; gateEpoch_=gateStep;
@@ -148,18 +150,50 @@ public:
       output=table[a]+(table[a+1]-table[a])*(point-a);
     }
     if(transition_<1.){transition_=std::min(1.,transition_+1./((.010+.240*std::clamp(s.glide,0.,1.))*sampleRate));output=transitionFrom_+(output-transitionFrom_)*smooth(transition_);}
-    lastOutput_=output;return output*std::clamp(s.depth,0.,1.);
+    lastOutput_=output;return output*(unitDepth?1.:std::clamp(s.depth,0.,1.));
+  }
+};
+
+// Converts waveform height to note bins; only entering an allowed triad note
+// triggers. Pulse generation is constant-cost and allocates no audio-thread memory.
+class RandomTrigger {
+  int lastNote_=-1,lastSource_=-1,gateCount_=0;
+  uint64_t serial_=0;double remaining_=0.,length_=0.,level_=0.,targetLevel_=0.,envelope_=0.;
+public:
+  void reset(){lastNote_=-1;lastSource_=-1;gateCount_=0;serial_=0;remaining_=length_=level_=targetLevel_=envelope_=0.;}
+  static bool chordNote(int note,int root,bool minor){int pc=((note-root)%12+12)%12;return pc==0||pc==(minor?3:4)||pc==7;}
+  double envelope()const{return envelope_;}
+  double process(double wave,const LfoSettings& s,double sr,bool gate){
+    if(!s.enabled){reset();return 0.;}
+    if(s.rndSource!=lastSource_){lastNote_=-1;gateCount_=0;remaining_=0.;lastSource_=s.rndSource;}
+    int lo=std::clamp(std::min(s.rndNoteMin,s.rndNoteMax),0,127),hi=std::clamp(std::max(s.rndNoteMin,s.rndNoteMax),0,127);
+    int note=std::clamp(lo+int(std::floor((std::clamp(wave,-1.,1.)+1.)*.5*(hi-lo+1))),lo,hi);
+    bool fire=false;
+    if(s.rndSource==0)fire=note!=lastNote_&&chordNote(note,s.rndRoot,s.rndMinor);
+    else if(gate){const int every=std::clamp(s.rndEvery,1,16);gateCount_%=every;fire=gateCount_==0;gateCount_=(gateCount_+1)%every;}
+    lastNote_=note;
+    if(fire){++serial_;double loTime=std::clamp(std::min(s.rndMin,s.rndMax),.005,2.),hiTime=std::clamp(std::max(s.rndMin,s.rndMax),.005,2.);
+      length_=loTime+(hiTime-loTime)*(cycleNoise(serial_,0x391a7)+1.)*.5;remaining_=length_;targetLevel_=cycleNoise(serial_,0x7b91e);
+    }
+    // Two-millisecond fades, also smoothing retriggers and the return to zero.
+    double target=remaining_>0.?std::min(1.,remaining_/.002):0.;
+    envelope_+=std::clamp(target-envelope_,-1./(.002*sr),1./(.002*sr));
+    level_+=std::clamp(targetLevel_-level_,-2./(.002*sr),2./(.002*sr));
+    remaining_=std::max(0.,remaining_-1./sr);
+    return level_*envelope_*std::clamp(s.depth,0.,1.);
   }
 };
 
 class Modulation {
   std::array<Lfo,lfoCount> lfos_{};
+  RandomTrigger random_;double lastBeat_=0.;bool haveBeat_=false;
   std::array<std::array<int,modTargetCount>,lfoCount> routes_{};
   std::array<int,lfoCount> routeCounts_{};
   std::array<double,lfoCount> outputs_{};
 public:
-  void prepare() { for(int i=0;i<lfoCount;++i) lfos_[i].prepare(0x13579BDFULL+uint64_t(i)*104729); }
-  void reset() { for(auto& lfo:lfos_) lfo.reset(); outputs_.fill(0.); }
+  void prepare() { for(int i=0;i<lfoCount;++i) lfos_[i].prepare(0x13579BDFULL+uint64_t(i)*104729);random_.reset();haveBeat_=false;outputs_.fill(0.); }
+  double rndEnvelope()const{return random_.envelope();}
+  void reset() { random_.reset();haveBeat_=false;for(auto& lfo:lfos_) lfo.reset(); outputs_.fill(0.); }
   double output(int i)const{return outputs_[i];}
   int wave(int i)const{return lfos_[i].wave();}
   double phase(int i)const{return lfos_[i].phase();}
@@ -171,14 +205,16 @@ public:
       if(settings[i].amount[t]!=0.||settings[i].positive[t]!=0.||settings[i].negative[t]!=0.)routes_[i][routeCounts_[i]++]=t;
   }
   ModValues process(const std::array<LfoSettings,lfoCount>& settings,const ModValues& base,
-                    double beat,double sampleRate,bool gateTrigger,int64_t gateStep,bool configured=false) {
+                    double beat,double sampleRate,bool gateTrigger,int64_t gateStep,bool configured=false,bool rndGate=false) {
+    if(haveBeat_&&beat<lastBeat_-1e-6)random_.reset();lastBeat_=beat;haveBeat_=true;
     if(!configured)configure(settings);
     ModValues result=base;
     for(int i=0;i<lfoCount;++i) {
-      const double value=lfos_[i].process(settings[i],beat,sampleRate,gateTrigger,gateStep);
+      double value=lfos_[i].process(settings[i],beat,sampleRate,gateTrigger,gateStep,i==4);
+      if(i==4)value=random_.process(value,settings[i],sampleRate,rndGate);
       outputs_[i]=settings[i].enabled?value:0.;
       if(!settings[i].enabled)continue;
-      const double unipolar=(value+std::clamp(settings[i].depth,0.,1.))*.5;
+      const double unipolar=(value+std::clamp(settings[i].depth,0.,1.)*(i==4?random_.envelope():1.))*.5;
       for(int n=0;n<routeCounts_[i];++n){const int target=routes_[i][n];
         result[target]+=value*settings[i].amount[target]+unipolar*(settings[i].positive[target]-settings[i].negative[target]);
       }
