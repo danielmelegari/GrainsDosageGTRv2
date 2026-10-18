@@ -1,5 +1,11 @@
 #pragma once
+#if defined(_WIN32)
 #include "trial_license_win.h"
+#elif defined(__APPLE__)
+#include "trial_license_mac.h"
+#else
+#error "Trial edition supports macOS and Windows only"
+#endif
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
