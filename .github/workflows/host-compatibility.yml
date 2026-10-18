@@ -1,0 +1,99 @@
+name: Host Compatibility — VST3 (macOS / Windows)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [fix/host-compatibility-live11]
+    paths:
+      - 'src/**'
+      - 'CMakeLists.txt'
+      - 'test_*.cpp'
+      - '.github/workflows/host-compatibility.yml'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'CMakeLists.txt'
+      - 'test_*.cpp'
+      - '.github/workflows/host-compatibility.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  vst3-host-validation:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS Intel (x86_64)
+            runner: macos-15-intel
+            arch: x86_64
+          - name: macOS Apple Silicon (arm64)
+            runner: macos-15
+            arch: arm64
+          - name: Windows x64
+            runner: windows-2022
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout pinned Steinberg VST3 SDK
+        uses: actions/checkout@v4
+        with:
+          repository: steinbergmedia/vst3sdk
+          ref: 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
+          submodules: recursive
+          path: vst3sdk
+
+      - name: Configure macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          cmake -S . -B build -G Xcode \
+            -DVST3_SDK_ROOT="$GITHUB_WORKSPACE/vst3sdk" \
+            -DCMAKE_OSX_ARCHITECTURES="${{ matrix.arch }}" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=10.14 \
+            -DSMTG_CREATE_PLUGIN_LINK=OFF \
+            -DSMTG_BUILD_UNIVERSAL_BINARY=OFF \
+            -DGRAINS_BUILD_TESTS=ON
+
+      - name: Configure Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
+            -DVST3_SDK_ROOT="$env:GITHUB_WORKSPACE/vst3sdk" `
+            -DSMTG_CREATE_PLUGIN_LINK=OFF `
+            -DGRAINS_BUILD_TESTS=ON
+
+      - name: Build plugin, validator and regression tests
+        shell: bash
+        run: cmake --build build --config Release --parallel 4
+
+      - name: Run DSP and VST3 state regression tests
+        shell: bash
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Steinberg VST3 plugin validator
+        shell: bash
+        run: python tools/validate_host_compatibility.py build
+
+      - name: Archive VST3 bundles for host testing
+        shell: bash
+        run: |
+          python tools/package_host_compatibility.py build dist
+
+      - name: Upload plugin binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: GrainsDosage-host-compat-${{ matrix.arch }}-${{ runner.os }}
+          path: dist/*.zip
+          if-no-files-found: error
+          retention-days: 14
+
+# This workflow cannot execute proprietary DAWs. Final Ableton Live 11,
+# Cubase, Studio One, Reaper, FL Studio and other host tests must be run
+# on systems with those applications legitimately installed.
