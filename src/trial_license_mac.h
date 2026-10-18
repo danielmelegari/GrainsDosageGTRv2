@@ -87,7 +87,7 @@ inline bool loadLicense(License& license) {
   if(dir.empty())return false;
   std::ifstream in(dir/"trial.license",std::ios::binary);
   if(!in)return false;
-  std::string text(2049,'\\0');
+  std::string text(2049, char(0));
   in.read(text.data(),std::streamsize(text.size()));
   text.resize(size_t(in.gcount()));
   if(!parseLicense(text,license)||!signatureValid(license)||license.machine!=machineId())return false;
