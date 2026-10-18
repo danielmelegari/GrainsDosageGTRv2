@@ -11,6 +11,7 @@
 #include <IOKit/IOKitLib.h>
 #include <Security/Security.h>
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <mutex>
@@ -25,7 +26,7 @@ inline Tick wallTime() {
   return offset+Tick(std::chrono::duration_cast<std::chrono::nanoseconds>(now).count()/100);
 }
 inline std::string machineId() {
-  io_service_t service=IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("IOPlatformExpertDevice"));
+  io_service_t service=IOServiceGetMatchingService(kIOMasterPortDefault, IOServiceMatching("IOPlatformExpertDevice"));
   if(!service) return {};
   CFTypeRef uuid=IORegistryEntryCreateCFProperty(service, CFSTR("IOPlatformUUID"), kCFAllocatorDefault, 0);
   IOObjectRelease(service);
