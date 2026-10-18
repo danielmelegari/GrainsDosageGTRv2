@@ -27,6 +27,8 @@ jobs:
             arch: arm64
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
+    env:
+      GRAINS_TRIAL_PUBLIC_KEY: ${{ vars.GRAINS_TRIAL_PUBLIC_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
