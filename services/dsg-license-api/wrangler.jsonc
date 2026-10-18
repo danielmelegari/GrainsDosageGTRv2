@@ -1,0 +1,39 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "dsgmachines-license-api",
+  "main": "worker.js",
+  "compatibility_date": "2026-10-18",
+  "workers_dev": true,
+  "vars": {
+    "SIGNING_KEY_ID": "dsg-es256-9786202924645f18",
+    "SIGNING_PUBLIC_KEY": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEl/d41MD14WzzqFS6yhFTtcNLhfb9\nDBmcmxTNk05vEWlHN609PhsJeshKAaJwlsh9inRapEnj8pbn5XbbrFehuA==\n-----END PUBLIC KEY-----\n"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "dsgmachines-licenses",
+      "database_id": "c1ba368a-eab8-444d-b86e-599e5811303a"
+    }
+  ],
+  "ratelimits": [
+    {
+      "name": "IP_LIMITER",
+      "namespace_id": "1002",
+      "simple": {
+        "limit": 20,
+        "period": 60
+      }
+    },
+    {
+      "name": "KEY_LIMITER",
+      "namespace_id": "1003",
+      "simple": {
+        "limit": 10,
+        "period": 60
+      }
+    }
+  ],
+  "observability": {
+    "enabled": false
+  }
+}
