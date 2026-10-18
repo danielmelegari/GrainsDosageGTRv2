@@ -29,9 +29,11 @@ jobs:
           - name: macOS Intel (x86_64)
             runner: macos-15-intel
             arch: x86_64
+            deployment: "10.14"
           - name: macOS Apple Silicon (arm64)
             runner: macos-15
             arch: arm64
+            deployment: "11.0"
           - name: Windows x64
             runner: windows-2022
             arch: x64
@@ -55,7 +57,7 @@ jobs:
           cmake -S . -B build -G Xcode \
             -DVST3_SDK_ROOT="$GITHUB_WORKSPACE/vst3sdk" \
             -DCMAKE_OSX_ARCHITECTURES="${{ matrix.arch }}" \
-            -DCMAKE_OSX_DEPLOYMENT_TARGET=10.14 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET="${{ matrix.deployment }}" \
             -DSMTG_CREATE_PLUGIN_LINK=OFF \
             -DSMTG_BUILD_UNIVERSAL_BINARY=OFF \
             -DGRAINS_BUILD_TESTS=ON
