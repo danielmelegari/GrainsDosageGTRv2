@@ -10,7 +10,7 @@ import subprocess
 
 def machine_id():
     data = subprocess.check_output(["ioreg", "-rd1", "-c", "IOPlatformExpertDevice"], text=True)
-    found = re.search(r'"IOPlatformUUID"\\s*=\\s*"([^"]+)"', data)
+    found = re.search(r'"IOPlatformUUID"\s*=\s*"([^"]+)"', data)
     if not found:
         raise SystemExit("Could not read the macOS machine UUID")
     return hashlib.sha256(("GrainsDosage-mac-machine-v1:" + found.group(1).lower()).encode()).hexdigest()
