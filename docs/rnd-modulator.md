@@ -58,3 +58,16 @@ All 192 pre-existing named parameter IDs were compared with the previous revisio
 and match. No GitHub workflows were dispatched.
 
 ![RND panel preview](rnd-modulator-preview.png)
+
+## RND integration fixes
+
+Global Random now includes RND's wave, routes, trigger source, chord and ordered
+note/pulse-length ranges. It retains mix locks and excludes loop-enable routes.
+Gater latch-release steps no longer emit RND triggers. Disabling/resetting Gater
+clears a pending trigger, and stopping transport rejects any pending event in both
+audio-routing paths. The RND wave-randomizer label resolves the saved rate just
+like modulators 1–4.
+
+Regression checks reproduce these failures against the original implementation.
+Display tests also compare RND's live modulation against the DSP for every
+supported destination and all three polarities.

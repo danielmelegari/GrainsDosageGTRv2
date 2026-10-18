@@ -78,19 +78,22 @@ template<class Getter,class Setter> void randomizeSound(uint32_t& seed,Getter ge
   set(kRepeatPitch0+i,(36+int(rnd()*25))/96.);set(kReverbStep0+i,choice(1));
   set(kGaterState0+i,i==0?1.:choice(1));set(kGaterLength0+i,rnd());set(kGaterSustain0+i,rnd());set(kGaterRelease0+i,0.);
  }
- for(int i=0;i<4;++i){
-  set(kModuleLoopOn0+i,0.);set(kModuleLoopWindow0+i,choice(3));
+ for(int i=0;i<qg::lfoCount;++i){
+  if(i<4){set(kModuleLoopOn0+i,0.);set(kModuleLoopWindow0+i,choice(3));}
   for(int j=0;j<lRoute0;++j)set(lfoID(i,j),rnd());
   set(lfoID(i,lEnabled),i==0?1.:choice(1));set(lfoID(i,lSync),1.);set(lfoID(i,lDepth),.15+.5*rnd());
-  set(kLfoWaveChoice0+i,(1+int(rnd()*qg::waveChoiceCount))/double(qg::waveChoiceCount));
-  set(lfoID(i,lGrid),choice(20));set(lfoID(i,lReset),choice(1));set(kRandomSteps0+i,choice(63));
-  set(kLfoSpeed0+i,choice(3));set(kModWaveRate0+i,choice(7));
+  set(modParam(kLfoWaveChoice0,i),(1+int(rnd()*qg::waveChoiceCount))/double(qg::waveChoiceCount));
+  set(lfoID(i,lGrid),choice(20));set(lfoID(i,lReset),choice(1));set(modParam(kRandomSteps0,i),choice(63));
+  set(modParam(kLfoSpeed0,i),choice(3));set(modParam(kModWaveRate0,i),choice(7));
   for(int j=0;j<8;++j)set(routeID(i,j),.5);
   for(int j=0;j<6;++j){int target;
    do{target=1+int(rnd()*qg::modTargetCount);}while(!availableMenuOption(slotTarget(i,j),target)||(target-1>=101&&extendedResliceIds[target-1-101]==kModuleLoopOn0+2));
    set(slotTarget(i,j),target/double(qg::modTargetCount));set(slotAmount(i,j),.35+.3*rnd());set(slotPolarity(i,j),choice(2));
   }
  }
+ set(kRndSource,choice(1));set(kRndRoot,choice(11));set(kRndMinor,choice(1));set(kRndGateEvery,choice(15));
+ double noteA=choice(127),noteB=choice(127);set(kRndNoteMin,std::min(noteA,noteB));set(kRndNoteMax,std::max(noteA,noteB));
+ double lengthA=rnd(),lengthB=rnd();set(kRndLengthMin,std::min(lengthA,lengthB));set(kRndLengthMax,std::max(lengthA,lengthB));
  for(auto id:{kXTarget,kYTarget}){int option;do{option=1+int(rnd()*xyDestCount);}while(!availableMenuOption(id,option)||(xyDestinationId(option-1)>=kModuleLoopOn0&&xyDestinationId(option-1)<kModuleLoopWindow0));set(id,option/double(xyDestCount));}
  // Global Random uses full wet modules or bypass, while explicit Mix locks win.
  for(auto module:{std::pair<ParamID,ParamID>{kGrainEnabled,kGrainMix},

@@ -7,14 +7,14 @@ using namespace aztec;
 int main(){
  // Compare every drawable destination/polarity against the real DSP modulator,
  // including legacy route amounts, clipping and extended Reslice controls.
- for(int target=0;target<qg::modTargetCount;++target)for(int polarity=0;polarity<3;++polarity){
+ for(int active:{0,4})for(int target=0;target<qg::modTargetCount;++target)for(int polarity=0;polarity<3;++polarity){
   int id=modulationParameter(target);assert(id>=0&&id<kUiLfoValue0);
   if(retiredPreslicerParam(id))continue;
   auto p=initialParameters();p[id]=.5;
-  for(int l=0;l<4;++l){p[lfoID(l,lEnabled)]=l==0?1.:0.;for(int t=0;t<8;++t)p[routeID(l,t)]=.5;for(int slot=0;slot<6;++slot)p[slotTarget(l,slot)]=0.;}
-  p[lfoID(0,lDepth)]=.8;p[slotTarget(0,0)]=(target+1.)/qg::modTargetCount;p[slotAmount(0,0)]=.9;p[slotPolarity(0,0)]=polarity*.5;
+  for(int l=0;l<qg::lfoCount;++l){p[lfoID(l,lEnabled)]=l==active?1.:0.;for(int t=0;t<8;++t)p[routeID(l,t)]=.5;for(int slot=0;slot<6;++slot)p[slotTarget(l,slot)]=0.;}
+  p[lfoID(active,lDepth)]=.8;p[slotTarget(active,0)]=(target+1.)/qg::modTargetCount;p[slotAmount(active,0)]=.9;p[slotPolarity(active,0)]=polarity*.5;
   auto s=settings(p,120,48000);qg::Modulation m;m.prepare();qg::ModValues base{};base.fill(.5);
-  for(int n=0;n<16;++n){auto expected=m.process(s.lfos,base,n*.127,48000,false,n);p[kUiModulationActive]=1.;for(int l=0;l<4;++l)p[kUiLfoValue0+l]=(m.output(l)+1.)*.5;
+  for(int n=0;n<16;++n){auto expected=m.process(s.lfos,base,n*.127,48000,false,n);p[kUiModulationActive]=1.;for(int l=0;l<qg::lfoCount;++l)p[modParam(kUiLfoValue0,l)]=(m.output(l)+1.)*.5;p[kUiRndEnvelope]=m.rndEnvelope();
    auto shown=modulationDisplayValues([&](ParamID k){return p[k];});assert(std::abs(shown[id]-expected[target])<1e-12);
   }
  }

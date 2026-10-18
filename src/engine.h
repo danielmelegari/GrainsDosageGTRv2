@@ -606,7 +606,7 @@ public:
     const int64_t step = int64_t(std::floor(beat / std::max(.015625, settings_.division) + 1e-8));
     const bool activeStep = (settings_.pattern & (1u << ((step % steps + steps) % steps))) != 0;
     ModValues values;values=modulation_.process(settings_.lfos,modBase_,beat,settings_.sampleRate,
-                                          step!=lastStep_ && activeStep,step,true,gater_.trigger());
+                                          step!=lastStep_ && activeStep,step,true,settings_.playing&&settings_.gater.enabled&&gater_.trigger());
     publishModulation(values);
     applyExtended(values);
     // Input Options feed every downstream capture and processor.
@@ -771,7 +771,7 @@ public:
     const bool gateTrigger=step!=lastStep_,rhythmTrigger=rhythm!=lastRhythm_;
     bool glitchOpen=settings_.glitchSequence ? (settings_.glitchPattern&(1u<<slot))!=0 : activeStep;
     const bool repeatOpen=settings_.repeatSequence ? (settings_.repeatPattern&(1u<<slot))!=0 : activeStep;
-    ModValues values;values=modulation_.process(settings_.lfos,modBase_,beat,settings_.sampleRate,gateTrigger&&activeStep,step,true,gater_.trigger());
+    ModValues values;values=modulation_.process(settings_.lfos,modBase_,beat,settings_.sampleRate,gateTrigger&&activeStep,step,true,settings_.playing&&settings_.gater.enabled&&gater_.trigger());
     publishModulation(values);
     applyExtended(values);
     // Input Options feed every downstream capture and processor.
