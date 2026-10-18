@@ -1,5 +1,6 @@
 // Exercise the actual plugin state reader and controller parameter definitions.
 #include "src/plugin.cpp"
+#include "src/value_entry.h"
 #include "public.sdk/source/common/memorystream.h"
 #include <cassert>
 #include <iostream>
@@ -12,11 +13,12 @@ int main() {
   for(int version=0;version<21;++version) {
     MemoryStream stream; IBStreamer writer(&stream,kLittleEndian);
     writer.writeInt32(0x51473130+version);
-    const int count=version==0 ? 26 : (version==1 ? 35 : (version==2 ? 95 : (version==3 ? int(kModuleOrder) : (version==4 ? int(kExtraRoutes0) : (version==5 ? int(kGlitchMove) : (version==6 ? int(kMasterFilter) : (version==7 ? int(kNormalize) : (version==8 ? int(kReverbLength) : (version==9 ? int(kUiWave0) : (version==10 ? int(kLfoSlots0) : (version==11 ? int(kModWaveRnd0) : (version==12 ? int(kReverbSource) : (version==13 ? int(kLimiterCeiling) : (version==14 ? int(kGaterEnabled) : (version==15 ? int(kInputDeclick) : (version==16 ? int(kFilterModel) : (version==17 ? int(kGaterMinLength) : (version==18 ? int(kGlitchTriggerRate) : (version==19 ? int(kResliceRndOn) : int(kCount))))))))))))))))))));
+    const int count=version==0 ? 26 : (version==1 ? 35 : (version==2 ? 95 : (version==3 ? int(kModuleOrder) : (version==4 ? int(kExtraRoutes0) : (version==5 ? int(kGlitchMove) : (version==6 ? int(kMasterFilter) : (version==7 ? int(kNormalize) : (version==8 ? int(kReverbLength) : (version==9 ? int(kUiWave0) : (version==10 ? int(kLfoSlots0) : (version==11 ? int(kModWaveRnd0) : (version==12 ? int(kReverbSource) : (version==13 ? int(kLimiterCeiling) : (version==14 ? int(kGaterEnabled) : (version==15 ? int(kInputDeclick) : (version==16 ? int(kFilterModel) : (version==17 ? int(kGaterMinLength) : (version==18 ? int(kGlitchTriggerRate) : (version==19 ? int(kResliceRndOn) : kLegacySkinCount)))))))))))))))))));
     auto expected=defaults();if(version<16)expected[kInputDeclick]=0.;if(version<7)expected[kMasterLimiter]=0.;
     for(int i=0;i<count;++i) { expected[i]=double((i*7)%101)/100.; writer.writeDouble(expected[i]); }
     if(version<20&&count>kResliceLength)expected[kResliceLength]=expected[kResliceLength]<1./6.?2./3.:1.;
     if(version>=11&&version<20)migrateModSlots(expected);
+    migrateExpandedDestinations(expected,version>=20,count>kYTarget);
     if(version<9){const double rt[]={.45,1.25,2.8,5.5,9.};expected[kReverbLength]=(rt[int(std::round(expected[kReverbType]*4.))]-.2)/19.8;}
     stream.seek(0,IBStream::kIBSeekSet,nullptr);
     auto actual=defaults(); assert(loadState(&stream,actual)); 
@@ -41,6 +43,85 @@ int main() {
       for(int t=0;t<6;++t) assert(actual[lfoID(i,lRoute0+t)]==.5);
     }
   }
+  // Pre-range sessions end at the old wave selectors and restore the full range.
+  {auto expected=defaults();expected[kLfoWaveChoice0]=.8;MemoryStream old;IBStreamer out(&old,kLittleEndian);out.writeInt32(0x5147314F);
+   for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);for(int i=kFreeze+1;i<kModWaveFrom0;++i)out.writeDouble(expected[i]);out.writeInt32(123456);
+   old.seek(0,IBStream::kIBSeekSet,nullptr);auto restored=defaults();assert(loadState(&old,restored)&&restored==expected);IBStreamer in(&old,kLittleEndian);int32 sentinel=0;assert(in.readInt32(sentinel)&&sentinel==123456);
+   for(int l=0;l<4;++l)assert(restored[kModWaveFrom0+l]==0.&&restored[kModWaveTo0+l]==1.);
+  }
+  // The preceding release's tail ends before the new MOD W rate selectors.
+  {auto expected=defaults();expected[kModWaveRnd0]=.75;MemoryStream old;IBStreamer out(&old,kLittleEndian);out.writeInt32(0x51473148);
+   for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);for(int i=kFreeze+1;i<kModWaveRate0;++i)out.writeDouble(expected[i]);
+   migrateExpandedDestinations(expected);old.seek(0,IBStream::kIBSeekSet,nullptr);auto restored=defaults();assert(loadState(&old,restored)&&restored==expected);assert(settings(restored,120,48000).lfos[0].waveRandom==3);
+  }
+  // Immediately preceding format has no quality field; keep Normal without
+  // consuming the next stream item. New format round-trips all three tiers.
+  {auto expected=defaults();MemoryStream old;IBStreamer out(&old,kLittleEndian);out.writeInt32(0x5147314D);
+   for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);for(int i=kFreeze+1;i<kAudioQuality;++i)out.writeDouble(expected[i]);out.writeInt32(12345);
+   old.seek(0,IBStream::kIBSeekSet,nullptr);auto restored=defaults();restored[kAudioQuality]=0.;assert(loadState(&old,restored)&&restored==expected);IBStreamer in(&old,kLittleEndian);int32 marker=0;assert(in.readInt32(marker)&&marker==12345);
+  }
+  // E states keep their old waveform IDs and end before the new tail.
+  {auto expected=defaults();expected[lfoID(0,lWave)]=73./129.;MemoryStream old;IBStreamer out(&old,kLittleEndian);out.writeInt32(0x5147314E);
+   for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);for(int i=kFreeze+1;i<kUiLfoValue0;++i)out.writeDouble(expected[i]);out.writeInt32(2468);
+   old.seek(0,IBStream::kIBSeekSet,nullptr);auto restored=defaults();assert(loadState(&old,restored)&&restored==expected);assert(settings(restored,120,48000).lfos[0].wave==73);IBStreamer in(&old,kLittleEndian);int32 marker=0;assert(in.readInt32(marker)&&marker==2468);
+  }
+  // Pre-generative release: appended cutter controls keep their new defaults.
+  {auto expected=defaults();expected[kResliceEnabled]=1.;MemoryStream old;IBStreamer out(&old,kLittleEndian);out.writeInt32(0x51473149);
+   for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);for(int i=kFreeze+1;i<kResliceAlgorithm;++i)out.writeDouble(expected[i]);
+   migrateExpandedDestinations(expected);old.seek(0,IBStream::kIBSeekSet,nullptr);auto restored=defaults();assert(loadState(&old,restored)&&restored==expected);assert(restored[kResliceRepeat]==.45&&restored[kResliceAlgorithm]==0.);
+  }
+  {auto expected=defaults();expected[kResliceCombOn]=1.;MemoryStream old;IBStreamer out(&old,kLittleEndian);out.writeInt32(0x5147314B);
+   for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);for(int i=kFreeze+1;i<kModuleLoopOn0;++i)out.writeDouble(expected[i]);migrateExpandedDestinations(expected);old.seek(0,IBStream::kIBSeekSet,nullptr);auto restored=defaults();assert(loadState(&old,restored)&&restored==expected);for(int i=0;i<4;++i)assert(restored[moduleLoopOn(i)]==0.);
+  }
+  // Last three-page release used 101 destinations and the shorter Morph list.
+  {auto oldValues=defaults();oldValues[slotTarget(1,3)]=22./101.;oldValues[kXTarget]=double(kSize+1)/kXYX;
+   MemoryStream old;IBStreamer out(&old,kLittleEndian);out.writeInt32(0x5147314C);
+   for(int i=0;i<kParamEnd;++i)out.writeDouble(oldValues[i]);out.writeDouble(oldValues[kGrainBuffer]);out.writeDouble(oldValues[kFreeze]);for(int i=kFreeze+1;i<kAudioQuality;++i)out.writeDouble(oldValues[i]);
+   old.seek(0,IBStream::kIBSeekSet,nullptr);auto restored=defaults();assert(loadState(&old,restored));
+   assert(std::round(restored[slotTarget(1,3)]*qg::modTargetCount)==22.);assert(xyDestinationId(int(std::round(restored[kXTarget]*xyDestCount))-1)==kSize);
+  }
+  // Previous procedural state preserves its fixed phrase and defaults new FX off.
+  for(double phrase:{0.,1./3.,2./3.,1.}){auto expected=defaults();expected[kReslicePhrase]=phrase;
+   MemoryStream old;IBStreamer out(&old,kLittleEndian);out.writeInt32(0x5147314A);
+   for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);for(int i=kFreeze+1;i<kResliceSubdivision;++i)out.writeDouble(expected[i]);
+   expected[kResliceMinPhrase]=(std::pow(2.,std::round(phrase*3.))-1.)/7.;migrateExpandedDestinations(expected);old.seek(0,IBStream::kIBSeekSet,nullptr);auto restored=defaults();assert(loadState(&old,restored)&&restored==expected);
+   auto s=settings(restored,120,48000);assert(s.reslice.minPhraseBeats==s.reslice.phraseBeats&&!s.reslice.crusher&&!s.reslice.comb);
+  }
+  // Previous split-format state must not consume newly appended fields.
+  {
+    auto expected=defaults(); expected[kSize]=.73; expected[kModuleOrder]=1.;
+    expected[kFreeze]=1.; expected[kGrainBuffer]=.4;
+    MemoryStream legacy; IBStreamer out(&legacy,kLittleEndian);out.writeInt32(0x51473145);
+    for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);
+    out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);
+    for(int i=kFreeze+1;i<kLegacySkinCount;++i)out.writeDouble(expected[i]);
+    migrateExpandedDestinations(expected);legacy.seek(0,IBStream::kIBSeekSet,nullptr);auto actual=defaults();
+    assert(loadState(&legacy,actual)&&actual==expected);
+    assert(settings(actual,120.,48000.).routing==-1);
+  }
+  {
+    auto p=defaults();p[slotTarget(0,0)]=1./qg::modTargetCount;p[slotAmount(0,0)]=.75;
+    p[kRoutingOrder]=1.;assert(settings(p,120.,48000.).routing==119);
+    for(int mode=0;mode<3;++mode){p[slotPolarity(0,0)]=mode*.5;auto l=settings(p,120.,48000.).lfos[0];
+      assert(l.amount[0]==(mode==0?.5:0.));assert(l.positive[0]==(mode==1?.5:0.));assert(l.negative[0]==(mode==2?.5:0.));}
+  }
+  // v0x46 saves ended before the appended rate and Gater phase parameters.
+  {
+    auto expected=defaults();expected[kReverbGrid]=1./3.;expected[kReverbRandomRate]=.5;
+    MemoryStream legacy;IBStreamer out(&legacy,kLittleEndian);out.writeInt32(0x51473146);
+    for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);
+    out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);
+    for(int i=kFreeze+1;i<kReverbRateV2;++i)out.writeDouble(expected[i]);
+    migrateExpandedDestinations(expected);legacy.seek(0,IBStream::kIBSeekSet,nullptr);auto actual=defaults();assert(loadState(&legacy,actual)&&actual==expected);
+    auto s=settings(actual,120.,48000.);assert(s.reverbGrid==.5&&s.reverbRandomGrid==.5);
+    actual[kReverbRateV2]=5./6.;s=settings(actual,120.,48000.);assert(s.reverbGrid==1.5&&s.reverbRandomGrid==1.5);
+    actual[kReverbRateV2]=1.;s=settings(actual,120.,48000.);assert(s.reverbGrid==.75&&s.reverbRandomGrid==.75);
+  }
+  // The pre-lock v47 state loads without reading the appended lock/meter IDs.
+  {auto expected=defaults();expected[kReverbRateV2]=1.;MemoryStream old;IBStreamer out(&old,kLittleEndian);out.writeInt32(0x51473147);
+   for(int i=0;i<kParamEnd;++i)out.writeDouble(expected[i]);out.writeDouble(expected[kGrainBuffer]);out.writeDouble(expected[kFreeze]);
+   for(int i=kFreeze+1;i<kMixLock0;++i)out.writeDouble(expected[i]);migrateExpandedDestinations(expected);old.seek(0,IBStream::kIBSeekSet,nullptr);auto actual=defaults();assert(loadState(&old,actual)&&actual==expected);
+  }
   MemoryStream bad; IBStreamer writer(&bad,kLittleEndian);
   writer.writeInt32(0x51473132); writer.writeDouble(std::numeric_limits<double>::quiet_NaN());
   bad.seek(0,IBStream::kIBSeekSet,nullptr); auto state=defaults(); const auto before=state;
@@ -56,12 +137,24 @@ int main() {
   }
   static_assert(kGlitchMove==185,"0.6.3 IDs stable");
   Controller controller; assert(controller.initialize(nullptr)==kResultOk);
+  assert(controller.getParameterObject(kAudioQuality)->getInfo().stepCount==2);
+  assert(controller.getParameterObject(kAudioQuality)->getInfo().defaultNormalizedValue==.5);
   // The global BYPASS button was removed: kBypassReserved keeps its legacy enum slot
   // (state/preset alignment) but is no longer a registered VST parameter, so the
   // validator never sees a bypass proxy. The trailing FREEZE/BUFFER/UI-TRIGGER ids
   // are state-only slots and were never registered either; derive the expected
   // count dynamically by subtracting every id that has no parameter object, so
   // this assertion cannot rot when new tail ids are appended to the enum.
+  {double v=0;assert(parseParameterEntry(&controller,kSize,"125 ms",v)&&std::abs(v-(125.-15)/235)<1e-9);
+   assert(parseParameterEntry(&controller,kGrainMix,"37,5 %",v)&&v==.375);
+   assert(parseParameterEntry(&controller,kPitch,"-12 st",v)&&v==.375);
+   assert(parseParameterEntry(&controller,kFilterCutoff,"1000 Hz",v)&&std::abs(v-std::log(50.)/std::log(1000.))<1e-9);
+   assert(parseParameterEntry(&controller,kRepeatDivision,"1/16",v)&&v==4./15.);
+   assert(parseParameterEntry(&controller,kModWaveRate0,"2/1",v)&&v==6./7.);
+   assert(parseParameterEntry(&controller,kModWaveRate0,"4/1",v)&&v==1.);
+   for(auto text:{"", "nan", "inf", "30 rubbish", "-1", "101%"})assert(!parseParameterEntry(&controller,kGrainMix,text,v));
+   assert(!parseParameterEntry(&controller,kFilterCutoff,"30000 Hz",v));assert(!parseParameterEntry(&controller,kRepeatDivision,"garbage",v));
+  }
   int registeredIds=0; for(int i=0;i<int(kCount);++i) if(controller.getParameterObject(ParamID(i))) ++registeredIds;
   assert(controller.getParameterCount()==registeredIds);
   assert(controller.getParameterObject(ParamID(kBypassReserved))==nullptr);
@@ -82,9 +175,12 @@ int main() {
     assert(std::abs(controller.getParamNormalized(ParamID(i))-def[i])<1e-12);
   }
   for(int idx=0;idx<controller.getParameterCount();++idx) { ParameterInfo info{}; assert(controller.getParameterInfo(idx,info)==kResultTrue); assert(info.id!=ParamID(kBypassReserved)); }
+  {String128 text{};assert(controller.getParamStringByValue(kXTarget,double(kTranspose+1)/xyDestCount,text)==kResultTrue);assert(entryText(text)=="Input Transpose");
+   assert(controller.getParameterObject(slotTarget(0,0))->getInfo().stepCount==qg::modTargetCount);
+   assert(controller.getParameterObject(kXTarget)->getInfo().stepCount==xyDestCount);}
   auto xy=defaults(); xy[kXYEnable]=1.; xy[kXYX]=1.; xy[kXYY]=0.;
   auto mapped=settings(xy,120.,48000.); assert(mapped.pitch==-48. && mapped.size>.18);
-  xy[kXTarget]=double(kTranspose+1)/kXYX; assert(settings(xy,120.,48000.).transpose==48.);
+  xy[kXTarget]=double(kTranspose+1)/xyDestCount; assert(settings(xy,120.,48000.).transpose==48.);
   auto noGate=defaults();noGate[kStep0]=0.;noGate[kAttack]=1.;assert(settings(noGate,120.,48000.).pattern==0xffff);
   assert(settings(noGate,120.,48000.).attack==.002);
   for(int id=0;id<4;++id)assert(controller.getParameterObject(kUiStep+id)->getInfo().flags&ParameterInfo::kIsReadOnly);
@@ -102,6 +198,8 @@ int main() {
   assert(processor->process(data)==kResultOk);assert(std::abs(outL[127])<=qg::MasterFx::ceiling+1e-6);
   for(double selected:{0.,.5,1.}){changes.clearQueue();put(kLimiterCeiling,selected);assert(processor->process(data)==kResultOk);double db=selected==0?0:selected==.5?-6:-10;for(int i=0;i<128;++i){assert(std::abs(double(outL[i]))<=std::pow(10.,db/20.));assert(std::abs(double(outR[i]))<=std::pow(10.,db/20.));}}
   changes.clearQueue();put(kMasterLimiter,0.);assert(processor->process(data)==kResultOk);assert(outL[127]==2.f&&outR[127]==.5f);
+  // RMS monitor channels reflect distinct actual host outputs.
+  {double rms[2]={-1.,-1.};for(int i=0;i<meters.getParameterCount();++i){auto* q=meters.getParameterData(i);int id=int(q->getParameterId());if(id==kUiOutputL||id==kUiOutputR){int32 offset=0;double v=0;assert(q->getPoint(q->getPointCount()-1,offset,v)==kResultOk);rms[id-kUiOutputL]=v;}}assert(rms[0]==1.&&std::abs(rms[1]-.5)<1e-6);}
   changes.clearQueue();put(kMasterFilter,1.);put(kMix,1.);put(kGrainMix,0.);put(kFilterType,1.);put(kFilterCutoff,std::log(50.)/std::log(1000.));
   for(int i=0;i<80;++i)assert(processor->process(data)==kResultOk);
   assert(std::abs(outL[127])<1e-4); // HP rejects a DC source through real VST queues.
@@ -123,6 +221,11 @@ int main() {
     assert(std::abs(out64L[96])<1e-10); // wet path active (mix=0 => silent), not dry passthrough
     assert(out64R[96]==0.);
   }
+  // The host's Randomize All trigger uses the same lock policy as the GUI.
+  {changes.clearQueue();for(int i=0;i<6;++i)put(lockableMixes[i],.271);assert(processor->process(data)==kResultOk);
+   changes.clearQueue();for(int i=0;i<6;++i)put(kMixLock0+i,1.);put(kRandomAll,1.);assert(processor->process(data)==kResultOk);
+   MemoryStream stored;assert(processor->getState(&stored)==kResultOk);stored.seek(0,IBStream::kIBSeekSet,nullptr);auto locked=defaults();assert(loadState(&stored,locked));for(int i=0;i<6;++i){assert(locked[lockableMixes[i]]==.271);assert(locked[kMixLock0+i]==1.);}
+  }
   // Roundtrip: dirty the legacy kBypassReserved slot through a real VST queue, then
   // save/reload and verify getState->setState->getState is byte-for-byte stable even
   // though the slot is not a registered parameter (bypass button removed).
@@ -136,7 +239,7 @@ int main() {
     MemoryStream rt3; assert(p2.getState(&rt3)==kResultOk);
     rt.seek(0,IBStream::kIBSeekSet,nullptr); rt3.seek(0,IBStream::kIBSeekSet,nullptr);
     int32 m1=0,m2=0;IBStreamer r1(&rt,kLittleEndian),r2(&rt3,kLittleEndian);
-    r1.readInt32(m1);r2.readInt32(m2);assert(m1==m2&&m1==0x51473145);
+    r1.readInt32(m1);r2.readInt32(m2);assert(m1==m2&&m1==0x51473150);
     // getState layout: kParamEnd values, buffer size, freeze flag, then the tail
     // (kBypassReserved lives in this region) up to kCount.
     const int fields=kParamEnd+2+(int(kCount)-int(kFreeze)-1);
@@ -145,3 +248,4 @@ int main() {
   processor->setActive(false);processor->terminate();processor->release();
   std::cout<<"PASS: v0.1–v0.12.0 state migration and legacy parallel mode, disabled legacy routes, malformed state rejection, controller defaults, appended Speed/Transpose routes, XY routing and processor state roundtrip, master host automation\n";
 }
+

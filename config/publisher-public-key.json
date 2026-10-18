@@ -1,0 +1,6 @@
+{
+  "public_key_pkcs1_der_base64": "MIIBCgKCAQEAyE6jTmenHMiB5jiVhHriuYW2H6GT8nQ36j6hYNNX42n9JgQc8R6dSFcgMIzbsIaga2CIefxRIoMQg7pDWmCsW9WxfGxV8+zfguvjflu7sl7HYdAM0q6t0CVHx8cDr3AF78wNKglXKWa4/9rAXsUuGQeVflFL+o2krafqLqXkbLwGglWYRfy6vLdOK1+XKwVepi6ac+Bk/xd9aDHKW+2bYcMG0QBkGUXlaMMsUONg6sFzGCqhcGk6xdrw5jQySoxvZEP8U02CWGuDo2SdJYtIWP/FJaZ6xM6l5Pttxkql7isldAeSm9xeXv89fCJ5hom/q7CfHpB1hRliWBCb/VOQywIDAQAB",
+  "sha256": "f41e04335d43d1c44322072831bd83266500da8a04cf98d0fa3f0f28b75d5dca",
+  "algorithm": "RSA-2048-SHA256-PKCS1-v1_5",
+  "format": "GrainsDosage-Public-Key-v1"
+}

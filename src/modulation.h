@@ -4,21 +4,29 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <string>
+#include <memory>
 
 namespace qg {
 constexpr int lfoCount = 4;
 
-constexpr int waveCount = 128;
+constexpr int waveCount = 128; // Legacy periodic shapes; persistent IDs stay unchanged.
+constexpr int extraWaveCount=200, tableWaveCount=waveCount+extraWaveCount, waveChoiceCount=tableWaveCount+2, maxWave=waveChoiceCount-1;
+inline constexpr const char* extraWaveFamilies[]={"FM Orbit","Phase Fold","Ripple Ramp","Pulse Train","Bouncing","Exponential Steps","Harmonic Bloom","Pendulum","Smooth Scatter","Rhythmic Gates"};
+inline std::string extraWaveName(int id){int n=id-130;return std::to_string(id+1)+" "+extraWaveFamilies[n/20]+" "+std::to_string(n%20+1);}
 constexpr int tableSize = 1024;
 constexpr double tau = 6.28318530717958647692;
 // Destination order is persistent: Size, Density, Pitch, Lookback, Chaos, Granular Mix, Speed, Transpose.
 struct LfoSettings {
   bool enabled = false, sync = true, gateReset = false;
   int randomSteps = 1;
-  int wave = 0; // 0..127 periodic waves, 128 S&H, 129 S&G
+  int wave = 0; // 0..127 legacy, 128/129 S&H/S&G, 130..329 new shapes
+  int randomWaveCount=waveCount;
+  int randomFirst=-1,randomLast=maxWave; // Inclusive wave IDs; -1 retains legacy DSP API selection.
   double speed=1.;
-  int waveRandom=0; // Off, 1/1, 1/2, 1/4, 1/8 (host quarter-note beats)
+  int waveRandom=0; // Off, 1/1, 1/2, 1/4, 1/8, 2/1, 4/1 (host quarter-note beats)
   double hz = 1., beats = 4., depth = 1., phase = 0., glide = 1.;
+  std::array<double, modTargetCount> positive{},negative{};
   std::array<double, modTargetCount> amount{}; // bipolar normalized destination range
 };
 using ModValues = std::array<double, modTargetCount>;
@@ -30,11 +38,11 @@ inline double cycleNoise(int64_t cycle, uint64_t seed) {
   return double(h >> 11) * (2. / 9007199254740992.) - 1.;
 }
 inline double smooth(double t) { return t*t*(3.-2.*t); }
-using WaveBank = std::array<std::array<float,tableSize+1>,waveCount>;
+using WaveBank = std::array<std::array<float,tableSize+1>,tableWaveCount>;
 inline const WaveBank& waveBank() {
   // Constructed explicitly by prepare(), never lazily from the audio callback.
-  static const WaveBank bank = [] {
-    WaveBank result{};
+  static const auto bank = [] {
+    auto storage=std::make_unique<WaveBank>();auto& result=*storage;
     for(int wave=0;wave<waveCount;++wave) {
       const int family=wave/16, variant=wave%16;
       const double t=variant/15.;
@@ -61,9 +69,26 @@ inline const WaveBank& waveBank() {
       }
       result[wave][tableSize]=result[wave][0];
     }
-    return result;
+    // Precompute new families once; audio processing remains one table lookup.
+    for(int n=0;n<extraWaveCount;++n){int family=n/20,v=n%20;double amount=(v+1.)/20.;auto& table=result[waveCount+n];
+      for(int i=0;i<tableSize;++i){double p=double(i)/tableSize,angle=tau*p,y=0.;int harmonics=2+v%7;
+        switch(family){
+        case 0:y=std::sin(angle+(.25+2.75*amount)*std::sin((2+v%5)*angle));break;
+        case 1:y=std::asin(std::sin(angle+(.2+1.8*amount)*std::sin(harmonics*angle)))/(tau*.25);break;
+        case 2:y=(2*p-1.+amount*.8*std::sin(harmonics*angle))/(1.+amount*.8);break;
+        case 3:{double duty=.08+.84*amount;double pulse=std::tanh((std::sin(harmonics*angle)-std::cos(tau*duty*.5))*(2.+v));y=.8*pulse+.2*std::sin(angle+.13*v);break;}
+        case 4:y=2*std::pow(std::abs(std::sin((1+v%5)*angle*.5)),.35+3.65*amount)-1.;break;
+        case 5:{int steps=3+v%10;double at=p*steps;double a=std::floor(at)/steps,b=(std::floor(at)+1)/steps;double f=std::pow(at-std::floor(at),.27+3*amount);y=2*(a+(b-a)*f)-1.;break;}
+        case 6:{double sum=0,norm=0;for(int h=1;h<=harmonics;++h){double gain=1./std::pow(double(h),.4+2*amount);sum+=gain*std::sin(h*angle+.17*v*(h-1));norm+=gain;}y=sum/norm;break;}
+        case 7:y=std::sin(angle)*(1.-amount*.75)+amount*.75*std::cos((2+v%6)*angle+.11*v);break;
+        case 8:{int points=3+v%9;double at=p*points;int j=int(at);double f=smooth(at-j);double a=cycleNoise(j,0xa135+v*991),b=cycleNoise((j+1)%points,0xa135+v*991);y=a+(b-a)*f;break;}
+        case 9:{int steps=4+v%13;double at=p*steps;int j=int(at);double f=at-j;double gate=cycleNoise(j,0xc983+v*7919)>.1?1.:-1.;y=gate*std::pow(std::sin(tau*.5*f),.2+2*amount);break;}
+        }table[i]=float(std::clamp(y,-1.,1.));
+      }table[tableSize]=table[0];
+    }
+    return storage;
   }();
-  return bank;
+  return *bank;
 }
 
 class Lfo {
@@ -95,14 +120,16 @@ public:
       const int wraps=int(std::floor(freePhase_)); freePhase_-=wraps; freeCycle_+=wraps;
     }
     position_=position;displayCycle_=cycle;
-    const double intervals[]={4.,2.,1.,.5};
-    int wave=std::clamp(s.wave,0,129);
-    if(s.waveRandom>0){int64_t step=int64_t(std::floor(beat/intervals[std::clamp(s.waveRandom-1,0,3)]+1e-9));wave=std::clamp(int((cycleNoise(step,seed_+0x57a9ULL)+1.)*.5*waveCount),0,waveCount-1);}
+    const double intervals[]={4.,2.,1.,.5,8.,16.};
+    int wave=std::clamp(s.wave,0,maxWave);
+    if(s.waveRandom>0){int64_t step=int64_t(std::floor(beat/intervals[std::clamp(s.waveRandom-1,0,5)]+1e-9));int count=std::clamp(s.randomWaveCount,waveCount,tableWaveCount);wave=std::clamp(int((cycleNoise(step,seed_+0x57a9ULL)+1.)*.5*count),0,count-1);if(wave>=waveCount)wave+=2;
+      if(s.randomFirst>=0){int first=std::clamp(std::min(s.randomFirst,s.randomLast),0,maxWave),last=std::clamp(std::max(s.randomFirst,s.randomLast),0,maxWave);wave=first+std::min(last-first,int((cycleNoise(step,seed_+0x57a9ULL)+1.)*.5*(last-first+1)));}
+    }
     activeWave_=wave;
     if(previousWave_>=0&&previousWave_!=wave){transition_=s.waveRandom>0?0.:1.;transitionFrom_=lastOutput_;}
     previousWave_=wave;
     double output=0.;
-    if(wave>=waveCount) {
+    if(wave==128||wave==129) {
       const int points=std::clamp(s.randomSteps,1,64);
       const double point=position*points;
       cycle=cycle*points+int64_t(std::floor(point)); position=point-std::floor(point);
@@ -115,7 +142,7 @@ public:
         output=previous+(next-previous)*smooth(fraction);
       }
     } else if(bank_) {
-      const auto& table=(*bank_)[std::clamp(wave,0,waveCount-1)];
+      const auto& table=(*bank_)[wave>=130?wave-2:wave];
       const double point=position*tableSize;
       const int a=std::clamp(int(point),0,tableSize-1);
       output=table[a]+(table[a+1]-table[a])*(point-a);
@@ -127,22 +154,38 @@ public:
 
 class Modulation {
   std::array<Lfo,lfoCount> lfos_{};
+  std::array<std::array<int,modTargetCount>,lfoCount> routes_{};
+  std::array<int,lfoCount> routeCounts_{};
+  std::array<double,lfoCount> outputs_{};
 public:
   void prepare() { for(int i=0;i<lfoCount;++i) lfos_[i].prepare(0x13579BDFULL+uint64_t(i)*104729); }
-  void reset() { for(auto& lfo:lfos_) lfo.reset(); }
+  void reset() { for(auto& lfo:lfos_) lfo.reset(); outputs_.fill(0.); }
+  double output(int i)const{return outputs_[i];}
   int wave(int i)const{return lfos_[i].wave();}
   double phase(int i)const{return lfos_[i].phase();}
   int64_t cycle(int i)const{return lfos_[i].cycle();}
   int64_t epoch(int i)const{return lfos_[i].epoch();}
+  void configure(const std::array<LfoSettings,lfoCount>& settings){
+    routeCounts_.fill(0);
+    for(int i=0;i<lfoCount;++i)for(int t=0;t<modTargetCount;++t)
+      if(settings[i].amount[t]!=0.||settings[i].positive[t]!=0.||settings[i].negative[t]!=0.)routes_[i][routeCounts_[i]++]=t;
+  }
   ModValues process(const std::array<LfoSettings,lfoCount>& settings,const ModValues& base,
-                    double beat,double sampleRate,bool gateTrigger,int64_t gateStep) {
+                    double beat,double sampleRate,bool gateTrigger,int64_t gateStep,bool configured=false) {
+    if(!configured)configure(settings);
     ModValues result=base;
     for(int i=0;i<lfoCount;++i) {
       const double value=lfos_[i].process(settings[i],beat,sampleRate,gateTrigger,gateStep);
-      for(int target=0;target<modTargetCount;++target) result[target]+=value*settings[i].amount[target];
+      outputs_[i]=settings[i].enabled?value:0.;
+      if(!settings[i].enabled)continue;
+      const double unipolar=(value+std::clamp(settings[i].depth,0.,1.))*.5;
+      for(int n=0;n<routeCounts_[i];++n){const int target=routes_[i][n];
+        result[target]+=value*settings[i].amount[target]+unipolar*(settings[i].positive[target]-settings[i].negative[target]);
+      }
     }
     for(auto& value:result) value=std::clamp(value,0.,1.);
     return result;
   }
 };
 }
+

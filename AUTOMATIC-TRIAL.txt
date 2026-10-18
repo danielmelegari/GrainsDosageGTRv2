@@ -1,0 +1,15 @@
+GrainsDosage — automatic 14-day trial
+
+No license code, registration or account is required.
+The trial starts when the plugin is first opened or activated for audio processing.
+It lasts 14 consecutive days, including time while the DAW is closed.
+The header displays the number of days left. At expiry it displays TRIAL EXPIRED,
+fades the output to silence, and stops the wet audio processing.
+Restarting the DAW, changing presets or reinstalling the plugin does not restart
+an intact trial record. Keep the computer clock correct. If protected storage
+cannot be read or saved, the trial remains blocked rather than granting more time.
+
+The trial record is stored in macOS Keychain, or in protected Windows user storage.
+The trial is offline and tied to the OS user environment. No purely offline
+software trial can prevent every deliberate binary patch or complete system rollback.
+For a purchase, install the Licensed edition and use its activation process.

@@ -33,5 +33,10 @@ int main() {
   auto changed = text; changed[20] = 'z'; assert(!parseLicense(changed, license));
   changed = text; changed.back() = '\r'; assert(!parseLicense(changed, license));
   assert(!parseLicense(std::string(5000,'x'), license));
+  auto permanent=std::string("GRAINS-PERMANENT-1\n")+std::string(64,'a')+"\n"+std::string(32,'c')+"\n3\n"+std::string(512,'b')+"\n";
+  assert(parseLicense(permanent,license));assert(license.permanent&&license.licenseId==std::string(32,'c'));
+  changed=permanent;changed[changed.find("\n3\n")+1]='4';assert(!parseLicense(changed,license));
+  changed=permanent;changed[changed.find(std::string(32,'c'))]='z';assert(!parseLicense(changed,license));
+  assert(parseLicense(text,license));assert(!license.permanent&&license.licenseId.empty());
   std::cout << "Trial policy and license parsing passed\n";
 }
