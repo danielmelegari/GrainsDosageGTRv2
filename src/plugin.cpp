@@ -378,6 +378,9 @@ public:
         if(out.numChannels>1 && out.channelBuffers64[1][n]!=0.) out.silenceFlags &= ~uint64(2);
       }
     }
+    // Host monitor feedback is not required for audio. Diagnostic builds can
+    // disable it to isolate host parameter-queue overhead from DSP and GUI.
+#ifndef GRAINS_DISABLE_HOST_TELEMETRY
     if(data.outputParameterChanges&&data.numSamples>0){
       const double beat=fallbackBeat_+(data.numSamples-1)*beatIncrement;
       const int step=int((int64_t(std::floor(beat/.25))%16+16)%16);
@@ -393,6 +396,7 @@ public:
       for(int i=0;i<128;++i)emit(kUiWave0+i,wave.amplitude[i]);
       for(int i=0;i<16;++i)emit(kUiResliceSource0+i,engine_.resliceSource(i)/15.);emit(kUiFilterSeqStep,engine_.filterSequenceStep()/31.);emit(kUiResliceStep,engine_.resliceStep()/15.);emit(kUiResliceActive,engine_.resliceActive()?1.:0.);emit(kUiGaterStep,engine_.gaterStep()/15.);for(int i=0;i<16;++i){emit(kUiGaterState0+i,engine_.gaterState(i)?1.:0.);emit(kUiGaterLength0+i,engine_.gaterLength(i));}emit(kUiReverbGate,!s.bypass&&engine_.reverbGate()?1.:0.);emit(kUiGrainStart,wave.start);emit(kUiGrainEnd,wave.end);emit(kUiGrainHead,wave.head);emit(kUiGrainActive,!s.bypass&&wave.active?1.:0.);emit(kUiWaveSeconds,wave.seconds/16.);for(int i=0;i<4;++i){emit(kUiModWave0+i,engine_.lfoWave(i)/129.);emit(kUiLfoPhase0+i,engine_.lfoPhase(i));emit(kUiLfoCycle0+i,std::clamp((double(engine_.lfoCycle(i))+2147483648.)/4294967295.,0.,1.));emit(kUiLfoEpoch0+i,std::clamp((double(engine_.lfoEpoch(i))+2147483648.)/4294967295.,0.,1.));}
     }
+#endif // GRAINS_DISABLE_HOST_TELEMETRY
     fallbackBeat_ += data.numSamples * beatIncrement;
     return kResultOk;
   }
