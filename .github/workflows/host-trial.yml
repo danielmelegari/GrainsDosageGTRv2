@@ -1,0 +1,82 @@
+name: Ableton-compatible trial VST3 (macOS and Windows)
+on:
+  workflow_dispatch:
+  push:
+    branches: [fix/host-compatibility-live11]
+    paths:
+      - 'src/**'
+      - 'CMakeLists.txt'
+      - 'tools/mac_trial_registration.py'
+      - '.github/workflows/host-trial.yml'
+permissions:
+  contents: read
+jobs:
+  trial:
+    if: vars.GRAINS_TRIAL_PUBLIC_KEY != ''
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2022
+            label: Windows-x64
+            arch: x64
+          - runner: macos-15-intel
+            label: macOS-Intel
+            arch: x86_64
+          - runner: macos-15
+            label: macOS-Apple-Silicon
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: steinbergmedia/vst3sdk
+          ref: 3cdf9ca5d1f5b1b21e0a86832aa4abe55607bd96
+          submodules: recursive
+          path: vst3sdk
+      - name: Generate publisher public key header
+        shell: bash
+        env:
+          GRAINS_TRIAL_PUBLIC_KEY: ${{ vars.GRAINS_TRIAL_PUBLIC_KEY }}
+        run: python tools/configure_trial_key.py "$RUNNER_TEMP/trial_public_key.h"
+      - name: Configure Windows trial
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cmake -S . -B build-trial -G "Visual Studio 17 2022" -A x64 `
+            -DVST3_SDK_ROOT="$env:GITHUB_WORKSPACE/vst3sdk" `
+            -DGRAINS_TRIAL=ON -DGRAINS_TRIAL_PUBLIC_KEY_HEADER="$env:RUNNER_TEMP/trial_public_key.h" `
+            -DGRAINS_BUILD_TESTS=ON -DSMTG_CREATE_PLUGIN_LINK=OFF
+      - name: Configure macOS trial
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          target=11.0
+          if [[ "${{ matrix.arch }}" == "x86_64" ]]; then target=10.14; fi
+          cmake -S . -B build-trial -G Xcode \
+            -DVST3_SDK_ROOT="$GITHUB_WORKSPACE/vst3sdk" \
+            -DCMAKE_OSX_ARCHITECTURES="${{ matrix.arch }}" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET="$target" \
+            -DGRAINS_TRIAL=ON -DGRAINS_TRIAL_PUBLIC_KEY_HEADER="$RUNNER_TEMP/trial_public_key.h" \
+            -DGRAINS_BUILD_TESTS=ON -DSMTG_CREATE_PLUGIN_LINK=OFF \
+            -DSMTG_BUILD_UNIVERSAL_BINARY=OFF
+      - name: Compile trial and run tests
+        shell: bash
+        run: |
+          cmake --build build-trial --config Release --parallel 4
+          ctest --test-dir build-trial -C Release --output-on-failure
+      - name: Validate Steinberg VST3 API
+        shell: bash
+        run: python tools/validate_host_compatibility.py build-trial
+      - name: Package trial plugin
+        shell: bash
+        run: python tools/package_host_compatibility.py build-trial dist
+      - name: Upload candidate for manual Ableton Live tests
+        uses: actions/upload-artifact@v4
+        with:
+          name: GrainsDosage-Trial-${{ matrix.label }}-VST3-test
+          path: dist/*.zip
+          if-no-files-found: error
+          retention-days: 14
