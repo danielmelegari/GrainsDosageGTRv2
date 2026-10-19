@@ -102,3 +102,11 @@ implementation at 8/44.1/96 kHz through the dedicated 65-second scenarios.
 Follow-up Linux validation: all 40 CTest suites passed and all 47 VST3 validator
 checks passed. Fresh native builds are required for this follow-up; the successful
 run 39177410084 and its packages contain only the preceding candidate c271876.
+
+The final steady-state engine comparison against c271876 used 48 kHz stereo,
+256-frame blocks and medians of three 10-second runs. All eight audio hashes
+were identical. Seven scenarios used 0.5–15.4% less engine CPU; one used 2.9%
+more. This is an isolated Linux engine benchmark, not a DAW CPU guarantee.
+The snapshot reader shares stereo interpolation, caches unchanged pitch rates
+and keeps the per-sample path inline to avoid the sustained CPU regression
+observed in the first snapshot prototype.
