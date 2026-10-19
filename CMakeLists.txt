@@ -227,6 +227,20 @@ if(APPLE)
         COMMAND ${CMAKE_COMMAND} -E make_directory "${_trial_au_resources}"
         COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:GrainsDosageTrialHelper>" "${_trial_au_resources}/GrainsDosageTrialHelper")
     endif()
+    # Staging changes the SDK-signed bundle after its POST_BUILD validation.
+    # Seal the helper first, then its containing plugin, after all copies finish.
+    # Otherwise a plain local build can fail a host scan with an invalid seal.
+    list(APPEND _trial_stage_commands
+      COMMAND /usr/bin/codesign --force --sign - --timestamp=none "${_trial_vst_resources}/GrainsDosageTrialHelper"
+      COMMAND /usr/bin/codesign --force --sign - --timestamp=none "${CMAKE_BINARY_DIR}/VST3/$<CONFIG>/GrainsDosage.vst3"
+      COMMAND /usr/bin/codesign --verify --deep --strict "${CMAKE_BINARY_DIR}/VST3/$<CONFIG>/GrainsDosage.vst3")
+    if(TARGET GrainsDosageAU)
+      list(APPEND _trial_stage_commands
+        COMMAND /usr/bin/codesign --force --sign - --timestamp=none "${_trial_au_resources}/GrainsDosageTrialHelper"
+        COMMAND /usr/bin/codesign --force --sign - --timestamp=none "${CMAKE_BINARY_DIR}/AU/$<CONFIG>/GrainsDosage.component/Contents/Resources/plugin.vst3"
+        COMMAND /usr/bin/codesign --force --sign - --timestamp=none "${CMAKE_BINARY_DIR}/AU/$<CONFIG>/GrainsDosage.component"
+        COMMAND /usr/bin/codesign --verify --deep --strict "${CMAKE_BINARY_DIR}/AU/$<CONFIG>/GrainsDosage.component")
+    endif()
     add_custom_target(grains_stage_trial_helper ALL ${_trial_stage_commands}
       DEPENDS ${_trial_stage_dependencies} VERBATIM)
   endif()

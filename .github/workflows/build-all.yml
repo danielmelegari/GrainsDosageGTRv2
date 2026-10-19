@@ -144,7 +144,7 @@ jobs:
           cmake --build build --config Release --target grains_stage_trial_helper
           for helper in build/VST3/Release/GrainsDosage.vst3/Contents/Resources/GrainsDosageTrialHelper build/AU/Release/GrainsDosage.component/Contents/Resources/plugin.vst3/Contents/Resources/GrainsDosageTrialHelper; do
             test -x "$helper"
-            cmp build/Release/GrainsDosageTrialHelper "$helper"
+            codesign --verify --strict "$helper"
           done
       - name: Audio and session regression tests
         run: ctest --test-dir build -C Release --output-on-failure
@@ -196,6 +196,31 @@ jobs:
           cp docs/licensing.md package/READ-ME-FIRST.md
           if [[ "${{ matrix.edition }}" == trial ]]; then cp AUTOMATIC-TRIAL.txt package/; fi
           cp USER-MANUAL.html auval-intel.txt package/
+      - name: Verify extracted VST3 signature and load on Intel
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          ditto -x -k package/GrainsDosage-${{ matrix.edition }}.vst3.zip extracted-vst3
+          VST="$PWD/extracted-vst3/GrainsDosage.vst3"
+          codesign --verify --deep --strict "$VST"
+          python3 tools/check-au-deployment.py "$VST"
+          arch -x86_64 build/bin/Release/validator "$VST" 2>&1 | tee vst3-intel.txt
+      - name: Package universal validation tool
+        run: |
+          mkdir -p validation-tools
+          cp build/bin/Release/validator validation-tools/validator
+          ditto -c -k --keepParent validation-tools validation-tools.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VST3-validation-tools-${{ matrix.edition }}
+          path: validation-tools.zip
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: VST3-diagnostics-${{ matrix.edition }}-Intel
+          path: vst3-intel.txt
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         with:
           name: GrainsDosage-${{ matrix.edition }}-macOS
@@ -203,10 +228,10 @@ jobs:
           if-no-files-found: error
           retention-days: 30
   apple-silicon:
-    name: Verify shipped AU on Apple Silicon (${{ matrix.edition }})
+    name: Verify shipped AU and VST3 on Apple Silicon (${{ matrix.edition }})
     needs: macos
     runs-on: macos-15
-    timeout-minutes: 10
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -217,6 +242,22 @@ jobs:
         with:
           name: GrainsDosage-${{ matrix.edition }}-macOS
           path: shipped
+      - uses: actions/download-artifact@v4
+        with:
+          name: VST3-validation-tools-${{ matrix.edition }}
+          path: tools-archive
+      - name: Validate distributed VST3 on Apple Silicon
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          ditto -x -k tools-archive/validation-tools.zip .
+          ditto -x -k shipped/GrainsDosage-${{ matrix.edition }}.vst3.zip extracted-vst3
+          VST="$PWD/extracted-vst3/GrainsDosage.vst3"
+          codesign --verify --deep --strict "$VST"
+          python3 tools/check-au-deployment.py "$VST"
+          for attempt in 1 2 3; do
+            arch -arm64 validation-tools/validator "$VST" 2>&1 | tee "vst3-arm64-$attempt.txt"
+          done
       - name: Validate actual distributed archive
         timeout-minutes: 5
         run: |
@@ -235,6 +276,7 @@ jobs:
           name: GrainsDosage-${{ matrix.edition }}-Apple-Silicon-validation
           path: |
             auval-arm64.txt
+            vst3-arm64-*.txt
             auval-diagnostics/
   manual:
     if: ${{ !inputs.macos_trial_only }}

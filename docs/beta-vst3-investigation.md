@@ -110,3 +110,35 @@ more. This is an isolated Linux engine benchmark, not a DAW CPU guarantee.
 The snapshot reader shares stereo interpolation, caches unchanged pitch rates
 and keeps the per-sample path inline to avoid the sustained CPU regression
 observed in the first snapshot prototype.
+
+
+## Confirmed Ableton scanner rejection (19 October 2026)
+
+The supplied Live 11.3.30 scanner log finds the nested installed GrainsDosage
+VST3, then reports `Failed to load plugin: a sealed resource is missing or invalid`
+and `VST3: not a plugin`. This establishes a failed code-signature resource seal
+for that installed bundle, not an unsupported OS or a DSP initialization error.
+The log does not identify the altered resource or when it changed.
+
+The CMake trial-helper staging target previously copied the helper into bundles
+**after** SDK signing. It now signs the helper and containing bundles inside-out
+and verifies them after staging, so a direct build does not depend on a later CI
+packaging step to repair its seal. Commercial packaging already re-signed and
+verified bundles; therefore this gap alone does not prove how the tester's
+installed copy became invalid.
+
+Commercial CI now extracts the final VST3 ZIP, checks its signature and validates
+it on Intel, then repeats validation of the downloaded archive on Apple Silicon
+three times. Previously the latter job tested only AU. Full Unlocked packages
+from run 39242726045 passed Windows and Intel checks and all three Apple Silicon
+VST3 validator runs (47 checks each); macOS regression tests passed all 43 suites.
+
+For an affected installation, quit the host and move the old GrainsDosage VST3
+bundle outside all scanned plugin folders as a backup. Extract a fresh complete
+bundle from the chosen macOS archive and copy it to a standard VST3 folder; do
+not merge into the old bundle or modify its plist/resources. Verify with
+`codesign --verify --deep --strict --verbose=4 /path/to/GrainsDosage.vst3`
+before Option-clicking Rescan in Live. If verification fails, preserve its exact
+output: it can name the missing/altered resource. Do not remove the signature as
+a workaround. Newer-OS reports require their own scanner evidence to establish
+whether they share this failure.

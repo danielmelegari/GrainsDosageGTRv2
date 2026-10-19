@@ -7,7 +7,7 @@ if [ "$(uname -s)" != Darwin ]; then
 fi
 sw_vers
 uname -m
-for bundle in "/Library/Audio/Plug-Ins/VST3/GrainsDosage.vst3" "$HOME/Library/Audio/Plug-Ins/VST3/GrainsDosage.vst3"; do
+for bundle in "/Library/Audio/Plug-Ins/VST3/GrainsDosage.vst3" "$HOME/Library/Audio/Plug-Ins/VST3/GrainsDosage.vst3" "/Library/Audio/Plug-Ins/VST3/GrainsDosage/GrainsDosage.vst3" "$HOME/Library/Audio/Plug-Ins/VST3/GrainsDosage/GrainsDosage.vst3"; do
   [ -e "$bundle" ] || continue
   printf '\nBundle: %s\n' "$bundle"
   plist="$bundle/Contents/Info.plist"
@@ -23,7 +23,7 @@ for bundle in "/Library/Audio/Plug-Ins/VST3/GrainsDosage.vst3" "$HOME/Library/Au
   binary="$bundle/Contents/MacOS/$executable"
   file "$binary"
   shasum -a 256 "$binary"
-  codesign --verify --deep --strict --verbose=2 "$bundle" 2>&1 || true
+  codesign --verify --deep --strict --verbose=4 "$bundle" 2>&1 || true
   xattr -p com.apple.quarantine "$bundle" 2>/dev/null || true
   if [ -f "$bundle/Contents/PkgInfo" ]; then
     printf 'PkgInfo: '; cat "$bundle/Contents/PkgInfo"; printf '\n'
