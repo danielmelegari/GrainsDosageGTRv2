@@ -1,13 +1,17 @@
 // Exercise the real VST3 wrapper with scanner/lifecycle buffer shapes.
 #include "src/plugin.cpp"
 #include "public.sdk/source/vst/hosting/parameterchanges.h"
+#include "public.sdk/source/common/memorystream.h"
 #include <cassert>
+#include <limits>
 #include <iostream>
 
 template<class Sample> void buffers(int symbolic) {
  auto processor=std::make_unique<Processor>();
  assert(processor->initialize(nullptr)==kResultOk);
  ProcessSetup setup{};setup.sampleRate=48000.;setup.maxSamplesPerBlock=128;setup.symbolicSampleSize=symbolic;
+ for(double rate:{0.,-1.,std::numeric_limits<double>::infinity(),std::numeric_limits<double>::quiet_NaN()}){auto invalid=setup;invalid.sampleRate=rate;assert(processor->setupProcessing(invalid)==kInvalidArgument);}
+ assert(processor->getState(nullptr)==kInvalidArgument);assert(processor->setState(nullptr)==kResultFalse);
  assert(processor->setupProcessing(setup)==kResultOk);assert(processor->setActive(true)==kResultOk);
  SpeakerArrangement stereo=SpeakerArr::kStereo;
  assert(processor->setBusArrangements(nullptr,1,&stereo,1)==kResultFalse);
@@ -25,7 +29,20 @@ template<class Sample> void buffers(int symbolic) {
  else {input.channelBuffers64=ins;output.channelBuffers64=outs;}
  data.inputs=&input;data.outputs=&output;
  auto silent=[&](){assert(processor->process(data)==kResultOk);for(int i=0;i<128;++i)assert(outL[i]==0.&&outR[i]==0.);assert(output.silenceFlags==3);};
- silent();ins[0]=ins[1]=nullptr;silent();
+ silent();
+ // Restoring an unfrozen preset must release an already frozen live engine.
+ MemoryStream unfrozen;assert(processor->getState(&unfrozen)==kResultOk);
+ changes.clearQueue();changes.addParameterData(kFreeze,index)->addPoint(0,1.,index);
+ assert(processor->process(data)==kResultOk);
+ auto frozen=[&](){MemoryStream saved;assert(processor->getState(&saved)==kResultOk);saved.seek(0,IBStream::kIBSeekSet,nullptr);auto state=defaults();assert(loadState(&saved,state));return state[kFreeze]>=.5;};
+ assert(frozen());unfrozen.seek(0,IBStream::kIBSeekSet,nullptr);
+ assert(processor->setState(&unfrozen)==kResultOk);data.inputParameterChanges=nullptr;
+ assert(processor->process(data)==kResultOk);assert(!frozen());
+ // Two automation points in the same block must both reach the engine.
+ changes.clearQueue();auto* freezeQueue=changes.addParameterData(kFreeze,index);
+ freezeQueue->addPoint(0,1.,index);freezeQueue->addPoint(64,0.,index);data.inputParameterChanges=&changes;
+ assert(processor->process(data)==kResultOk);assert(!frozen());data.inputParameterChanges=nullptr;
+ ins[0]=ins[1]=nullptr;silent();
  // A completely missing input channel array is silence, not a crash.
  if constexpr(std::is_same_v<Sample,float>)input.channelBuffers32=nullptr;else input.channelBuffers64=nullptr;
  silent();outs[1]=nullptr;assert(processor->process(data)==kResultFalse);
@@ -34,7 +51,28 @@ template<class Sample> void buffers(int symbolic) {
  processor->setActive(false);processor->terminate();
 }
 
+void randomizeBlock(){
+ auto a=std::make_unique<Processor>(),b=std::make_unique<Processor>();
+ ProcessSetup setup{};setup.sampleRate=48000;setup.maxSamplesPerBlock=128;setup.symbolicSampleSize=kSample32;
+ for(auto* p:{a.get(),b.get()}){assert(p->initialize(nullptr)==kResultOk);assert(p->setupProcessing(setup)==kResultOk);assert(p->setActive(true)==kResultOk);}
+ auto expected=defaults();uint32_t seed=0x9E3779B9u;
+ aztec::randomizeSound(seed,[&](ParamID id){return expected[id];},[&](ParamID id,double value){expected[id]=value;});
+ ParameterChanges trigger(1),direct(kCount);int32 index=0;
+ trigger.addParameterData(kRandomAll,index)->addPoint(0,1.,index);
+ for(int id=0;id<kCount;++id)if(!isMonitor(id)&&expected[id]!=defaults()[id])direct.addParameterData(id,index)->addPoint(0,expected[id],index);
+ float left[128],right[128],aL[128]{},aR[128]{},bL[128]{},bR[128]{};
+ for(int i=0;i<128;++i){left[i]=float(std::sin(i*.12)*.2);right[i]=float(std::cos(i*.17)*.3);}
+ float* ins[]={left,right};float* ao[]={aL,aR};float* bo[]={bL,bR};AudioBusBuffers input{},outA{},outB{};
+ input.numChannels=outA.numChannels=outB.numChannels=2;input.channelBuffers32=ins;outA.channelBuffers32=ao;outB.channelBuffers32=bo;
+ ProcessData data{};data.numSamples=128;data.numInputs=data.numOutputs=1;data.symbolicSampleSize=kSample32;data.inputs=&input;
+ data.outputs=&outA;data.inputParameterChanges=&trigger;assert(a->process(data)==kResultOk);
+ data.outputs=&outB;data.inputParameterChanges=&direct;assert(b->process(data)==kResultOk);
+ double energy=0.;for(int i=0;i<128;++i){assert(aL[i]==bL[i]&&aR[i]==bR[i]);energy+=double(aL[i])*aL[i]+double(aR[i])*aR[i];}assert(energy>0.);
+ for(auto* p:{a.get(),b.get()}){p->setActive(false);p->terminate();}
+}
+
 int main(){
+ randomizeBlock();
  buffers<float>(kSample32);buffers<double>(kSample64);
  // At each host block size/rate, monitoring must leave audio bit-identical
  // and publish at most about ten waveform batches per second.

@@ -34,6 +34,7 @@ std::array<double,kCount> defaults(){return initialParameters();}
 // by getState; everything after it up to kCount is appended in the tail layout.
 static constexpr int kParamEnd = int(kUiFilterSeqStep) + 1;
 bool loadState(IBStream* stream, std::array<double,kCount>& p) {
+  if(!stream)return false;
   IBStreamer in(stream,kLittleEndian); int32 magic=0;
   if(!in.readInt32(magic) || (magic!=0x51473130 && magic!=0x51473131 && magic!=0x51473132 && magic!=0x51473133 && magic!=0x51473134 && magic!=0x51473135 && magic!=0x51473136 && magic!=0x51473137 && magic!=0x51473138 && magic!=0x51473139 && magic!=0x5147313A && magic!=0x5147313B && magic!=0x5147313C && magic!=0x5147313D && magic!=0x5147313E && magic!=0x5147313F && magic!=0x51473140 && magic!=0x51473141 && magic!=0x51473142 && magic!=0x51473143 && magic!=0x51473144 && magic!=0x51473145 && magic!=0x51473146 && magic!=0x51473147 && magic!=0x51473148 && magic!=0x51473149 && magic!=0x5147314A && magic!=0x5147314B && magic!=0x5147314C && magic!=0x5147314D && magic!=0x5147314E && magic!=0x5147314F && magic!=0x51473150 && magic!=0x51473151)) return false;
   auto result=defaults();
@@ -108,7 +109,6 @@ class Processor final : public AudioEffect {
   double rate_ = 44100., tempo_ = 120., fallbackBeat_ = 0.;
   // The parameter array covers every legacy + monitor ID; the VST parameter list stops before the new UI controls.
   bool freezePending_ = false; // queued FREEZE toggle (from editor click or automation): consumed by the next process() call
-  int8_t freezeApplied_ = -1;  // last freeze state pushed to the engine (-1 unknown): lets setState drive setFrozen() directly so a restored session fades in with the 50 ms crossfade instead of blind-toggling
   uint32_t randomSeed_ = 0x9E3779B9u; // xorshift seed for RANDOM ALL one-shots
   bool randomAllPending_ = false;    // RANDOM ALL is a momentary button, like a trigger pulse
   // FREEZE is a sustained toggle: when the incoming value differs from the
@@ -116,7 +116,7 @@ class Processor final : public AudioEffect {
   // This keeps editor clicks AND DAW automation in sync with the audio thread.
   // RANDOM ALL stays momentary: any pulse >= .5 queues a single re-roll.
   void handleTrigger(ParamID id,double v) {
-    if(id==kFreeze){if((v>=.5)!=engine_.isFrozen())freezePending_=true;return;}
+    if(id==kFreeze){p_[id]=v>=.5?1.:0.;freezePending_=true;return;}
     if(id==kRandomAll&&v>=.5){randomAllPending_=true;p_[id]=0.;return;}
     // TAB is UI state that lives in the parameter array (persisted through
     // getState/loadState), but it must stay writable for the editor even though
@@ -141,6 +141,7 @@ public:
     return kResultOk;
   }
   tresult PLUGIN_API setupProcessing(ProcessSetup& setup) override {
+    if(!std::isfinite(setup.sampleRate)||setup.sampleRate<=0.||setup.maxSamplesPerBlock<0||canProcessSampleSize(setup.symbolicSampleSize)!=kResultTrue)return kInvalidArgument;
     rate_ = setup.sampleRate; engine_.prepare(rate_);declick_.prepare(rate_,p_[kInputDeclick]>=.5);
     return AudioEffect::setupProcessing(setup);
   }
@@ -151,10 +152,11 @@ public:
     // getState writes). Queue it so the next process() block applies it on the
     // audio thread, where touching settings_ is safe. engine_.set() below copies
     // s.freeze=false into settings_, which would otherwise silently unfreeze.
-    if(p_[kFreeze]>=.5) freezePending_=true;
+    freezePending_=true;randomAllPending_=false;
     return kResultOk;
   }
   tresult PLUGIN_API getState(IBStream* stream) override {
+    if(!stream)return kInvalidArgument;
     IBStreamer out(stream,kLittleEndian);
     if(!out.writeInt32(0x51473151)) return kResultFalse;
     for(int i=0;i<kParamEnd;++i) if(!out.writeDouble(p_[i])) return kResultFalse;
@@ -240,23 +242,20 @@ public:
     } else return kResultFalse;
     outputBus.silenceFlags=outputBus.numChannels>1?3:1;
     double barBeats=4.;if(data.processContext&&(data.processContext->state&ProcessContext::kTimeSigValid)&&data.processContext->timeSigNumerator>0&&data.processContext->timeSigDenominator>0)barBeats=std::clamp(4.*data.processContext->timeSigNumerator/data.processContext->timeSigDenominator,.25,32.);
+    auto consumeRandom=[&](){if(randomAllPending_){applyRandomAll();randomAllPending_=false;p_[kRandomAll]=0.;}};
+    auto consumeFreeze=[&](){if(freezePending_){engine_.setFrozen(p_[kFreeze]>=.5);freezePending_=false;}p_[kFreeze]=engine_.isFrozen()?1.:0.;};
+    consumeRandom();
     auto s = settings(p_, tempo_, rate_,barBeats);s.playing=!data.processContext||(data.processContext->state & ProcessContext::kPlaying); engine_.set(s);
     auto setMaster=[&](){const double ceilings[]={0.,-6.,-10.};master_.set(false,0,1000.,0.,value(p_,kMasterLimiter)>=.5,0,0.,ceilings[int(std::round(value(p_,kLimiterCeiling)*2.))]);};
     setMaster();
-    // Momentary UI triggers consumed once per block (before the engine receives
-    // this block's settings, so a freeze toggle takes effect on the first sample).
-    // Toggle only when the engine actually disagrees with the queued request:
-    // a stale pending flag (e.g. an automation pulse that raced a preset load)
-    // must not double-toggle FREEZE back to its original state.
-    if(freezePending_) { const bool want=p_[kFreeze]>=.5; if(want!=engine_.isFrozen()) engine_.setFrozen(want); freezePending_=false; }
-    if(randomAllPending_) { applyRandomAll(); randomAllPending_=false; p_[kRandomAll]=0.; }
-    p_[kFreeze]=engine_.isFrozen()?1.:0.; // mirror the sustained state for save/load + readback
+    // Apply the requested freeze state after updating the selected buffer window.
+    consumeFreeze();
     const double beatIncrement = tempo_ / (60. * rate_);
     double peak=0.,squareL=0.,squareR=0.;
     const double licenseTarget=aztec::license::processingAllowed()?1.:0.;
     for(int32 n=0;n<data.numSamples;++n) {
       licenseGain_+=std::clamp(licenseTarget-licenseGain_,-1./(.02*rate_),1./(.02*rate_));
-      if(n>0 && applyChanges(n)) { s=settings(p_,tempo_,rate_,barBeats);s.playing=!data.processContext||(data.processContext->state & ProcessContext::kPlaying); engine_.set(s);setMaster(); }
+      if(n>0 && applyChanges(n)) { consumeRandom();s=settings(p_,tempo_,rate_,barBeats);s.playing=!data.processContext||(data.processContext->state & ProcessContext::kPlaying); engine_.set(s);setMaster();consumeFreeze(); }
       const double beat = fallbackBeat_ + n * beatIncrement;
       if(data.symbolicSampleSize == kSample32) {
         auto& in = data.inputs[0]; auto& out = data.outputs[0];
