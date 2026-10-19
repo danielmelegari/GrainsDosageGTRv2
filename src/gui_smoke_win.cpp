@@ -26,6 +26,17 @@ int main(){try{auto* c=new Controller;check(c->initialize(nullptr)==kResultOk,"C
  check(dpi->setContentScaleFactor(1.25f)==kResultOk,"DPI after attach");view->getSize(&scaled);GetClientRect(child,&childSize);check(scaled.getWidth()==childSize.right&&scaled.getHeight()==childSize.bottom,"DPI client alignment");check(dpi->setContentScaleFactor(1.f)==kResultOk,"Return to 100% DPI");dpi->release();
  RECT desired{0,0,natural.getWidth(),natural.getHeight()};AdjustWindowRect(&desired,WS_OVERLAPPEDWINDOW,FALSE);SetWindowPos(parent,nullptr,0,0,desired.right-desired.left,desired.bottom-desired.top,SWP_NOMOVE|SWP_NOZORDER);view->onSize(&natural);
  check(SendMessageW(child,WM_APP+71,0,0)==1,"Current skin loaded");ShowWindow(parent,SW_SHOW);UpdateWindow(parent);UpdateWindow(child);
+ // Repeated paints/resizes must not accumulate GDI handles. Warm the font
+ // cache first so the steady-state count excludes intentional retained fonts.
+ auto repaint=[&](){InvalidateRect(child,nullptr,FALSE);UpdateWindow(child);GdiFlush();};
+ for(int i=0;i<2;++i){ViewRect size(0,0,natural.getWidth()+i*32,natural.getHeight()+i*24);view->onSize(&size);repaint();}
+ view->onSize(&natural);repaint();const DWORD warmHandles=GetGuiResources(GetCurrentProcess(),GR_GDIOBJECTS);
+ check(warmHandles>0,"GDI resource count");
+ for(int i=0;i<40;++i)repaint();
+ check(GetGuiResources(GetCurrentProcess(),GR_GDIOBJECTS)<=warmHandles,"Paint GDI resources stay bounded");
+ for(int i=0;i<12;++i){ViewRect size(0,0,natural.getWidth()+i%2*32,natural.getHeight()+i%2*24);view->onSize(&size);repaint();}
+ view->onSize(&natural);repaint();
+ check(GetGuiResources(GetCurrentProcess(),GR_GDIOBJECTS)<=warmHandles,"Resize releases previous render buffer");
  auto send=[&](int action,double x,double y,int count=1){RECT r;GetClientRect(child,&r);aztec::mockup::Viewport fit(r.right,r.bottom);UINT msg=action==0?(count>1?WM_LBUTTONDBLCLK:WM_LBUTTONDOWN):action==1?WM_MOUSEMOVE:WM_LBUTTONUP;SendMessageW(child,msg,action==2?0:MK_LBUTTON,MAKELPARAM(int(fit.x+x*fit.scale),int(fit.y+y*fit.scale)));};auto click=[&](double x,double y,int n){BYTE old[256]{},keys[256]{};GetKeyboardState(old);std::copy(old,old+256,keys);if(n<0){keys[VK_SHIFT]|=0x80;SetKeyboardState(keys);}send(0,x,y,n);send(2,x,y,n);SetKeyboardState(old);};auto drag=[&](int a,double x,double y){send(a,x,y);};aztec::runGuiScenarios(c,click,drag,[&](double v){SendMessageW(child,WM_APP+73,0,LPARAM(std::round(v)));},[&](){return int(SendMessageW(child,WM_APP+72,0,0));});
  {aztec::mockup::RackState rack;auto value=[&](aztec::ParamID id){return c->getParamNormalized(id);};auto module=aztec::mockup::moduleRect(0,value,rack);rack.scroll[0]=std::clamp(module.y-220.,0.,aztec::mockup::maxScroll(rack));SendMessageW(child,WM_APP+73,0,LPARAM(std::round(rack.offset())));aztec::mockup::Rect readout{};for(auto control:aztec::mockup::controls(value,0,0,0,0,0,rack))if(control.id==aztec::kSize)readout=aztec::mockup::valueRect(control.r,control.kind,control.id,control.label);UINT_PTR timer=SetTimer(nullptr,0,100,typeValue);check(timer!=0,"Value-entry timer");click(readout.x+readout.w/2,readout.y+readout.h/2,2);KillTimer(nullptr,timer);check(typedValueApplied&&std::abs(c->getParamNormalized(aztec::kSize)-(123.-15.)/235.)<1e-9,"Keyboard value dialog Apply");SendMessageW(child,WM_APP+73,0,0);}
  for(int page=0;page<3;++page){auto r=aztec::mockup::pageRect(page);click(r.x+80,r.y+20,1);SendMessageW(child,WM_APP+73,0,0);UpdateWindow(child);screenshot(child,page);}
