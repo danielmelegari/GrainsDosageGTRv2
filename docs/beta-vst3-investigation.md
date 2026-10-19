@@ -11,8 +11,8 @@ Gater trigger and display fixes in `8240023`. Preserve these commits and the
 ## Current changes
 
 - Waveform/sequencer/modulation monitor publication: 30 Hz to 10 Hz. This lowers
-  publication frequency by about 67%, not total plugin CPU by 67%. Per-block
-  output meters retain their existing cadence. Large host blocks quantize the
+  publication frequency by about 67%, not total plugin CPU by 67%. Output meters are capped at 30 Hz, accumulating RMS energy and peak
+  values across the entire display interval. Large host blocks quantize the
   display interval. Audio algorithms and parameter IDs remain unchanged.
 - `GRAINS_DISABLE_HOST_TELEMETRY=ON` disables monitor output in a diagnostic build
   without disabling DSP. Meter, waveform and sequencer displays will stop updating.
@@ -26,8 +26,12 @@ The older compatibility branch predates RND, newer state formats and existing
 buffer optimizations. It must not replace the purple-skin source. Its buffer
 resize finding does not describe this base: selectable windows already use
 preallocated storage. Existing allocation tests cover live/frozen size changes.
-Rhythmic captures still copy bounded audio slices; absence of allocation alone
-does not establish freedom from worst-case audio-thread stalls.
+BeatRepeater captures now keep a logical snapshot of the recording ring. Before
+an incoming sample overwrites held audio, at most one stereo sample is preserved
+in preallocated capture storage. Starting a capture no longer copies up to
+16 seconds of stereo audio in one audio callback. No extra buffer is allocated.
+A frozen copy of the previous algorithm is the sample-for-sample test oracle for
+physical wraps, offsets, recaptures, pitch, reverse, length changes and reset.
 
 ## Ableton cannot find the VST3 / Finder says Application
 
@@ -75,3 +79,26 @@ successfully but failed **Apple Silicon Audio Unit validation**. That AU failure
 is separate from the reported VST3 scan problem. The previous macOS Trial build
 at `eacde6e` passed, but predates RND and this candidate. Do not assume a previous
 successful artifact contains the latest source.
+
+## Follow-up hardening
+
+The waveform countdown now saturates at zero when no host monitor sink exists;
+it cannot run into signed integer underflow during long headless sessions.
+Meter cadence and accumulated RMS/peak values are tested at all three sample
+rates and host buffer sizes alongside bit-identical audio.
+
+The macOS automatic-trial helper path is resolved on the initializing thread,
+before launching its worker. The worker no longer calls `dladdr`, removing a
+possible dynamic-loader-lock cycle when unload joins the worker. This does not
+claim to identify the previous AU timeout's cause; the earlier candidate's
+Apple Silicon AU validation succeeded before this additional hardening.
+
+A local 96 kHz synthetic 16-second capture benchmark (200 recaptures) measured
+455 microseconds mean / 736 microseconds maximum before, versus 0.073 / 0.390
+after. These are capture-call timings on this Linux runner, not total DAW CPU
+savings. The new capture algorithm produced bit-identical samples to the old
+implementation at 8/44.1/96 kHz through the dedicated 65-second scenarios.
+
+Follow-up Linux validation: all 40 CTest suites passed and all 47 VST3 validator
+checks passed. Fresh native builds are required for this follow-up; the successful
+run 39177410084 and its packages contain only the preceding candidate c271876.

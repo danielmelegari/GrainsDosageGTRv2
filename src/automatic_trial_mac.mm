@@ -12,10 +12,14 @@ std::string helperPath(){
  return path.substr(0,slash)+"/../Resources/GrainsDosageTrialHelper";
 }
 struct Storage {
+ // Resolve on the initializing host thread, before the worker starts. Calling
+ // dladdr from the worker can wait for dyld while unload holds dyld's lock and
+ // waits for that same worker to join.
+ const std::string executable=helperPath();
  int64_t now()const{return automatic::wallSeconds();}
  int64_t steady()const{return automatic::steadySeconds();}
  State update(bool create,int64_t current,int64_t minimum,int64_t& first,int64_t& last){
-  return automatic::runHelper(helperPath(),create,current,minimum,first,last);
+  return automatic::runHelper(executable,create,current,minimum,first,last);
  }
 };
 automatic::Manager<Storage>& manager(){static automatic::Manager<Storage> instance(true);return instance;}

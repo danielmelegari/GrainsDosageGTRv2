@@ -102,7 +102,9 @@ class Processor final : public AudioEffect {
   qg::InputDeclick declick_;
   qg::MasterFx master_;
   std::array<double, kCount> p_{};
-  int waveCountdown_=0;
+  int waveCountdown_=0,meterCountdown_=0;
+  int64_t meterSamples_=0;
+  double meterSquareL_=0.,meterSquareR_=0.,meterPeak_=0.;
   double rate_ = 44100., tempo_ = 120., fallbackBeat_ = 0.;
   // The parameter array covers every legacy + monitor ID; the VST parameter list stops before the new UI controls.
   bool freezePending_ = false; // queued FREEZE toggle (from editor click or automation): consumed by the next process() call
@@ -178,7 +180,7 @@ public:
 #if defined(GRAINS_TRIAL) && GRAINS_TRIAL
       aztec::license::firstOpen(); // Host lifecycle thread, never process().
 #endif
-      engine_.prepare(rate_);declick_.prepare(rate_,p_[kInputDeclick]>=.5);master_.prepare(rate_); fallbackBeat_=0.;waveCountdown_=0; }
+      engine_.prepare(rate_);declick_.prepare(rate_,p_[kInputDeclick]>=.5);master_.prepare(rate_); fallbackBeat_=0.;waveCountdown_=meterCountdown_=0;meterSamples_=0;meterSquareL_=meterSquareR_=meterPeak_=0.; }
     return AudioEffect::setActive(active);
   }
   // NOTE: Processor must NOT override setComponentState — AudioEffect does not
@@ -299,14 +301,21 @@ public:
     }
     aztec::modCell().packed.store(engine_.lastModPacked_.load(std::memory_order_relaxed),std::memory_order_relaxed);
 #ifndef GRAINS_DISABLE_HOST_TELEMETRY
-    if(data.outputParameterChanges&&data.numSamples>0){
-      for(int ch=0;ch<2;++ch){int32 index=0;auto* q=data.outputParameterChanges->addParameterData(ParamID(kUiOutputL+ch),index);if(q)q->addPoint(data.numSamples-1,std::clamp(std::sqrt((ch?squareR:squareL)/data.numSamples),0.,1.),index);}
-      const double beat=fallbackBeat_+(data.numSamples-1)*beatIncrement;
-      const int step=int((int64_t(std::floor(beat/.25))%16+16)%16);
-      const double meters[]={step/15.,(!s.bypass&&engine_.glitchRunning())?1.:0.,(!s.bypass&&engine_.repeatRunning())?1.:0.,std::clamp(peak,0.,1.),double((int64_t(std::floor(beat/s.reverbGrid))%16+16)%16)/15.};
-      for(int i=0;i<5;++i){int32 index=0;auto id=ParamID(i==4?kUiReverb:kUiStep+i);auto* q=data.outputParameterChanges->addParameterData(id,index);if(q)q->addPoint(data.numSamples-1,meters[i],index);}
+    meterCountdown_=std::max(0,meterCountdown_-data.numSamples);
+    meterSamples_+=data.numSamples;meterSquareL_+=squareL;meterSquareR_+=squareR;meterPeak_=std::max(meterPeak_,peak);
+    if(meterCountdown_==0){
+      if(data.outputParameterChanges){
+        for(int ch=0;ch<2;++ch){int32 index=0;auto* q=data.outputParameterChanges->addParameterData(ParamID(kUiOutputL+ch),index);if(q)q->addPoint(data.numSamples-1,std::clamp(std::sqrt((ch?meterSquareR_:meterSquareL_)/meterSamples_),0.,1.),index);}
+        const double beat=fallbackBeat_+(data.numSamples-1)*beatIncrement;
+        const int step=int((int64_t(std::floor(beat/.25))%16+16)%16);
+        const double meters[]={step/15.,(!s.bypass&&engine_.glitchRunning())?1.:0.,(!s.bypass&&engine_.repeatRunning())?1.:0.,std::clamp(meterPeak_,0.,1.),double((int64_t(std::floor(beat/s.reverbGrid))%16+16)%16)/15.};
+        for(int i=0;i<5;++i){int32 index=0;auto id=ParamID(i==4?kUiReverb:kUiStep+i);auto* q=data.outputParameterChanges->addParameterData(id,index);if(q)q->addPoint(data.numSamples-1,meters[i],index);}
+      }
+      meterCountdown_=std::max(1,int(rate_/30.));
+      meterSamples_=0;meterSquareL_=meterSquareR_=meterPeak_=0.;
     }
-    waveCountdown_-=data.numSamples;
+    // Stay bounded even if the host never provides a monitor sink.
+    waveCountdown_=std::max(0,waveCountdown_-data.numSamples);
     if(data.outputParameterChanges&&data.numSamples>0&&waveCountdown_<=0){
       waveCountdown_=std::max(1,int(rate_/10.));auto wave=engine_.grainView();
       auto emit=[&](int id,double v){int32 index=0;auto* q=data.outputParameterChanges->addParameterData(ParamID(id),index);if(q)q->addPoint(data.numSamples-1,v,index);};
