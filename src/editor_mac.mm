@@ -1,5 +1,6 @@
 #import <Cocoa/Cocoa.h>
 #include "editor.h"
+#include "editor_refresh.h"
 #include "license.h"
 #include "value_entry.h"
 // Header order matters: every non-aztec dependency (qg DSP helpers in
@@ -174,6 +175,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   NSPoint origin;
   double starting;
   NSTimer* timer;
+  aztec::EditorRefresh refresh;
   uint32_t randomSeed;
 }
 - (BOOL)skinLoaded;
@@ -330,7 +332,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
       if(image)editableModuleSkins[@(stage)]=image;
     }
     self.toolTip=@"Drag knobs vertically; Double-click knobs/faders to reset; double-click a value readout to type; Shift-click restores its default. Scroll each page. Drag module headers vertically to change audio order. Option-scroll edits a knob.";
-    timer=[NSTimer timerWithTimeInterval:1./15. target:self selector:@selector(tick:) userInfo:nil repeats:YES];
+    timer=[NSTimer timerWithTimeInterval:1./60. target:self selector:@selector(tick:) userInfo:nil repeats:YES];
     timer.tolerance=.003;
     [[NSRunLoop mainRunLoop] addTimer:timer forMode:NSRunLoopCommonModes];
   }return self;
@@ -349,6 +351,10 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
 }
 - (void)tick:(NSTimer*)tick {
   (void)tick;if(!owner||self.hiddenOrHasHiddenAncestor||!self.window||!(self.window.occlusionState&NSWindowOcclusionStateVisible))return;
+  const double now=aztec::EditorRefresh::now();
+  if(refresh.interactionDue(now))[self setNeedsDisplay:YES];
+  if(dragID>=0||dragXY)return;
+  if(!refresh.backgroundDue(now,1./15.))return;
   bool changed=false;
   NSString* currentLicense=[NSString stringWithUTF8String:aztec::license::status().c_str()];
   if(![licenseLabel isEqual:currentLicense]){licenseLabel=currentLicense;changed=true;}
@@ -730,11 +736,11 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   if(!owner)return;NSPoint p=[self logical:event];
   if(dragScroll){auto bar=aztec::mockup::scrollbar(),thumb=aztec::mockup::scrollThumb(rackState);[self setPageScroll:scrollOrigin+(p.y-origin.y)*aztec::mockup::maxScroll(rackState)/std::max(1.,bar.h-thumb.h)];return;}
   if(dragSlot>=0){routePointer=p;if(std::hypot(p.x-origin.x,p.y-origin.y)>8)routeMoved=true;if(routeMoved)dropSlot=aztec::mockup::routeInsertion(p.x,p.y,[&](aztec::ParamID id){return owner->value(id);},rackState);[self setNeedsDisplay:YES];return;}
-  if(dragXY){auto xy=rackState.position(aztec::mockup::xy);auto v=aztec::mockup::xyValue(xy,p.x,p.y);owner->change(aztec::kXYX,v.first);owner->change(aztec::kXYY,v.second);[self setNeedsDisplay:YES];return;}
+  if(dragXY){auto xy=rackState.position(aztec::mockup::xy);auto v=aztec::mockup::xyValue(xy,p.x,p.y);owner->change(aztec::kXYX,v.first);owner->change(aztec::kXYY,v.second);refresh.request();if(refresh.interactionDue(aztec::EditorRefresh::now()))[self setNeedsDisplay:YES];return;}
   if(dragID<0)return;double delta=(dragKind==aztec::Slider||dragKind==aztec::Pan)?(p.x-origin.x)/dragRect.size.width:(origin.y-p.y)/(dragKind==aztec::VSlider?std::max(1.,dragRect.size.height-42):180.);
   if(event.modifierFlags&NSEventModifierFlagShift)delta*=.1;
   starting=std::clamp(starting+delta,0.,1.);origin=p;
-  owner->change(aztec::ParamID(dragID),starting);[self setNeedsDisplay:YES];
+  owner->change(aztec::ParamID(dragID),starting);refresh.request();if(refresh.interactionDue(aztec::EditorRefresh::now()))[self setNeedsDisplay:YES];
 }
 - (void)mouseUp:(NSEvent*)event {
   (void)event;if(!owner)return;

@@ -7,6 +7,7 @@
 #include "pluginterfaces/gui/iplugviewcontentscalesupport.h"
 #include "gui_scenarios.h"
 #include <iostream>
+#include <chrono>
 static void check(bool ok,const char* why){if(!ok)throw std::runtime_error(why);}
 static void screenshot(HWND window,int page){
  RECT rect{};GetClientRect(window,&rect);HDC screen=GetDC(window),memory=CreateCompatibleDC(screen);
@@ -37,6 +38,21 @@ int main(){try{auto* c=new Controller;check(c->initialize(nullptr)==kResultOk,"C
  for(int i=0;i<12;++i){ViewRect size(0,0,natural.getWidth()+i%2*32,natural.getHeight()+i%2*24);view->onSize(&size);repaint();}
  view->onSize(&natural);repaint();
  check(GetGuiResources(GetCurrentProcess(),GR_GDIOBJECTS)<=warmHandles,"Resize releases previous render buffer");
+ // Repeated knob updates must patch the cached scene, not redraw all artwork.
+ {
+  aztec::mockup::RackState rack;auto value=[&](aztec::ParamID id){return c->getParamNormalized(id);};
+  auto module=aztec::mockup::moduleRect(0,value,rack);
+  rack.scroll[0]=std::clamp(module.y-220.,0.,aztec::mockup::maxScroll(rack));
+  SendMessageW(child,WM_APP+73,0,LPARAM(std::round(rack.offset())));repaint();
+  auto builds=SendMessageW(child,WM_APP+75,0,0),patches=SendMessageW(child,WM_APP+76,0,0);
+  double original=value(aztec::kSize),totalMs=0.,maxMs=0.;
+  for(int i=0;i<20;++i){auto start=std::chrono::steady_clock::now();c->setParamNormalized(aztec::kSize,(i+1)/21.);repaint();
+    double ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count();totalMs+=ms;maxMs=std::max(maxMs,ms);}
+  std::cout<<"Cached knob repaint mean_ms="<<totalMs/20<<" max_ms="<<maxMs<<'\n';
+  check(SendMessageW(child,WM_APP+75,0,0)==builds,"Knob updates reuse static artwork");
+  check(SendMessageW(child,WM_APP+76,0,0)>=patches+19,"Knob updates patch cached controls");
+  c->setParamNormalized(aztec::kSize,original);SendMessageW(child,WM_APP+73,0,0);repaint();
+ }
  auto send=[&](int action,double x,double y,int count=1){RECT r;GetClientRect(child,&r);aztec::mockup::Viewport fit(r.right,r.bottom);UINT msg=action==0?(count>1?WM_LBUTTONDBLCLK:WM_LBUTTONDOWN):action==1?WM_MOUSEMOVE:WM_LBUTTONUP;SendMessageW(child,msg,action==2?0:MK_LBUTTON,MAKELPARAM(int(fit.x+x*fit.scale),int(fit.y+y*fit.scale)));};auto click=[&](double x,double y,int n){BYTE old[256]{},keys[256]{};GetKeyboardState(old);std::copy(old,old+256,keys);if(n<0){keys[VK_SHIFT]|=0x80;SetKeyboardState(keys);}send(0,x,y,n);send(2,x,y,n);SetKeyboardState(old);};auto drag=[&](int a,double x,double y){send(a,x,y);};aztec::runGuiScenarios(c,click,drag,[&](double v){SendMessageW(child,WM_APP+73,0,LPARAM(std::round(v)));},[&](){return int(SendMessageW(child,WM_APP+72,0,0));});
  {aztec::mockup::RackState rack;auto value=[&](aztec::ParamID id){return c->getParamNormalized(id);};auto module=aztec::mockup::moduleRect(0,value,rack);rack.scroll[0]=std::clamp(module.y-220.,0.,aztec::mockup::maxScroll(rack));SendMessageW(child,WM_APP+73,0,LPARAM(std::round(rack.offset())));aztec::mockup::Rect readout{};for(auto control:aztec::mockup::controls(value,0,0,0,0,0,rack))if(control.id==aztec::kSize)readout=aztec::mockup::valueRect(control.r,control.kind,control.id,control.label);UINT_PTR timer=SetTimer(nullptr,0,100,typeValue);check(timer!=0,"Value-entry timer");click(readout.x+readout.w/2,readout.y+readout.h/2,2);KillTimer(nullptr,timer);check(typedValueApplied&&std::abs(c->getParamNormalized(aztec::kSize)-(123.-15.)/235.)<1e-9,"Keyboard value dialog Apply");SendMessageW(child,WM_APP+73,0,0);}
  for(int page=0;page<3;++page){auto r=aztec::mockup::pageRect(page);click(r.x+80,r.y+20,1);SendMessageW(child,WM_APP+73,0,0);UpdateWindow(child);screenshot(child,page);}
