@@ -14,6 +14,7 @@
 #include <filesystem>
 #include "editor.h"
 #include "editor_refresh.h"
+#include "host_edit_queue.h"
 #include "license.h"
 #include "value_entry.h"
 #include "parameters.h"
@@ -54,6 +55,8 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
   std::array<double,kCount> lastDisplayValues{};
   int animationFrames=0;std::string licenseLabel;
   EditorRefresh refresh;
+  HostEditQueue hostEdits;
+  void flushHostEdits(bool force=false){hostEdits.flush(EditorRefresh::now(),[&](uint32_t id,double v){controller->performEdit(id,v);},force);}
   aztec::mockup::Motion motion;
   std::array<int,4> routingAtDrag;
   double originX=0,originY=0,dragValue=0,dragWidth=1,dragHeight=180;Kind dragKind=Knob;bool dragXY=false,routeMoved=false;
@@ -251,7 +254,11 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
   }
   double value(ParamID id)const{return controller->getParamNormalized(id);}
   ParameterInfo info(ParamID id)const{auto* p=controller->getParameterObject(id);return p?p->getInfo():ParameterInfo{};}
-  void change(ParamID id,double v){auto p=info(id);v=std::clamp(v,0.,1.);if(p.stepCount)v=std::round(v*p.stepCount)/p.stepCount;controller->setParamNormalized(id,v);controller->performEdit(id,v);if(dragID>=0||dragXY){refresh.request();if(refresh.interactionDue(EditorRefresh::now()))InvalidateRect(window,nullptr,FALSE);}else InvalidateRect(window,nullptr,FALSE);}
+  void change(ParamID id,double v){auto p=info(id);v=std::clamp(v,0.,1.);if(p.stepCount)v=std::round(v*p.stepCount)/p.stepCount;bool dragging=(dragID==int(id))||(dragXY&&(id==kXYX||id==kXYY));
+    if(dragging&&value(id)==v)return;
+    controller->setParamNormalized(id,v);
+    if(dragging){hostEdits.queue(id,v);flushHostEdits();}else controller->performEdit(id,v);
+    if(dragID>=0||dragXY){refresh.request();if(refresh.interactionDue(EditorRefresh::now()))InvalidateRect(window,nullptr,FALSE);}else InvalidateRect(window,nullptr,FALSE);}
   void edit(ParamID id,double v){controller->beginEdit(id);change(id,v);controller->endEdit(id);}
   std::wstring display(ParamID id,double v){String128 s{};controller->getParamStringByValue(id,v,s);std::wstring out(reinterpret_cast<wchar_t*>(s));auto p=info(id);
     if(!(p.flags&ParameterInfo::kIsList)&&out.find(L'.')!=std::wstring::npos){wchar_t b[64];swprintf(b,64,L"%.2f",wcstod(out.c_str(),nullptr));out=b;while(out.back()==L'0')out.pop_back();if(out.back()==L'.')out.pop_back();}
@@ -529,7 +536,7 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
     const auto status=license::status();if(!status.empty()){mockup::Rect button{450,88,220,25};mockup::pill(painter,button);painter.text(status+(license::activationRequired?"  ·  ACTIVATE":""),button,11,{230,233,237},true);}
 
   }
-  void end(){if(dragID>=0)controller->endEdit(ParamID(dragID));if(dragXY){controller->endEdit(kXYX);controller->endEdit(kXYY);}dragID=dragSlot=dropSlot=-1;dragXY=routeMoved=dragScroll=false;animationFrames=12;}
+  void end(){flushHostEdits(true);hostEdits.clear();if(dragID>=0)controller->endEdit(ParamID(dragID));if(dragXY){controller->endEdit(kXYX);controller->endEdit(kXYY);}dragID=dragSlot=dropSlot=-1;dragXY=routeMoved=dragScroll=false;animationFrames=12;}
   void down(double x,double y,bool dbl){layout();SetFocus(window);
     auto hit=[&](mockup::Rect r){return r.contains(x,y);};
     if(license::activationRequired&&!license::status().empty()&&hit({450,88,220,25})){activationDialog();return;}
@@ -572,6 +579,7 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
       case WM_APP+71:for(int stage:{0,2,3,4,mockup::inputOptionsBackground})if(!e->moduleImages[stage]||e->moduleImages[stage]->GetLastStatus()!=Gdiplus::Ok)return 0;return e->rackCables&&e->rackCables->GetLastStatus()==Gdiplus::Ok&&e->rackLogo&&e->rackLogo->GetLastStatus()==Gdiplus::Ok&&e->rackBackplate&&e->rackAtlas&&e->rackBackplate->GetLastStatus()==Gdiplus::Ok&&e->rackAtlas->GetLastStatus()==Gdiplus::Ok;
       case WM_ERASEBKGND:return 1;
       case WM_TIMER:{
+        e->flushHostEdits();
         if(!IsWindowVisible(hwnd)||IsIconic(GetAncestor(hwnd,GA_ROOT)))return 0;
         const double now=EditorRefresh::now();
         if(e->refresh.interactionDue(now))InvalidateRect(hwnd,nullptr,FALSE);

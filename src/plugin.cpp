@@ -104,6 +104,8 @@ class Processor final : public AudioEffect {
   qg::MasterFx master_;
   std::array<double, kCount> p_{};
   int waveCountdown_=0,meterCountdown_=0;
+  std::array<double,kCount> lastTelemetry_{};
+  bool telemetrySinkAvailable_=false;
   int64_t meterSamples_=0;
   double meterSquareL_=0.,meterSquareR_=0.,meterPeak_=0.;
   double rate_ = 44100., tempo_ = 120., fallbackBeat_ = 0.;
@@ -182,7 +184,7 @@ public:
 #if defined(GRAINS_TRIAL) && GRAINS_TRIAL
       aztec::license::firstOpen(); // Host lifecycle thread, never process().
 #endif
-      engine_.prepare(rate_);declick_.prepare(rate_,p_[kInputDeclick]>=.5);master_.prepare(rate_); fallbackBeat_=0.;waveCountdown_=meterCountdown_=0;meterSamples_=0;meterSquareL_=meterSquareR_=meterPeak_=0.; }
+      lastTelemetry_.fill(-1.);engine_.prepare(rate_);declick_.prepare(rate_,p_[kInputDeclick]>=.5);master_.prepare(rate_); fallbackBeat_=0.;waveCountdown_=meterCountdown_=0;meterSamples_=0;meterSquareL_=meterSquareR_=meterPeak_=0.; }
     return AudioEffect::setActive(active);
   }
   // NOTE: Processor must NOT override setComponentState — AudioEffect does not
@@ -300,6 +302,8 @@ public:
     }
     aztec::modCell().packed.store(engine_.lastModPacked_.load(std::memory_order_relaxed),std::memory_order_relaxed);
 #ifndef GRAINS_DISABLE_HOST_TELEMETRY
+    if(data.outputParameterChanges&&!telemetrySinkAvailable_)lastTelemetry_.fill(-1.);
+    telemetrySinkAvailable_=data.outputParameterChanges!=nullptr;
     meterCountdown_=std::max(0,meterCountdown_-data.numSamples);
     meterSamples_+=data.numSamples;meterSquareL_+=squareL;meterSquareR_+=squareR;meterPeak_=std::max(meterPeak_,peak);
     if(meterCountdown_==0){
@@ -317,7 +321,13 @@ public:
     waveCountdown_=std::max(0,waveCountdown_-data.numSamples);
     if(data.outputParameterChanges&&data.numSamples>0&&waveCountdown_<=0){
       waveCountdown_=std::max(1,int(rate_/10.));auto wave=engine_.grainView();
-      auto emit=[&](int id,double v){int32 index=0;auto* q=data.outputParameterChanges->addParameterData(ParamID(id),index);if(q)q->addPoint(data.numSamples-1,v,index);};
+      auto emit=[&](int id,double v){
+        // Avoid notifying the host about hundreds of unchanged hidden values.
+        // Retain the legacy first bin as a refresh heartbeat for the editor.
+        if(id!=kUiWave0&&lastTelemetry_[id]==v)return;
+        int32 index=0;auto* q=data.outputParameterChanges->addParameterData(ParamID(id),index);
+        if(q&&q->addPoint(data.numSamples-1,v,index)==kResultOk)lastTelemetry_[id]=v;
+      };
       emit(kUiRndEnvelope,engine_.rndEnvelope());
       emit(kUiModulationActive,!s.bypass&&licenseGain_>0.?1.:0.);
       for(int i=0;i<qg::lfoCount;++i)emit(modParam(kUiLfoValue0,i),(engine_.lfoOutput(i)+1.)*.5);

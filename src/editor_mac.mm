@@ -1,6 +1,7 @@
 #import <Cocoa/Cocoa.h>
 #include "editor.h"
 #include "editor_refresh.h"
+#include "host_edit_queue.h"
 #include "license.h"
 #include "value_entry.h"
 // Header order matters: every non-aztec dependency (qg DSP helpers in
@@ -39,6 +40,7 @@ class Editor final:public CPluginView {
   EditController* controller_;
   std::shared_ptr<EditorState> editorState_;
   __strong GrainsSurface* surface_=nil;
+  HostEditQueue hostEdits_;
 public:
   explicit Editor(EditController* c,std::shared_ptr<EditorState> state);
   void rememberPresetName(NSString* name){editorState_->presetName=name.UTF8String?name.UTF8String:"";}
@@ -53,7 +55,13 @@ public:
   ParameterInfo info(ParamID id) const {auto* p=controller_->getParameterObject(id);return p?p->getInfo():ParameterInfo{};}
   NSString* display(ParamID id,double value,bool units=true) const;
   void begin(ParamID id) {controller_->beginEdit(id);}
-  void end(ParamID id) {controller_->endEdit(id);}
+  void flushHostEdits(bool force=false){hostEdits_.flush(EditorRefresh::now(),[&](uint32_t id,double v){controller_->performEdit(id,v);},force);}
+  void end(ParamID id) {flushHostEdits(true);hostEdits_.clear();controller_->endEdit(id);}
+  void dragChange(ParamID id,double v){
+    v=std::clamp(v,0.,1.);int n=info(id).stepCount;if(n>0)v=std::round(v*n)/n;
+    if(value(id)==v)return;
+    controller_->setParamNormalized(id,v);hostEdits_.queue(id,v);flushHostEdits();
+  }
   void change(ParamID id,double v) {
     v=std::clamp(v,0.,1.);int n=info(id).stepCount;if(n>0)v=std::round(v*n)/n;
     // Momentary triggers (RANDOM ALL): pulse the value locally so the button
@@ -350,7 +358,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   dragID=dragSlot=dropSlot=-1;dragXY=false;[timer invalidate];timer=nil;
 }
 - (void)tick:(NSTimer*)tick {
-  (void)tick;if(!owner||self.hiddenOrHasHiddenAncestor||!self.window||!(self.window.occlusionState&NSWindowOcclusionStateVisible))return;
+  (void)tick;if(owner)owner->flushHostEdits();if(!owner||self.hiddenOrHasHiddenAncestor||!self.window||!(self.window.occlusionState&NSWindowOcclusionStateVisible))return;
   const double now=aztec::EditorRefresh::now();
   if(refresh.interactionDue(now))[self setNeedsDisplay:YES];
   if(dragID>=0||dragXY)return;
@@ -736,11 +744,11 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   if(!owner)return;NSPoint p=[self logical:event];
   if(dragScroll){auto bar=aztec::mockup::scrollbar(),thumb=aztec::mockup::scrollThumb(rackState);[self setPageScroll:scrollOrigin+(p.y-origin.y)*aztec::mockup::maxScroll(rackState)/std::max(1.,bar.h-thumb.h)];return;}
   if(dragSlot>=0){routePointer=p;if(std::hypot(p.x-origin.x,p.y-origin.y)>8)routeMoved=true;if(routeMoved)dropSlot=aztec::mockup::routeInsertion(p.x,p.y,[&](aztec::ParamID id){return owner->value(id);},rackState);[self setNeedsDisplay:YES];return;}
-  if(dragXY){auto xy=rackState.position(aztec::mockup::xy);auto v=aztec::mockup::xyValue(xy,p.x,p.y);owner->change(aztec::kXYX,v.first);owner->change(aztec::kXYY,v.second);refresh.request();if(refresh.interactionDue(aztec::EditorRefresh::now()))[self setNeedsDisplay:YES];return;}
+  if(dragXY){auto xy=rackState.position(aztec::mockup::xy);auto v=aztec::mockup::xyValue(xy,p.x,p.y);owner->dragChange(aztec::kXYX,v.first);owner->dragChange(aztec::kXYY,v.second);refresh.request();if(refresh.interactionDue(aztec::EditorRefresh::now()))[self setNeedsDisplay:YES];return;}
   if(dragID<0)return;double delta=(dragKind==aztec::Slider||dragKind==aztec::Pan)?(p.x-origin.x)/dragRect.size.width:(origin.y-p.y)/(dragKind==aztec::VSlider?std::max(1.,dragRect.size.height-42):180.);
   if(event.modifierFlags&NSEventModifierFlagShift)delta*=.1;
   starting=std::clamp(starting+delta,0.,1.);origin=p;
-  owner->change(aztec::ParamID(dragID),starting);refresh.request();if(refresh.interactionDue(aztec::EditorRefresh::now()))[self setNeedsDisplay:YES];
+  owner->dragChange(aztec::ParamID(dragID),starting);refresh.request();if(refresh.interactionDue(aztec::EditorRefresh::now()))[self setNeedsDisplay:YES];
 }
 - (void)mouseUp:(NSEvent*)event {
   (void)event;if(!owner)return;

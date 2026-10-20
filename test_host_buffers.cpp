@@ -87,6 +87,7 @@ int main(){
   input.channelBuffers32=ins;outA.channelBuffers32=ao;outB.channelBuffers32=bo;
   ParameterChanges monitor(kCount);ProcessData data{};data.symbolicSampleSize=kSample32;data.numSamples=block;data.numInputs=data.numOutputs=1;data.inputs=&input;
   double windowSquare=0.,windowPeak=0.;int windowSamples=0;
+  std::array<double,kCount> lastTelemetry;lastTelemetry.fill(-1.);
   int batches=0,meterBatches=0;for(int sample=0;sample<int(rate);sample+=block){
    monitor.clearQueue();data.outputs=&outA;data.outputParameterChanges=&monitor;assert(a->process(data)==kResultOk);
    for(int i=0;i<block;++i){windowSquare+=double(aL[i])*aL[i];windowPeak=std::max({windowPeak,std::abs(double(aL[i])),std::abs(double(aR[i]))});}windowSamples+=block;
@@ -95,6 +96,10 @@ int main(){
     if(q->getParameterId()==kUiOutputL){assert(q->getPoint(0,offset,v)==kResultOk);assert(std::abs(v-std::clamp(std::sqrt(windowSquare/windowSamples),0.,1.))<1e-12);metered=true;}
     if(q->getParameterId()==kUiStep+3){assert(q->getPoint(0,offset,v)==kResultOk);assert(v==std::clamp(windowPeak,0.,1.));}
     if(q->getParameterId()==kUiWave0)++batches;
+    auto id=q->getParameterId();
+    bool meter=id==kUiOutputL||id==kUiOutputR||id==kUiReverb||(id>=kUiStep&&id<kUiStep+4);
+    if(!meter&&id!=kUiWave0){assert(q->getPoint(0,offset,v)==kResultOk);assert(v!=lastTelemetry[id]);lastTelemetry[id]=v;}
+
    }
    if(metered){windowSquare=windowPeak=0.;windowSamples=0;}
    for(int i=0;i<monitor.getParameterCount();++i)if(monitor.getParameterData(i)->getParameterId()==kUiOutputL)++meterBatches;
