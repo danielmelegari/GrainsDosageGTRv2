@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(GrainsDosage VERSION 0.13.15 LANGUAGES CXX)
+project(GrainsDosage VERSION 0.13.16 LANGUAGES CXX)
 # Keep the visible GUI version aligned with the built plugin metadata.
 add_compile_definitions(GRAINS_PLUGIN_VERSION="${PROJECT_VERSION}")
 set(GRAINS_EDITION "development" CACHE STRING "development, trial, licensed, or unlocked")
@@ -371,7 +371,7 @@ if(GRAINS_BUILD_TESTS)
   endif()
   add_executable(grains_export_presets tools/export_factory_presets.cpp)
   set_target_properties(grains_export_presets PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/preset-bank/$<CONFIG>")
-  foreach(suite editor_refresh capture_snapshot host_buffers rnd_regressions random_trigger audio_quality wave_library modulation_display module_preset reslice_destinations audio_float_mode module_loop input_options reslice_controls reslice_dsg bank_collection modwave_rate buffer_memory engine modulation features rhythm random master upgrade gater declick expansion state glitch_trigger musical gui_layout knob_rotation routing_polarity ui_motion preset_bank trial)
+  foreach(suite display_transport editor_refresh capture_snapshot host_buffers rnd_regressions random_trigger audio_quality wave_library modulation_display module_preset reslice_destinations audio_float_mode module_loop input_options reslice_controls reslice_dsg bank_collection modwave_rate buffer_memory engine modulation features rhythm random master upgrade gater declick expansion state glitch_trigger musical gui_layout knob_rotation routing_polarity ui_motion preset_bank trial)
     add_executable(grains_test_${suite} test_${suite}.cpp)
     target_include_directories(grains_test_${suite} PRIVATE "${VST3_SDK_ROOT}")
     if(MSVC)
@@ -381,12 +381,17 @@ if(GRAINS_BUILD_TESTS)
     endif()
     # parameters.h uses Steinberg::Vst::ParamID only when built against the SDK;
     # standalone DSP tests get a binary-identical uint32 fallback instead.
-    if(suite STREQUAL "state" OR suite STREQUAL "host_buffers")
+    if(suite STREQUAL "state" OR suite STREQUAL "host_buffers" OR suite STREQUAL "display_transport")
       target_compile_definitions(grains_test_${suite} PRIVATE GRAINS_HAVE_VST3_SDK)
       target_sources(grains_test_${suite} PRIVATE
         "${VST3_SDK_ROOT}/public.sdk/source/common/memorystream.cpp"
         "${VST3_SDK_ROOT}/public.sdk/source/vst/hosting/parameterchanges.cpp")
       target_link_libraries(grains_test_${suite} PRIVATE sdk)
+      if(suite STREQUAL "display_transport")
+        target_sources(grains_test_${suite} PRIVATE
+          "${VST3_SDK_ROOT}/public.sdk/source/vst/hosting/hostclasses.cpp"
+          "${VST3_SDK_ROOT}/public.sdk/source/vst/hosting/pluginterfacesupport.cpp")
+      endif()
       # test_state includes plugin.cpp, whose controller references createEditor.
       # Link the real platform editor and its frameworks, just as for the plugin.
       if(APPLE)

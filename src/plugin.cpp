@@ -12,6 +12,7 @@
 #include "public.sdk/source/vst/vstaudioeffect.h"
 #include "public.sdk/source/vst/vsteditcontroller.h"
 #include "base/source/fstreamer.h"
+#include "base/source/timer.h"
 #include "pluginterfaces/base/ustring.h"
 #include "pluginterfaces/vst/ivstparameterchanges.h"
 #include "public.sdk/source/vst/vstparameters.h"
@@ -106,6 +107,11 @@ class Processor final : public AudioEffect {
   int waveCountdown_=0,meterCountdown_=0;
   std::array<double,kCount> lastTelemetry_{};
   bool telemetrySinkAvailable_=false;
+  // Per-instance latest display values. Only lock-free stores run on the audio
+  // thread; VST3 message allocation/delivery happens on the controller timer.
+  static_assert(std::atomic<double>::is_always_lock_free,"Display transport must be lock-free");
+  std::array<std::atomic<double>,kCount> monitorValues_{};
+  std::atomic<bool> messageMonitoring_{false},resetMonitorCache_{false},monitorRequested_{false};
   int64_t meterSamples_=0;
   double meterSquareL_=0.,meterSquareR_=0.,meterPeak_=0.;
   double rate_ = 44100., tempo_ = 120., fallbackBeat_ = 0.;
@@ -131,10 +137,28 @@ class Processor final : public AudioEffect {
 public:
   Processor() {
     setControllerClass(controllerID);
-    p_=defaults();
+    p_=defaults();for(int id=0;id<kCount;++id)monitorValues_[id].store(p_[id],std::memory_order_relaxed);
     processContextRequirements.needTempo().needProjectTimeMusic().needTransportState().needTimeSignature();
   }
   static FUnknown* create(void*) { return static_cast<IAudioProcessor*>(new Processor); }
+  tresult PLUGIN_API notify(IMessage* message) override {
+    if(!message||!message->getMessageID())return kInvalidArgument;
+    if(std::strcmp(message->getMessageID(),"GrainsDosage.Display.Request.v1")!=0)return AudioEffect::notify(message);
+    if(!getPeer())return kResultFalse;
+    monitorRequested_.store(true,std::memory_order_release);
+    auto reply=owned(allocateMessage());if(!reply)return kResultFalse;
+    std::array<double,kCount> snapshot{};
+    for(int id=0;id<kCount;++id)snapshot[id]=monitorValues_[id].load(std::memory_order_relaxed);
+    reply->setMessageID("GrainsDosage.Display.Values.v1");
+    if(!reply->getAttributes()||reply->getAttributes()->setBinary("values",snapshot.data(),uint32(sizeof(snapshot)))!=kResultOk)return kResultFalse;
+    auto result=sendMessage(reply);
+    if(result==kResultOk)messageMonitoring_.store(true,std::memory_order_release);
+    return result;
+  }
+  tresult PLUGIN_API disconnect(IConnectionPoint* other) override {
+    messageMonitoring_.store(false,std::memory_order_release);resetMonitorCache_.store(true,std::memory_order_release);
+    return AudioEffect::disconnect(other);
+  }
   tresult PLUGIN_API initialize(FUnknown* c) override {
     if(AudioEffect::initialize(c) != kResultOk) return kResultFalse;
     aztec::license::initialize();
@@ -302,31 +326,38 @@ public:
     }
     aztec::modCell().packed.store(engine_.lastModPacked_.load(std::memory_order_relaxed),std::memory_order_relaxed);
 #ifndef GRAINS_DISABLE_HOST_TELEMETRY
-    if(data.outputParameterChanges&&!telemetrySinkAvailable_)lastTelemetry_.fill(-1.);
+    if(resetMonitorCache_.exchange(false,std::memory_order_acq_rel)||(data.outputParameterChanges&&!telemetrySinkAvailable_))lastTelemetry_.fill(-1.);
     telemetrySinkAvailable_=data.outputParameterChanges!=nullptr;
+    const bool privateDisplay=messageMonitoring_.load(std::memory_order_acquire);
+    auto publish=[&](int id,double v){
+      monitorValues_[id].store(v,std::memory_order_relaxed);
+      if(privateDisplay||!data.outputParameterChanges)return true;
+      int32 index=0;auto* queue=data.outputParameterChanges->addParameterData(ParamID(id),index);
+      return queue&&queue->addPoint(data.numSamples-1,v,index)==kResultOk;
+    };
     meterCountdown_=std::max(0,meterCountdown_-data.numSamples);
     meterSamples_+=data.numSamples;meterSquareL_+=squareL;meterSquareR_+=squareR;meterPeak_=std::max(meterPeak_,peak);
     if(meterCountdown_==0){
-      if(data.outputParameterChanges){
-        for(int ch=0;ch<2;++ch){int32 index=0;auto* q=data.outputParameterChanges->addParameterData(ParamID(kUiOutputL+ch),index);if(q)q->addPoint(data.numSamples-1,std::clamp(std::sqrt((ch?meterSquareR_:meterSquareL_)/meterSamples_),0.,1.),index);}
+      if(privateDisplay||data.outputParameterChanges){
+        for(int ch=0;ch<2;++ch)publish(kUiOutputL+ch,std::clamp(std::sqrt((ch?meterSquareR_:meterSquareL_)/meterSamples_),0.,1.));
         const double beat=fallbackBeat_+(data.numSamples-1)*beatIncrement;
         const int step=int((int64_t(std::floor(beat/.25))%16+16)%16);
         const double meters[]={step/15.,(!s.bypass&&engine_.glitchRunning())?1.:0.,(!s.bypass&&engine_.repeatRunning())?1.:0.,std::clamp(meterPeak_,0.,1.),double((int64_t(std::floor(beat/s.reverbGrid))%16+16)%16)/15.};
-        for(int i=0;i<5;++i){int32 index=0;auto id=ParamID(i==4?kUiReverb:kUiStep+i);auto* q=data.outputParameterChanges->addParameterData(id,index);if(q)q->addPoint(data.numSamples-1,meters[i],index);}
+        for(int i=0;i<5;++i)publish(i==4?kUiReverb:kUiStep+i,meters[i]);
       }
       meterCountdown_=std::max(1,int(rate_/30.));
       meterSamples_=0;meterSquareL_=meterSquareR_=meterPeak_=0.;
     }
     // Stay bounded even if the host never provides a monitor sink.
     waveCountdown_=std::max(0,waveCountdown_-data.numSamples);
-    if(data.outputParameterChanges&&data.numSamples>0&&waveCountdown_<=0){
+    if((privateDisplay?monitorRequested_.load(std::memory_order_acquire):data.outputParameterChanges!=nullptr)&&data.numSamples>0&&waveCountdown_<=0){
+      monitorRequested_.store(false,std::memory_order_relaxed);
       waveCountdown_=std::max(1,int(rate_/10.));auto wave=engine_.grainView();
       auto emit=[&](int id,double v){
         // Avoid notifying the host about hundreds of unchanged hidden values.
         // Retain the legacy first bin as a refresh heartbeat for the editor.
         if(id!=kUiWave0&&lastTelemetry_[id]==v)return;
-        int32 index=0;auto* q=data.outputParameterChanges->addParameterData(ParamID(id),index);
-        if(q&&q->addPoint(data.numSamples-1,v,index)==kResultOk)lastTelemetry_[id]=v;
+        if(publish(id,v))lastTelemetry_[id]=v;
       };
       emit(kUiRndEnvelope,engine_.rndEnvelope());
       emit(kUiModulationActive,!s.bypass&&licenseGain_>0.?1.:0.);
@@ -346,9 +377,29 @@ public:
   ParamValue toPlain(ParamValue v)const override{return 20.*std::pow(1000.,v);}
   ParamValue toNormalized(ParamValue v)const override{return std::log(std::clamp(v,20.,20000.)/20.)/std::log(1000.);}
 };
-class Controller final : public EditController {
+class Controller final : public EditController, public ITimerCallback {
+  Timer* displayTimer_=nullptr;
+  void stopDisplayTimer(){if(displayTimer_){displayTimer_->stop();displayTimer_->release();displayTimer_=nullptr;}}
   std::shared_ptr<aztec::EditorState> editorState_=std::make_shared<aztec::EditorState>();
 public:
+  ~Controller() override {stopDisplayTimer();}
+  tresult PLUGIN_API terminate() override {stopDisplayTimer();return EditController::terminate();}
+  void onTimer(Timer*) override {
+    // No display traffic when every editor window has been destroyed.
+    if(editorState_.use_count()<=1||!getPeer())return;
+    sendMessageID("GrainsDosage.Display.Request.v1");
+  }
+  tresult PLUGIN_API notify(IMessage* message) override {
+    if(!message||!message->getMessageID())return kInvalidArgument;
+    if(std::strcmp(message->getMessageID(),"GrainsDosage.Display.Values.v1")!=0)return EditController::notify(message);
+    const void* bytes=nullptr;uint32 size=0;
+    if(!message->getAttributes()||message->getAttributes()->getBinary("values",bytes,size)!=kResultOk||!bytes||size!=sizeof(std::array<double,kCount>))return kInvalidArgument;
+    std::array<double,kCount> snapshot;std::memcpy(snapshot.data(),bytes,size);
+    for(int id=0;id<kCount;++id)if(isMonitor(id)&&id!=kUiTab&&std::isfinite(snapshot[id]))
+      if(auto* param=getParameterObject(ParamID(id)))param->setNormalized(std::clamp(snapshot[id],0.,1.));
+    // Display-only updates: never performEdit/restartComponent/setDirty here.
+    return kResultOk;
+  }
   std::shared_ptr<aztec::EditorState> editorState()const{return editorState_;}
   static FUnknown* create(void*) { return static_cast<IEditController*>(new Controller); }
   tresult PLUGIN_API initialize(FUnknown* c) override {
@@ -640,7 +691,10 @@ public:
   }
   IPlugView* PLUGIN_API createView(FIDString name) override {
 #if defined(__APPLE__) || defined(_WIN32)
-    if(name && std::strcmp(name,ViewType::kEditor)==0) return aztec::createEditor(this,editorState_);
+    if(name && std::strcmp(name,ViewType::kEditor)==0){
+      if(!displayTimer_)displayTimer_=Timer::create(this,67);
+      return aztec::createEditor(this,editorState_);
+    }
 #endif
     return nullptr;
   }
