@@ -96,6 +96,33 @@ void consumedAutomation(){
  assert(changes.queue.checks<=3);
  p->setActive(false);p->terminate();
 }
+// Compare mixed queues in one block with the same events split across blocks.
+// An early-exhausted queue must not discard or move another queue's later points.
+std::vector<float> automatedRender(int block){
+ auto p=std::make_unique<Processor>();assert(p->initialize(nullptr)==kResultOk);
+ ProcessSetup setup{};setup.sampleRate=48000;setup.maxSamplesPerBlock=128;setup.symbolicSampleSize=kSample32;
+ assert(p->setupProcessing(setup)==kResultOk);assert(p->setActive(true)==kResultOk);
+ struct Event{int sample;ParamID id;double value;};
+ const Event events[]={{0,kMix,.8},{0,kPitch,.5},{17,kMix,.2},{32,kFreeze,1.},{64,kPitch,.6},{65,kFreeze,0.},{127,kMix,.9}};
+ std::vector<float> result(1024),left(128),right(128),outR(128);
+ float* ins[]={left.data(),right.data()};float* outs[]={nullptr,outR.data()};
+ AudioBusBuffers in{},out{};in.numChannels=out.numChannels=2;in.channelBuffers32=ins;out.channelBuffers32=outs;
+ ProcessData data{};data.symbolicSampleSize=kSample32;data.numSamples=block;data.numInputs=data.numOutputs=1;data.inputs=&in;data.outputs=&out;
+ ParameterChanges changes(3);data.inputParameterChanges=&changes;
+ for(int start=0;start<int(result.size());start+=block){
+  changes.clearQueue();int32 index=0;
+  for(auto e:events)if(e.sample>=start&&e.sample<start+block)changes.addParameterData(e.id,index)->addPoint(e.sample-start,e.value,index);
+  for(int i=0;i<block;++i){left[i]=float(.2*std::sin((start+i)*.037));right[i]=float(.15*std::cos((start+i)*.053));}
+  outs[0]=result.data()+start;assert(p->process(data)==kResultOk);
+ }
+ p->setActive(false);p->terminate();return result;
+}
+void automationTiming(){
+ const auto whole=automatedRender(128),split=automatedRender(16);
+ double maximum=0.;for(size_t i=0;i<whole.size();++i)maximum=std::max(maximum,std::abs(double(whole[i])-split[i]));
+ std::cerr<<"Mixed-queue automation block-size difference: "<<maximum<<"\n";assert(maximum<1e-6);
+}
+
 void transportTransitions(){
  aztec::HostTransport clock;double beat=0.;constexpr double inc=1./24000.;
  assert(!clock.update(beat,0.,true,true,128,inc));beat+=128*inc;
@@ -138,7 +165,7 @@ void stoppedTransport(){
 }
 
 int main(){
- consumedAutomation();transportTransitions();stoppedTransport();
+ consumedAutomation();automationTiming();transportTransitions();stoppedTransport();
  randomizeBlock();
  buffers<float>(kSample32);buffers<double>(kSample64);
  // At each host block size/rate, monitoring must leave audio bit-identical
