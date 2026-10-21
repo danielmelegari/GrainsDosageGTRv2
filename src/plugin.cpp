@@ -1,5 +1,6 @@
 #include "engine.h"
 #include "audio_float_mode.h"
+#include "host_transport.h"
 #include "license.h"
 #include "parameter_settings.h"
 #include "declick.h"
@@ -115,6 +116,7 @@ class Processor final : public AudioEffect {
   int64_t meterSamples_=0;
   double meterSquareL_=0.,meterSquareR_=0.,meterPeak_=0.;
   double rate_ = 44100., tempo_ = 120., fallbackBeat_ = 0.;
+  aztec::HostTransport transport_;
   // The parameter array covers every legacy + monitor ID; the VST parameter list stops before the new UI controls.
   bool freezePending_ = false; // queued FREEZE toggle (from editor click or automation): consumed by the next process() call
   uint32_t randomSeed_ = 0x9E3779B9u; // xorshift seed for RANDOM ALL one-shots
@@ -208,7 +210,7 @@ public:
 #if defined(GRAINS_TRIAL) && GRAINS_TRIAL
       aztec::license::firstOpen(); // Host lifecycle thread, never process().
 #endif
-      lastTelemetry_.fill(-1.);engine_.prepare(rate_);declick_.prepare(rate_,p_[kInputDeclick]>=.5);master_.prepare(rate_); fallbackBeat_=0.;waveCountdown_=meterCountdown_=0;meterSamples_=0;meterSquareL_=meterSquareR_=meterPeak_=0.; }
+      lastTelemetry_.fill(-1.);engine_.prepare(rate_);declick_.prepare(rate_,p_[kInputDeclick]>=.5);master_.prepare(rate_); fallbackBeat_=0.;transport_.reset();waveCountdown_=meterCountdown_=0;meterSamples_=0;meterSquareL_=meterSquareR_=meterPeak_=0.; }
     return AudioEffect::setActive(active);
   }
   // NOTE: Processor must NOT override setComponentState — AudioEffect does not
@@ -228,10 +230,10 @@ public:
       }
     }
     auto applyChanges = [&](int32 sample) {
-      bool changed=false;
+      bool changed=false;int remaining=0;
       for(int qi=0;qi<queueCount;++qi) {int id=queueIDs[qi];
-        auto* q=queues[id]; int32 offset=0; ParamValue v=0.;
-        while(cursors[id]<q->getPointCount() && q->getPoint(cursors[id],offset,v)==kResultOk && offset<=sample) {
+        auto* q=queues[id];const int32 points=q->getPointCount();int32 offset=0; ParamValue v=0.;
+        while(cursors[id]<points && q->getPoint(cursors[id],offset,v)==kResultOk && offset<=sample) {
           if(std::isfinite(v)) {
             // FREEZE / RANDOM ALL arrive as momentary triggers (>= .5): consume
             // them here instead of storing, so p_ only ever holds 0 for those ids.
@@ -241,18 +243,20 @@ public:
           }
           ++cursors[id];
         }
+        // Retain only queues with future points; presets commonly deliver
+        // hundreds of offset-zero events, which must not be rescanned per sample.
+        if(cursors[id]<points)queueIDs[remaining++]=id;
       }
+      queueCount=remaining;
       return changed;
     };
     applyChanges(0);
     if(data.processContext) {
       if(data.processContext->state & ProcessContext::kTempoValid) tempo_ = std::isfinite(data.processContext->tempo) ? std::clamp(data.processContext->tempo,20.,400.) : 120.;
-      if((data.processContext->state & ProcessContext::kProjectTimeMusicValid) && std::isfinite(data.processContext->projectTimeMusic)) {
-        const double beat=data.processContext->projectTimeMusic;
-        if(std::abs(beat-fallbackBeat_)>2.*tempo_/(60.*rate_)) engine_.resetTransport();
-        fallbackBeat_=beat;
-      }
     }
+    const bool playing=!data.processContext||(data.processContext->state&ProcessContext::kPlaying);
+    const bool positionValid=data.processContext&&(data.processContext->state&ProcessContext::kProjectTimeMusicValid)&&std::isfinite(data.processContext->projectTimeMusic);
+    if(transport_.update(fallbackBeat_,positionValid?data.processContext->projectTimeMusic:0.,positionValid,playing,data.numSamples,tempo_/(60.*rate_)))engine_.resetTransport();
     // Hosts may flush automation without audio during scanning or activation.
     if(data.numSamples <= 0) return kResultOk;
     if(data.numInputs < 1 || data.numOutputs < 1) return kResultOk;

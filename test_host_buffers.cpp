@@ -71,7 +71,74 @@ void randomizeBlock(){
  for(auto* p:{a.get(),b.get()}){p->setActive(false);p->terminate();}
 }
 
+class CountedQueue final:public ParameterValueQueue {
+public:
+ int checks=0;
+ CountedQueue():ParameterValueQueue(kMix){}
+ int32 PLUGIN_API getPointCount()override{++checks;return ParameterValueQueue::getPointCount();}
+};
+class CountedChanges final:public ParameterChanges {
+public:
+ CountedQueue queue;
+ int32 PLUGIN_API getParameterCount()override{return 1;}
+ IParamValueQueue* PLUGIN_API getParameterData(int32 i)override{return i==0?&queue:nullptr;}
+};
+void consumedAutomation(){
+ auto p=std::make_unique<Processor>();assert(p->initialize(nullptr)==kResultOk);
+ ProcessSetup setup{};setup.sampleRate=48000;setup.maxSamplesPerBlock=2048;setup.symbolicSampleSize=kSample32;
+ assert(p->setupProcessing(setup)==kResultOk);assert(p->setActive(true)==kResultOk);
+ float l[2048]{},r[2048]{};float* channels[]={l,r};AudioBusBuffers bus{};bus.numChannels=2;bus.channelBuffers32=channels;
+ CountedChanges changes;int32 index=0;changes.queue.addPoint(0,.3,index);
+ ProcessData data{};data.symbolicSampleSize=kSample32;data.numSamples=2048;data.numInputs=data.numOutputs=1;
+ data.inputs=data.outputs=&bus;data.inputParameterChanges=&changes;
+ assert(p->process(data)==kResultOk);
+ std::cerr<<"Point-count calls for one consumed automation event: "<<changes.queue.checks<<"\n";
+ assert(changes.queue.checks<=3);
+ p->setActive(false);p->terminate();
+}
+void transportTransitions(){
+ aztec::HostTransport clock;double beat=0.;constexpr double inc=1./24000.;
+ assert(!clock.update(beat,0.,true,true,128,inc));beat+=128*inc;
+ assert(!clock.update(beat,128*inc,true,true,128,inc));beat+=128*inc;
+ assert(clock.update(beat,8.,true,true,128,inc)); // seek
+ beat+=128*inc;assert(clock.update(beat,0.,true,true,128,inc)); // loop wrap
+ beat+=128*inc;assert(clock.update(beat,beat,true,false,128,inc)); // stop once
+ double stopped=beat;beat+=128*inc;
+ assert(!clock.update(beat,stopped,true,false,128,inc));assert(beat>stopped);
+ assert(!clock.update(beat,99.,true,true,0,inc)); // flush is not a seek
+ assert(clock.update(beat,stopped,true,true,128,inc));assert(beat==stopped); // resume
+ beat+=128*inc;assert(!clock.update(beat,0.,false,true,128,inc)); // missing context
+ clock.reset();beat=0.;assert(!clock.update(beat,0.,true,false,128,inc));
+}
+
+// A stopped host's fixed playhead must not reset active effects each block.
+// Rendering the same live input in different block sizes must agree.
+std::vector<float> stoppedRender(int block){
+ auto p=std::make_unique<Processor>();assert(p->initialize(nullptr)==kResultOk);
+ ProcessSetup setup{};setup.sampleRate=48000;setup.maxSamplesPerBlock=512;setup.symbolicSampleSize=kSample32;
+ assert(p->setupProcessing(setup)==kResultOk);assert(p->setActive(true)==kResultOk);
+ ProcessContext context{};context.state=ProcessContext::kProjectTimeMusicValid|ProcessContext::kTempoValid;
+ context.projectTimeMusic=8.;context.tempo=120.;
+ std::vector<float> result(16384),right(512),left(512),outR(512);
+ float* ins[]={left.data(),right.data()};float* outs[]={nullptr,outR.data()};
+ AudioBusBuffers in{},out{};in.numChannels=out.numChannels=2;in.channelBuffers32=ins;out.channelBuffers32=outs;
+ ProcessData data{};data.symbolicSampleSize=kSample32;data.numSamples=block;data.numInputs=data.numOutputs=1;
+ data.inputs=&in;data.outputs=&out;data.processContext=&context;
+ for(int start=0;start<int(result.size());start+=block){
+  for(int i=0;i<block;++i){left[i]=float(.2*std::sin((start+i)*.037));right[i]=float(.15*std::cos((start+i)*.053));}
+  outs[0]=result.data()+start;assert(p->process(data)==kResultOk);
+ }
+ p->setActive(false);p->terminate();return result;
+}
+void stoppedTransport(){
+ auto small=stoppedRender(128),large=stoppedRender(512);
+ double maximum=0.;for(size_t i=0;i<small.size();++i)maximum=std::max(maximum,std::abs(double(small[i])-large[i]));
+ std::cerr<<"Stopped transport block-size audio difference: "<<maximum<<"\n";
+ assert(maximum<1e-6);
+}
+
 int main(){
+ consumedAutomation();transportTransitions();stoppedTransport();
  randomizeBlock();
  buffers<float>(kSample32);buffers<double>(kSample64);
  // At each host block size/rate, monitoring must leave audio bit-identical

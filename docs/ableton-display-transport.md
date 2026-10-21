@@ -35,3 +35,26 @@ Ableton Live test. Successful native builds and SDK validation do not by themsel
 prove that a particular installed Live version is responsive. The reported
 Ableton-only stall is the motivation; the exact behavior in Live remains a host
 verification item.
+
+## Follow-up audit: 0.13.17
+
+Two independently reproduced processor defects were corrected:
+
+- A stopped host reporting a constant musical position triggered a transport
+  reset every audio block. The host timeline is now tracked separately from the
+  free-running live-input clock. Seeks, loop wraps and stop/resume transitions
+  still reset once; zero-sample automation flushes do not change that tracking.
+  Before the fix, identical stopped live input rendered with 128 versus 512
+  frames differed by a maximum of 0.143414 (normalized sample amplitude). After
+  the fix the difference is zero in the regression test.
+- Exhausted automation queues were scanned on every remaining sample. They are
+  now removed from the active list while future events keep their sample offsets.
+  For one offset-zero event in a 2048-frame block, getPointCount calls fell from
+  2049 to 1. This measures removed queue work, not total CPU improvement.
+
+Both regressions failed against the preceding implementation before their fixes.
+The wrapper tests also cover seeks, looping, stopping, resuming, missing context,
+automation-only flushes, and multiple automation events within a block.
+
+Neither finding establishes the cause of the reported one-second Ableton UI
+stall. That host-specific symptom has not been reproduced in this environment.
