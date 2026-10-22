@@ -698,7 +698,6 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   int st=-1,step=mockup::hitStep(p.x,p.y,value,rackState,st);if(step>=0){
     ParamID id=st==2?kRepeatStep0+step:st==3?kResliceStep0+step:kGaterState0+step;
     if(event.modifierFlags&NSEventModifierFlagShift){owner->edit(id,owner->info(id).defaultNormalizedValue);[self setNeedsDisplay:YES];return;}
-    if(event.clickCount>=2){[self editValue:id];return;}
     if(st==2){selectedRepeat=step;if(event.clickCount>=2)owner->edit(kRepeatStep0+step,value(kRepeatStep0+step)>.5?0.:1.);}
     if(st==3){selectedReslice=step;if(event.clickCount>=2)owner->edit(kResliceStep0+step,value(kResliceStep0+step)>.5?0.:1.);}
     if(st==4){selectedGate=step;if(event.modifierFlags&NSEventModifierFlagOption){double v=value(kGaterRelease0+step)>.5?0.:1.;owner->edit(kGaterRelease0+step,v);if(v>.5)owner->edit(kGaterState0+step,0.);}else{owner->edit(kGaterRelease0+step,0.);owner->edit(kGaterState0+step,value(kGaterState0+step)>.25?0.:1.);}}
@@ -709,7 +708,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   for(const auto& c:controls)if((p.y>=mockup::bodyTop||c.id==kInputDeclick||c.id==kDeclickSensitivity)&&NSPointInRect(p,c.rect)){
     auto readout=mockup::valueRect({c.rect.origin.x,c.rect.origin.y,c.rect.size.width,c.rect.size.height},mockup::Kind(c.kind),c.id,c.label);
     if(event.modifierFlags&NSEventModifierFlagShift){owner->edit(c.id,owner->info(c.id).defaultNormalizedValue);[self setNeedsDisplay:YES];return;}
-    if(event.clickCount>=2){if(!readout.contains(p.x,p.y)&&(c.kind==aztec::Knob||c.kind==aztec::Slider||c.kind==aztec::VSlider||c.kind==aztec::Pan)){owner->edit(c.id,owner->info(c.id).defaultNormalizedValue);[self setNeedsDisplay:YES];}else [self editValue:c.id];return;}
+    if(event.clickCount>=2){if(!readout.contains(p.x,p.y)&&(c.kind==aztec::Knob||c.kind==aztec::Slider||c.kind==aztec::VSlider||c.kind==aztec::Pan)){owner->edit(c.id,owner->info(c.id).defaultNormalizedValue);[self setNeedsDisplay:YES];}else if(readout.contains(p.x,p.y)) [self editValue:c.id];return;}
     if(readout.contains(p.x,p.y))return;
     if(c.kind==aztec::PanMode)owner->edit(c.id,std::clamp(int((p.x-c.rect.origin.x)/(c.rect.size.width/3.)),0,2)/2.);
     else if(c.kind==aztec::Pad||c.kind==aztec::Toggle)owner->edit(c.id,owner->value(c.id)>=.5?0.:1.);
@@ -736,10 +735,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   alert.informativeText=@"Invalid value. Enter a value within the control's range, using its displayed units or option name.";
  }
 }
-- (void)rightMouseDown:(NSEvent*)event {
- if(!owner)return;[self layoutControls];auto p=[self logical:event];
- for(const auto& c:controls)if((p.y>=aztec::mockup::bodyTop||c.id==aztec::kInputDeclick||c.id==aztec::kDeclickSensitivity)&&NSPointInRect(p,c.rect)){[self editValue:c.id];return;}
-}
+- (void)rightMouseDown:(NSEvent*)event {(void)event;}
 - (void)mouseDragged:(NSEvent*)event {
   if(!owner)return;NSPoint p=[self logical:event];
   if(dragScroll){auto bar=aztec::mockup::scrollbar(),thumb=aztec::mockup::scrollThumb(rackState);[self setPageScroll:scrollOrigin+(p.y-origin.y)*aztec::mockup::maxScroll(rackState)/std::max(1.,bar.h-thumb.h)];return;}
