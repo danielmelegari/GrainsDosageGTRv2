@@ -152,6 +152,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   NSString* licenseLabel;
   NSMutableDictionary<NSNumber*,NSImage*>* editableModuleSkins;
   NSImage* staticScene;
+  NSBitmapImageRep* sceneBitmap;
   aztec::mockup::RackState rackState;
   int scenePage;double sceneScroll;
   bool dragScroll;double scrollOrigin;NSPoint routePointer;
@@ -508,6 +509,25 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   };
   painter.clip=[](mockup::Rect r){CGContextRef c=[NSGraphicsContext currentContext].CGContext;CGContextSaveGState(c);CGContextClipToRect(c,CGRectMake(r.x,r.y,r.w,r.h));};
   painter.unclip=[](){CGContextRestoreGState([NSGraphicsContext currentContext].CGContext);};
+  // Rasterize at the destination pixel density. lockFocus on a logical-size
+  // NSImage forced expensive full-frame resampling in Live on Mojave.
+  const double density=viewport.scale*std::max(1.,double(self.window.backingScaleFactor));
+  const NSInteger pixelWidth=std::max<NSInteger>(1,std::lround(canvasW*density));
+  const NSInteger pixelHeight=std::max<NSInteger>(1,std::lround(canvasH*density));
+  if(sceneBitmap.pixelsWide!=pixelWidth||sceneBitmap.pixelsHigh!=pixelHeight)staticScene=nil;
+  auto beginScene=[&]{
+    [NSGraphicsContext saveGraphicsState];
+    NSGraphicsContext* bitmapContext=[NSGraphicsContext graphicsContextWithBitmapImageRep:sceneBitmap];
+    [NSGraphicsContext setCurrentContext:[NSGraphicsContext graphicsContextWithCGContext:bitmapContext.CGContext flipped:YES]];
+    CGContextRef ctx=bitmapContext.CGContext;
+    CGContextSaveGState(ctx);
+    CGContextTranslateCTM(ctx,0,pixelHeight);
+    CGContextScaleCTM(ctx,double(pixelWidth)/canvasW,-double(pixelHeight)/canvasH);
+  };
+  auto endScene=[&]{
+    CGContextRestoreGState([NSGraphicsContext currentContext].CGContext);
+    [NSGraphicsContext restoreGraphicsState];
+  };
   bool rebuild=!staticScene||![scenePreset isEqualToString:presetName]||scenePage!=rackState.page||sceneScroll!=rackState.offset();scenePage=rackState.page;sceneScroll=rackState.offset();
   std::vector<ParamID> changedControls;
   std::array<int,5> selection{{[self tab],selectedLfo,selectedRepeat,selectedGate,selectedReslice}};
@@ -526,11 +546,13 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   auto render=[&](mockup::RenderPass pass){mockup::render(painter,[&](ParamID id){return owner->value(id);},[&](ParamID id,double v){return std::string([owner->display(id,v) UTF8String]);},std::string([presetName UTF8String]),[self tab],selectedLfo,selectedRepeat,selectedGate,selectedReslice,&waveVisual,dragSlot,dropSlot,&motion,pass,rackState);};
   if(fullRedrawForInspection||dragSlot>=0||motion.routing){staticScene=nil;render(mockup::RenderPass::All);}else{
   if(rebuild){
+    sceneBitmap=[[NSBitmapImageRep alloc] initWithBitmapDataPlanes:nullptr pixelsWide:pixelWidth pixelsHigh:pixelHeight bitsPerSample:8 samplesPerPixel:4 hasAlpha:YES isPlanar:NO colorSpaceName:NSDeviceRGBColorSpace bytesPerRow:0 bitsPerPixel:32];
     staticScene=[[NSImage alloc] initWithSize:NSMakeSize(canvasW,canvasH)];
-    [staticScene lockFocusFlipped:YES];render(mockup::RenderPass::Static);[staticScene unlockFocus];
+    [staticScene addRepresentation:sceneBitmap];
+    beginScene();render(mockup::RenderPass::Static);endScene();
     scenePreset=[presetName copy];++staticBuilds;
   }else if(!patches.empty()){
-    [staticScene lockFocusFlipped:YES];
+    beginScene();
     for(const auto& control:patches){
       CGContextRef context=[NSGraphicsContext currentContext].CGContext;CGContextSaveGState(context);
       CGContextClipToRect(context,CGRectMake(control.r.x,control.r.y,control.r.w,control.r.h));
@@ -539,9 +561,15 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
       mockup::renderControl(painter,control,[&](ParamID id){return owner->value(id);},[&](ParamID id,double v){return std::string([owner->display(id,v) UTF8String]);},selectedLfo);
       CGContextRestoreGState(context);++controlPatches;
     }
-    [staticScene unlockFocus];
+    endScene();
   }
-  [staticScene drawInRect:NSMakeRect(0,0,canvasW,canvasH) fromRect:NSZeroRect operation:NSCompositingOperationCopy fraction:1. respectFlipped:YES hints:nil];
+  // Draw the bitmap directly, avoiding NSImage's representation/cache machinery.
+  CGContextRef sceneContext=[NSGraphicsContext currentContext].CGContext;
+  CGContextSaveGState(sceneContext);
+  CGContextTranslateCTM(sceneContext,0,canvasH);CGContextScaleCTM(sceneContext,1,-1);
+  CGContextSetInterpolationQuality(sceneContext,kCGInterpolationNone);
+  CGContextDrawImage(sceneContext,CGRectMake(0,0,canvasW,canvasH),sceneBitmap.CGImage);
+  CGContextRestoreGState(sceneContext);
   render(mockup::RenderPass::Dynamic);
   const auto licenseText=aztec::license::status();
   if(!licenseText.empty()){
