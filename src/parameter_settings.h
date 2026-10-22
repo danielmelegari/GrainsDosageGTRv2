@@ -4,13 +4,18 @@
 namespace aztec {
 inline double value(const std::array<double, kCount>& p, int id) { return std::clamp(p[id], 0., 1.); }
 inline qg::Settings settings(const std::array<double, kCount>& saved, double tempo, double rate, double barBeats=4.) {
-  auto p=saved;
-  if(value(p,kXYEnable)>=.5) {
+  // Most blocks do not use XY: read saved values directly in that case.
+  // Only XY offsets need a private modified parameter array.
+  std::array<double,kCount> adjusted;
+  const bool xyEnabled=value(saved,kXYEnable)>=.5;
+  if(xyEnabled) {
+    adjusted=saved;
     for(int axis=0;axis<2;++axis) {
       const int target=xyDestinationId(int(std::round(value(saved,axis?kYTarget:kXTarget)*xyDestCount))-1);
-      if(target>=0 && target<int(kCount)) p[target]=std::clamp(p[target]+(value(saved,axis?kXYY:kXYX)*2.-1.)*(value(saved,axis?kYAmount:kXAmount)*2.-1.),0.,1.);
+      if(target>=0 && target<int(kCount)) adjusted[target]=std::clamp(adjusted[target]+(value(saved,axis?kXYY:kXYX)*2.-1.)*(value(saved,axis?kYAmount:kXAmount)*2.-1.),0.,1.);
     }
   }
+  const auto& p=xyEnabled?adjusted:saved;
   qg::Settings s;const double loopWindows[]={8.,4.,2.,1.};for(int i=0;i<4;++i){s.loopOn[i]=value(p,moduleLoopOn(i))>=.5;s.loopBeats[i]=loopWindows[int(std::round(value(p,moduleLoopWindow(i))*3.))];}
   s.quality=qg::audioQuality(int(std::round(value(p,kAudioQuality)*2.)));
   s.tempo = tempo; s.sampleRate = rate;

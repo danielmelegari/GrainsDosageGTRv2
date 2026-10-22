@@ -180,14 +180,15 @@ int main(){
   AudioBusBuffers input{},outA{},outB{};input.numChannels=outA.numChannels=outB.numChannels=2;
   input.channelBuffers32=ins;outA.channelBuffers32=ao;outB.channelBuffers32=bo;
   ParameterChanges monitor(kCount);ProcessData data{};data.symbolicSampleSize=kSample32;data.numSamples=block;data.numInputs=data.numOutputs=1;data.inputs=&input;
-  double windowSquare=0.,windowPeak=0.;int windowSamples=0;
+  double windowPeak=0.;
   std::array<double,kCount> lastTelemetry;lastTelemetry.fill(-1.);
   int batches=0,meterBatches=0;for(int sample=0;sample<int(rate);sample+=block){
    monitor.clearQueue();data.outputs=&outA;data.outputParameterChanges=&monitor;assert(a->process(data)==kResultOk);
-   for(int i=0;i<block;++i){windowSquare+=double(aL[i])*aL[i];windowPeak=std::max({windowPeak,std::abs(double(aL[i])),std::abs(double(aR[i]))});}windowSamples+=block;
+   for(int i=0;i<block;++i){windowPeak=std::max({windowPeak,std::abs(double(aL[i])),std::abs(double(aR[i]))});}
    bool metered=false;
    for(int i=0;i<monitor.getParameterCount();++i){auto* q=monitor.getParameterData(i);int32 offset=0;double v=0.;
-    if(q->getParameterId()==kUiOutputL){assert(q->getPoint(0,offset,v)==kResultOk);assert(std::abs(v-std::clamp(std::sqrt(windowSquare/windowSamples),0.,1.))<1e-12);metered=true;}
+    assert(q->getParameterId()!=kUiOutputL&&q->getParameterId()!=kUiOutputR); // removed display bars must produce no RMS traffic
+    if(q->getParameterId()==kUiLevel)metered=true;
     if(q->getParameterId()==kUiStep+3){assert(q->getPoint(0,offset,v)==kResultOk);assert(v==std::clamp(windowPeak,0.,1.));}
     if(q->getParameterId()==kUiWave0)++batches;
     auto id=q->getParameterId();
@@ -195,8 +196,8 @@ int main(){
     if(!meter&&id!=kUiWave0){assert(q->getPoint(0,offset,v)==kResultOk);assert(v!=lastTelemetry[id]);lastTelemetry[id]=v;}
 
    }
-   if(metered){windowSquare=windowPeak=0.;windowSamples=0;}
-   for(int i=0;i<monitor.getParameterCount();++i)if(monitor.getParameterData(i)->getParameterId()==kUiOutputL)++meterBatches;
+   if(metered)windowPeak=0.;
+   for(int i=0;i<monitor.getParameterCount();++i)if(monitor.getParameterData(i)->getParameterId()==kUiLevel)++meterBatches;
    data.outputs=&outB;data.outputParameterChanges=nullptr;assert(b->process(data)==kResultOk);
    for(int i=0;i<block;++i)assert(aL[i]==bL[i]&&aR[i]==bR[i]);
   }

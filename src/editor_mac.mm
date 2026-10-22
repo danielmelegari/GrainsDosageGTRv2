@@ -480,17 +480,19 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   painter.box=[](mockup::Rect r,skin::Rgb fill,skin::Rgb edge,double radius){box(NSMakeRect(r.x,r.y,r.w,r.h),C(fill),C(edge),radius);};
   painter.text=[&](const std::string& text,mockup::Rect r,double size,skin::Rgb color,bool center){
     NSString* str=[NSString stringWithUTF8String:text.c_str()];
-    NSFont* fitFont=[NSFont fontWithName:@"HelveticaNeue-Medium" size:size];if(!fitFont)fitFont=[NSFont boldSystemFontOfSize:size];
-    double measured=[str sizeWithAttributes:@{NSFontAttributeName:fitFont}].width;
-    if(measured>r.w&&measured>0)size*=r.w/measured;
-    NSString* key=[NSString stringWithFormat:@"%@|%.3f|%d,%d,%d|%d",str,size,color.r,color.g,color.b,center];
+    // Cache the fitted text by its inputs, so repeated paints do not remeasure it.
+    NSString* key=[NSString stringWithFormat:@"%@|%.3f|%.3f|%d,%d,%d|%d",str,size,r.w,color.r,color.g,color.b,center];
     NSAttributedString* cachedText=textCache[key];
     if(!cachedText){
+      NSFont* fitFont=[NSFont fontWithName:@"HelveticaNeue-Medium" size:size];if(!fitFont)fitFont=[NSFont boldSystemFontOfSize:size];
+      double measured=[str sizeWithAttributes:@{NSFontAttributeName:fitFont}].width;
+      if(measured>r.w&&measured>0)size*=r.w/measured;
       NSMutableParagraphStyle* style=[[NSMutableParagraphStyle alloc] init];style.alignment=center?NSTextAlignmentCenter:NSTextAlignmentLeft;style.lineBreakMode=NSLineBreakByTruncatingTail;
       NSFont* font=[NSFont fontWithName:@"HelveticaNeue-Medium" size:size];if(!font)font=[NSFont systemFontOfSize:size weight:NSFontWeightMedium];
       cachedText=[[NSAttributedString alloc] initWithString:str attributes:@{NSFontAttributeName:font,NSForegroundColorAttributeName:C(color),NSParagraphStyleAttributeName:style}];
       if(textCache.count>512)[textCache removeAllObjects];textCache[key]=cachedText;
     }
+    if(cachedText.length>0)size=[(NSFont*)[cachedText attribute:NSFontAttributeName atIndex:0 effectiveRange:nullptr] pointSize];
     [cachedText drawInRect:NSMakeRect(r.x,r.y+(r.h-size*1.2)/2,r.w,size*1.4)];
   };
   painter.line=[](double x,double y,double xx,double yy,skin::Rgb col,double width){NSBezierPath* path=[NSBezierPath bezierPath];[path moveToPoint:NSMakePoint(x,y)];[path lineToPoint:NSMakePoint(xx,yy)];[C(col) setStroke];path.lineWidth=width;[path stroke];};

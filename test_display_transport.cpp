@@ -69,8 +69,8 @@ template<class Sample> void check(int format){
   if(block%25==0)controller->onTimer(nullptr);
  }
  controller->onTimer(nullptr);
- assert(controller->getParamNormalized(kUiOutputL)>0);
- assert(other->getParamNormalized(kUiOutputL)==0); // no cross-instance display globals
+ assert(controller->getParamNormalized(kUiLevel)>0);
+ assert(other->getParamNormalized(kUiLevel)==0); // no cross-instance display globals
  assert(counter.calls==0); // display delivery never announces a control edit/restart
  auto tab=controller->getParamNormalized(kUiTab),mix=controller->getParamNormalized(kMix);
  // Reject malformed packets and never overwrite editable controls/navigation.

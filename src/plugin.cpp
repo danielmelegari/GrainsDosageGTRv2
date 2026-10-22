@@ -113,8 +113,7 @@ class Processor final : public AudioEffect {
   static_assert(std::atomic<double>::is_always_lock_free,"Display transport must be lock-free");
   std::array<std::atomic<double>,kCount> monitorValues_{};
   std::atomic<bool> messageMonitoring_{false},resetMonitorCache_{false},monitorRequested_{false};
-  int64_t meterSamples_=0;
-  double meterSquareL_=0.,meterSquareR_=0.,meterPeak_=0.;
+  double meterPeak_=0.;
   double rate_ = 44100., tempo_ = 120., fallbackBeat_ = 0.;
   aztec::HostTransport transport_;
   // The parameter array covers every legacy + monitor ID; the VST parameter list stops before the new UI controls.
@@ -210,7 +209,7 @@ public:
 #if defined(GRAINS_TRIAL) && GRAINS_TRIAL
       aztec::license::firstOpen(); // Host lifecycle thread, never process().
 #endif
-      lastTelemetry_.fill(-1.);engine_.prepare(rate_);declick_.prepare(rate_,p_[kInputDeclick]>=.5);master_.prepare(rate_); fallbackBeat_=0.;transport_.reset();waveCountdown_=meterCountdown_=0;meterSamples_=0;meterSquareL_=meterSquareR_=meterPeak_=0.; }
+      lastTelemetry_.fill(-1.);engine_.prepare(rate_);declick_.prepare(rate_,p_[kInputDeclick]>=.5);master_.prepare(rate_); fallbackBeat_=0.;transport_.reset();waveCountdown_=meterCountdown_=0;meterPeak_=0.; }
     return AudioEffect::setActive(active);
   }
   // NOTE: Processor must NOT override setComponentState — AudioEffect does not
@@ -281,7 +280,7 @@ public:
     // Apply the requested freeze state after updating the selected buffer window.
     consumeFreeze();
     const double beatIncrement = tempo_ / (60. * rate_);
-    double peak=0.,squareL=0.,squareR=0.;
+    double peak=0.;
     const double licenseTarget=aztec::license::processingAllowed()?1.:0.;
     for(int32 n=0;n<data.numSamples;++n) {
       licenseGain_+=std::clamp(licenseTarget-licenseGain_,-1./(.02*rate_),1./(.02*rate_));
@@ -300,7 +299,6 @@ public:
         if(licenseGain_<1.){a=float(rawL+licenseGain_*(double(a)-rawL));b=float(rawR+licenseGain_*(double(b)-rawR));}
 #endif
         peak=std::max({peak,std::abs(double(a)),std::abs(double(b))});
-        squareL+=double(a)*a;squareR+=double(b)*b;
         out.channelBuffers32[0][n] = a;
         if(a!=0.f) out.silenceFlags &= ~uint64(1);
         if(out.numChannels>1 && b!=0.f) out.silenceFlags &= ~uint64(2);
@@ -321,7 +319,6 @@ public:
         const double finalR=licenseGain_<1.?rawR+licenseGain_*(wetR-rawR):wetR;
 #endif
         peak=std::max({peak,std::abs(finalL),std::abs(finalR)});
-        squareL+=finalL*finalL;squareR+=finalR*finalR;
         out.channelBuffers64[0][n]=finalL;
         if(out.numChannels>1)out.channelBuffers64[1][n]=finalR;
         if(finalL!=0.)out.silenceFlags&=~uint64(1);
@@ -340,17 +337,16 @@ public:
       return queue&&queue->addPoint(data.numSamples-1,v,index)==kResultOk;
     };
     meterCountdown_=std::max(0,meterCountdown_-data.numSamples);
-    meterSamples_+=data.numSamples;meterSquareL_+=squareL;meterSquareR_+=squareR;meterPeak_=std::max(meterPeak_,peak);
+    meterPeak_=std::max(meterPeak_,peak);
     if(meterCountdown_==0){
       if(privateDisplay||data.outputParameterChanges){
-        for(int ch=0;ch<2;++ch)publish(kUiOutputL+ch,std::clamp(std::sqrt((ch?meterSquareR_:meterSquareL_)/meterSamples_),0.,1.));
         const double beat=fallbackBeat_+(data.numSamples-1)*beatIncrement;
         const int step=int((int64_t(std::floor(beat/.25))%16+16)%16);
         const double meters[]={step/15.,(!s.bypass&&engine_.glitchRunning())?1.:0.,(!s.bypass&&engine_.repeatRunning())?1.:0.,std::clamp(meterPeak_,0.,1.),double((int64_t(std::floor(beat/s.reverbGrid))%16+16)%16)/15.};
         for(int i=0;i<5;++i)publish(i==4?kUiReverb:kUiStep+i,meters[i]);
       }
       meterCountdown_=std::max(1,int(rate_/30.));
-      meterSamples_=0;meterSquareL_=meterSquareR_=meterPeak_=0.;
+      meterPeak_=0.;
     }
     // Stay bounded even if the host never provides a monitor sink.
     waveCountdown_=std::max(0,waveCountdown_-data.numSamples);

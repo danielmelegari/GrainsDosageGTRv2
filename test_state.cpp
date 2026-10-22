@@ -200,6 +200,7 @@ int main() {
   auto noGate=defaults();noGate[kStep0]=0.;noGate[kAttack]=1.;assert(settings(noGate,120.,48000.).pattern==0xffff);
   assert(settings(noGate,120.,48000.).attack==.002);
   for(int id=0;id<4;++id)assert(controller.getParameterObject(kUiStep+id)->getInfo().flags&ParameterInfo::kIsReadOnly);
+  for(auto id:{kUiOutputL,kUiOutputR})assert(controller.getParameterObject(id)->getInfo().flags&ParameterInfo::kIsHidden);
   controller.terminate();
   auto* processor=new Processor;
   MemoryStream saved; assert(processor->getState(&saved)==kResultOk);
@@ -216,8 +217,8 @@ int main() {
   changes.clearQueue();put(kMasterLimiter,0.);assert(processor->process(data)==kResultOk);assert(outL[127]==2.f&&outR[127]==.5f);
   // Allow the capped monitor interval to contain only the settled output.
   for(int block=0;block<32;++block)assert(processor->process(data)==kResultOk);
-  // RMS monitor channels reflect distinct actual host outputs.
-  {double rms[2]={-1.,-1.};for(int i=0;i<meters.getParameterCount();++i){auto* q=meters.getParameterData(i);int id=int(q->getParameterId());if(id==kUiOutputL||id==kUiOutputR){int32 offset=0;double v=0;assert(q->getPoint(q->getPointCount()-1,offset,v)==kResultOk);rms[id-kUiOutputL]=v;}}assert(rms[0]==1.&&std::abs(rms[1]-.5)<1e-6);}
+  // Removed output bars keep reserved IDs but no longer publish RMS values.
+  for(int i=0;i<meters.getParameterCount();++i){auto id=meters.getParameterData(i)->getParameterId();assert(id!=kUiOutputL&&id!=kUiOutputR);}
   changes.clearQueue();put(kMasterFilter,1.);put(kMix,1.);put(kGrainMix,0.);put(kFilterType,1.);put(kFilterCutoff,std::log(50.)/std::log(1000.));
   for(int i=0;i<80;++i)assert(processor->process(data)==kResultOk);
   assert(std::abs(outL[127])<1e-4); // HP rejects a DC source through real VST queues.

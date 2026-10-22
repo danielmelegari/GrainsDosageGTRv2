@@ -78,8 +78,8 @@ inline Rect valueRect(Rect r,Kind kind,ParamID id,const std::string& label){
  return {};
 }
 struct Motion {
- std::array<double,5> y{};std::array<double,16> gate{};std::array<double,2> meters{};bool ready=false,routing=false;std::chrono::steady_clock::time_point last{};
- void update(const Value& value,int drag,int insertion,const RackState& state=RackState{}){auto now=std::chrono::steady_clock::now();double dt=ready?std::clamp(std::chrono::duration<double>(now-last).count(),0.,.1):0.;last=now;auto chain=routeChain(value);if(drag>=0&&insertion>=0)chain=fourModuleOrder(int(std::round(moveRoute(chain,drag,insertion)*120))-1);double ease=1-std::exp(-dt/.065),top=430;routing=false;for(int stage:chain){y[stage]=ready?y[stage]+ease*(top-y[stage]):top;if(std::abs(top-y[stage])>.8)routing=true;top+=moduleHeight(stage,state.resliceAdvanced)+14;}int playing=int(std::round(value(kUiGaterStep)*15));for(int i=0;i<16;++i){double target=i==playing&&value(kGaterEnabled)>.5?std::min(value(kUiGaterPhase),value(kUiGaterLength0+i)):0.;gate[i]+=(1-std::exp(-dt/.025))*(target-gate[i]);}for(int ch=0;ch<2;++ch){double target=value(kUiOutputL+ch);meters[ch]+=(1-std::exp(-dt/(target>meters[ch]?.075:.3)))*(target-meters[ch]);}ready=true;}
+ std::array<double,5> y{};std::array<double,16> gate{};bool ready=false,routing=false;std::chrono::steady_clock::time_point last{};
+ void update(const Value& value,int drag,int insertion,const RackState& state=RackState{}){auto now=std::chrono::steady_clock::now();double dt=ready?std::clamp(std::chrono::duration<double>(now-last).count(),0.,.1):0.;last=now;auto chain=routeChain(value);if(drag>=0&&insertion>=0)chain=fourModuleOrder(int(std::round(moveRoute(chain,drag,insertion)*120))-1);double ease=1-std::exp(-dt/.065),top=430;routing=false;for(int stage:chain){y[stage]=ready?y[stage]+ease*(top-y[stage]):top;if(std::abs(top-y[stage])>.8)routing=true;top+=moduleHeight(stage,state.resliceAdvanced)+14;}int playing=int(std::round(value(kUiGaterStep)*15));for(int i=0;i<16;++i){double target=i==playing&&value(kGaterEnabled)>.5?std::min(value(kUiGaterPhase),value(kUiGaterLength0+i)):0.;gate[i]+=(1-std::exp(-dt/.025))*(target-gate[i]);}ready=true;}
 };
 struct WaveVisual {std::array<double,waveformBins> lo{},hi{};double active=0;void update(const Value& v){for(int i=0;i<waveformBins;++i){lo[i]+=.06*((v(kUiWaveLow0+i)*2-1)-lo[i]);hi[i]+=.06*((v(kUiWaveHigh0+i)*2-1)-hi[i]);}active+=.06*((v(kUiGrainActive)>.5?1.:0.)-active);}};
 enum Art {Backplate, Atlas, RoundScrew, Logo, Cables};
@@ -211,7 +211,7 @@ inline bool monitorVisible(ParamID id,const Value& v,const RackState& s,int lfo)
  if(id>=kPreRndCount)return s.page==1||id==modParam(kUiLfoValue0,4)||id==kUiRndEnvelope;
  if(id>=kUiLfoValue0&&id<kLfoWaveChoice0){if(s.page==2)return false;auto list=controls(v,0,lfo,0,0,0,s);for(const auto& c:list)if((c.kind==Knob||c.kind==Slider||c.kind==Pan||c.kind==VSlider)&&visible(c.r))return true;return false;}
  if(s.page==2)return false;
- if(s.page==1){if(id>=kUiLfoPhase0&&id<kModWaveRnd0)return int(id-kUiLfoPhase0)%4==lfo&&visible(s.position(scope));if(id>=kUiModWave0&&id<kReverbSource)return int(id-kUiModWave0)==lfo&&visible(s.position(scope));if(id==kUiFilterSeqStep)return visible(s.position({573,836,428,104}));if(id==kUiReverb||id==kUiReverbGate)return visible(s.position({300,1118,700,138}));if(id==kUiOutputL||id==kUiOutputR)return visible(s.position({92,1376,354,96}));return false;}
+ if(s.page==1){if(id>=kUiLfoPhase0&&id<kModWaveRnd0)return int(id-kUiLfoPhase0)%4==lfo&&visible(s.position(scope));if(id>=kUiModWave0&&id<kReverbSource)return int(id-kUiModWave0)==lfo&&visible(s.position(scope));if(id==kUiFilterSeqStep)return visible(s.position({573,836,428,104}));if(id==kUiReverb||id==kUiReverbGate)return visible(s.position({300,1118,700,138}));return false;}
  if((id>=kUiWave0&&id<=kUiWaveSeconds)||(id>=kUiWaveLow0&&id<kReverbRateV2))return visible(waveRect(v,s));if(id==kUiGlitch)return visible(moduleRect(1,v,s));if(id==kUiStep||id==kUiRepeat)return visible(moduleRect(2,v,s));if((id>=kUiGaterStep&&id<kInputDeclick)||id==kUiGaterPhase)return visible(moduleRect(4,v,s));if(id==kUiResliceStep||id==kUiResliceActive||(id>=kUiResliceSource0&&id<kUiFilterSeqStep)){if(!s.resliceAdvanced)return false;auto r=moduleRect(3,v,s);return visible({r.x+26,r.y+670,923,72});}return false;
 }
 inline void restoreControlBackground(Painter& p,const Control& c,const Value& v,const RackState& s){
@@ -250,13 +250,6 @@ inline void render(Painter& p,const Value& value,const Display& display,const st
   if(live&&visible(pos({573,836,428,104})))for(int i=0;i<32;++i){auto r=pos({573+i*13.4,836,9,104});p.box(r,ink,ink,4);double n=(qg::filterPattern(int(std::round(value(kFilterSeqPattern)*63)),i)+1)*.5;bool active=value(kFilterSeqOn)>.5&&i==int(std::round(value(kUiFilterSeqStep)*31));if(value(kFilterSeqOn)>.5)p.box({r.x+1,r.y+101-n*97,7,3+n*97},active?white:cyan,cyan,3);if(i%4==0)p.text(std::to_string(i+1),{r.x-4,r.y+108,18,15},9,muted,true);}
   if(fixed&&value(kReverbSource)>=.5)p.text("RANDOM IMPULSE",pos({305,1140,640,75}),18,muted,true);
   if(live&&value(kReverbSource)<.5)for(int i=0;i<16;++i){auto r=pos({300.+i*43,1118,26,138});if(visible(r))renderControl(p,{ParamID(kReverbStep0+i),r,Pad,""},value,display,lfo);p.text(std::to_string(i+1),{r.x-3,r.y+r.h+5,r.w+6,18},12,white,true);}
-  for(int ch=0;ch<2;++ch){auto r=pos({92.+ch*185,1376,169,96});if(visible(r)){
-   if(fixed){pill(p,r);p.text(ch?"RIGHT":"LEFT",{r.x+10,r.y+8,r.w-20,18},11,muted,true);}
-   if(live){double level=motion?motion->meters[ch]:value(kUiOutputL+ch),db=20*std::log10(std::max(.00001,level));int lit=int(16*std::clamp((db+48)/48.,0.,1.));
-    for(int i=0;i<16;++i){auto col=i<lit?(i>=13?orange:cyan):Rgb{26,44,51};p.box({r.x+12+i*9,r.y+37,6,25},col,col,1);}
-    p.box({r.x+10,r.y+69,r.w-20,18},{29,32,38},{29,32,38},0);p.text(level<.00001?"-INF dB":std::to_string(int(std::round(db)))+" dB",{r.x+10,r.y+69,r.w-20,18},11,cyan,true);
-   }
-  }}
   if(fixed){button(pos(zoomMenu),"SIZE");}
  }else{auto r=pos({54,210,974,832});if(fixed){rackPanel(p,r);title(r,"MORPH XY");xyPanel(p,pos(xy));}if(live){auto r=pos(xy);auto pt=xyPoint(r,value(kXYX),value(kXYY));if(p.clip)p.clip(xySurface(r));p.box({pt.first-9,pt.second-9,18,18},{13,49,56},cyan,9);p.box({pt.first-5,pt.second-5,10,10},cyan,cyan,5);if(p.unclip)p.unclip();}}
  if(state.page==0&&motion&&motion->ready&&(drag>=0||motion->routing))for(auto& c:list)if(c.id!=kInputDeclick&&c.id!=kDeclickSensitivity){for(int stage:{0,2,3,4})if(c.r.y>=tops[stage]&&c.r.y<tops[stage]+moduleHeight(stage,state.resliceAdvanced)){c.r.y+=motion->y[stage]-state.offset()-tops[stage];break;}}
