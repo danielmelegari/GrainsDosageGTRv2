@@ -94,7 +94,10 @@ jobs:
         shell: pwsh
         run: |
           $editionFlag = if ('${{ matrix.edition }}' -eq 'trial') { '/DTrial' } else { '/DLicensed' }
-          & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' $editionFlag /DBuildDir=build installer/GrainsDosage.iss
+          $metadata = Get-Content 'build/VST3/Release/GrainsDosage.vst3/Contents/Resources/moduleinfo.json' -Raw | ConvertFrom-Json
+          $pluginVersion = $metadata.Version
+          if ($pluginVersion -notmatch '^\d+\.\d+\.\d+$') { throw 'Missing or invalid packaged plugin version' }
+          & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' $editionFlag "/DAppVersion=$pluginVersion" /DBuildDir=build installer/GrainsDosage.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         with:

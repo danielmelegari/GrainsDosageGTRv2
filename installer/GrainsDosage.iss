@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "0.13.15"
+  #error AppVersion must be supplied from the packaged plugin
 #endif
 #ifndef ProjectDir
   #define ProjectDir ".."
