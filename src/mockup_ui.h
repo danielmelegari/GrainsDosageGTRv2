@@ -9,6 +9,7 @@
 #include <functional>
 #include <string>
 #include <vector>
+#include <optional>
 #include <chrono>
 #ifndef GRAINS_PLUGIN_VERSION
 #define GRAINS_PLUGIN_VERSION "dev"
@@ -77,7 +78,36 @@ inline Rect valueRect(Rect r,Kind kind,ParamID id,const std::string& label){
  if(kind==Slider||kind==Pan){if(id>=kLfoSlots0&&id<kLfoSpeed0)return {r.x+r.w-33,r.y,33,r.h};if(r.h>=40)return {r.x,r.y+r.h-19,r.w,19};return {r.x+r.w-32,r.y,32,r.h};}
  return {};
 }
+// Owned by each editor's Motion state. Phase is deliberately not a cache key.
+struct ModulationScopeCache {
+ std::array<double,7> key{};std::array<double,4> geometry{};
+ std::array<double,211> amplitudes{};bool valid=false;size_t builds=0;
+ std::vector<std::pair<double,double>> points;
+ const std::vector<std::pair<double,double>>& get(const Value& value,int lfo,Rect glass){
+  const int wave=modWaveSelection(value,lfo)>0?int(std::round(value(modParam(kUiModWave0,lfo))*qg::maxWave)):selectedWave(value,lfo);
+  const bool random=wave==128||wave==129;
+  const double cycle=random?std::round(value(modParam(kUiLfoCycle0,lfo))*4294967295.-2147483648.):0.;
+  const double epoch=random&&value(lfoID(lfo,lReset))>=.5?std::round(value(modParam(kUiLfoEpoch0,lfo))*4294967295.-2147483648.):0.;
+  const double depth=lfo==4?1.:value(lfoID(lfo,lDepth));
+  const int steps=random?1+int(std::round(value(modParam(kRandomSteps0,lfo))*63)):1;
+  const double glide=random?.01+.99*value(lfoID(lfo,lGlide)):0.;
+  const std::array<double,7> next{{double(lfo),double(wave),depth,double(steps),glide,cycle,epoch}};
+  const std::array<double,4> bounds{{glass.x,glass.y,glass.w,glass.h}};
+  const bool shapeChanged=!valid||key!=next;
+  if(!shapeChanged&&geometry==bounds)return points;
+  if(shapeChanged){
+  key=next;valid=true;++builds;
+  qg::Lfo preview;preview.prepare(0x13579BDFULL+uint64_t(lfo)*104729+uint64_t(int64_t(epoch))*0x9e3779b97f4a7c15ULL);
+  qg::LfoSettings shape;shape.enabled=true;shape.beats=1;shape.wave=wave;shape.randomSteps=steps;shape.depth=depth;shape.phase=0;shape.glide=glide;
+  for(int i=0;i<=210;++i)amplitudes[i]=std::clamp(preview.process(shape,cycle+i/210.,48000,false,0),-1.,1.);
+  }
+  geometry=bounds;points.resize(211);
+  for(int i=0;i<=210;++i)points[i]={glass.x+3+i*(glass.w-6)/210,glass.y+glass.h/2-amplitudes[i]*(glass.h/2-5)};
+  return points;
+ }
+};
 struct Motion {
+ ModulationScopeCache scopeShape;
  std::array<double,5> y{};std::array<double,16> gate{};bool ready=false,routing=false;std::chrono::steady_clock::time_point last{};
  void update(const Value& value,int drag,int insertion,const RackState& state=RackState{}){auto now=std::chrono::steady_clock::now();double dt=ready?std::clamp(std::chrono::duration<double>(now-last).count(),0.,.1):0.;last=now;auto chain=routeChain(value);if(drag>=0&&insertion>=0)chain=fourModuleOrder(int(std::round(moveRoute(chain,drag,insertion)*120))-1);double ease=1-std::exp(-dt/.065),top=430;routing=false;for(int stage:chain){y[stage]=ready?y[stage]+ease*(top-y[stage]):top;if(std::abs(top-y[stage])>.8)routing=true;top+=moduleHeight(stage,state.resliceAdvanced)+14;}int playing=int(std::round(value(kUiGaterStep)*15));for(int i=0;i<16;++i){double target=i==playing&&value(kGaterEnabled)>.5?std::min(value(kUiGaterPhase),value(kUiGaterLength0+i)):0.;gate[i]+=(1-std::exp(-dt/.025))*(target-gate[i]);}ready=true;}
 };
@@ -246,7 +276,14 @@ inline void render(Painter& p,const Value& value,const Display& display,const st
  }else if(state.page==1){
   for(auto r:{Rect{54,210,974,475},Rect{54,699,480,294},Rect{548,699,480,294},Rect{54,1007,974,305},Rect{54,1326,974,210}})if(fixed)rackPanel(p,pos(r));title(pos({54,210,974,475}),"MODULATION");title(pos({54,699,480,294}),"FILTER");title(pos({548,699,480,294}),"FILTER SEQUENCER");title(pos({54,1007,974,305}),"REVERB");title(pos({54,1326,974,210}),"OUTPUT");
   if(fixed){for(int i=0;i<qg::lfoCount;++i){auto r=pos(lfoRect(i));pill(p,r);p.text(i==4?"RND":std::to_string(i+1),r,17,i==lfo?accent:white,true);}xyPanel(p,pos(scope),false);}
-  if(live&&visible(pos(scope))){auto sc=pos(scope);qg::Lfo preview;double cycle=std::round(value(modParam(kUiLfoCycle0,lfo))*4294967295.-2147483648.);int64_t epoch=int64_t(std::round(value(modParam(kUiLfoEpoch0,lfo))*4294967295.-2147483648.));preview.prepare(0x13579BDFULL+uint64_t(lfo)*104729+(value(lfoID(lfo,lReset))>=.5?uint64_t(epoch)*0x9e3779b97f4a7c15ULL:0));qg::LfoSettings shape;shape.enabled=true;shape.beats=1;shape.wave=modWaveSelection(value,lfo)>0?int(std::round(value(modParam(kUiModWave0,lfo))*qg::maxWave)):selectedWave(value,lfo);shape.randomSteps=1+int(std::round(value(modParam(kRandomSteps0,lfo))*63));shape.depth=lfo==4?1.:value(lfoID(lfo,lDepth));shape.phase=0;shape.glide=.01+.99*value(lfoID(lfo,lGlide));auto glass=xySurface(sc);std::vector<std::pair<double,double>> pts;for(int i=0;i<=210;++i)pts.push_back({glass.x+3+i*(glass.w-6)/210,glass.y+glass.h/2-std::clamp(preview.process(shape,cycle+i/210.,48000,false,0),-1.,1.)*(glass.h/2-5)});if(p.polyline)p.polyline(pts,cyan,2);else for(size_t i=1;i<pts.size();++i)p.line(pts[i-1].first,pts[i-1].second,pts[i].first,pts[i].second,cyan,2);double x=glass.x+3+xyNormalized(value(modParam(kUiLfoPhase0,lfo)))*(glass.w-6);p.line(x,glass.y+3,x,glass.y+glass.h-3,white,1);}
+  if(live&&visible(pos(scope))){
+   auto glass=xySurface(pos(scope));std::optional<ModulationScopeCache> fallback;
+   if(!motion)fallback.emplace();
+   const auto& pts=(motion?motion->scopeShape:*fallback).get(value,lfo,glass);
+   if(p.polyline)p.polyline(pts,cyan,2);else for(size_t i=1;i<pts.size();++i)p.line(pts[i-1].first,pts[i-1].second,pts[i].first,pts[i].second,cyan,2);
+   // The position marker moves independently; it never rebuilds the curve.
+   double x=glass.x+3+xyNormalized(value(modParam(kUiLfoPhase0,lfo)))*(glass.w-6);p.line(x,glass.y+3,x,glass.y+glass.h-3,white,1);
+  }
   if(live&&visible(pos({573,836,428,104})))for(int i=0;i<32;++i){auto r=pos({573+i*13.4,836,9,104});p.box(r,ink,ink,4);double n=(qg::filterPattern(int(std::round(value(kFilterSeqPattern)*63)),i)+1)*.5;bool active=value(kFilterSeqOn)>.5&&i==int(std::round(value(kUiFilterSeqStep)*31));if(value(kFilterSeqOn)>.5)p.box({r.x+1,r.y+101-n*97,7,3+n*97},active?white:cyan,cyan,3);if(i%4==0)p.text(std::to_string(i+1),{r.x-4,r.y+108,18,15},9,muted,true);}
   if(fixed&&value(kReverbSource)>=.5)p.text("RANDOM IMPULSE",pos({305,1140,640,75}),18,muted,true);
   if(live&&value(kReverbSource)<.5)for(int i=0;i<16;++i){auto r=pos({300.+i*43,1118,26,138});if(visible(r))renderControl(p,{ParamID(kReverbStep0+i),r,Pad,""},value,display,lfo);p.text(std::to_string(i+1),{r.x-3,r.y+r.h+5,r.w+6,18},12,white,true);}
