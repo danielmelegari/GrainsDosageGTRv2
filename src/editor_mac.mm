@@ -372,7 +372,8 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   if(animationFrames>0||dragSlot>=0){
     --animationFrames;
     if(rackState.page==0&&aztec::mockup::visible(aztec::mockup::waveRect([&](aztec::ParamID id){return owner->value(id);},rackState)))waveVisual.update([&](aztec::ParamID id){return cached[id];});
-    [self setNeedsDisplay:YES];
+    if(dragSlot>=0){refresh.request();if(refresh.interactionDue(now))[self setNeedsDisplay:YES];}
+    else [self setNeedsDisplay:YES];
   }
 }
 - (NSPoint)logical:(NSEvent*)event {
@@ -739,7 +740,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
 - (void)mouseDragged:(NSEvent*)event {
   if(!owner)return;NSPoint p=[self logical:event];
   if(dragScroll){auto bar=aztec::mockup::scrollbar(),thumb=aztec::mockup::scrollThumb(rackState);[self setPageScroll:scrollOrigin+(p.y-origin.y)*aztec::mockup::maxScroll(rackState)/std::max(1.,bar.h-thumb.h)];return;}
-  if(dragSlot>=0){routePointer=p;if(std::hypot(p.x-origin.x,p.y-origin.y)>8)routeMoved=true;if(routeMoved)dropSlot=aztec::mockup::routeInsertion(p.x,p.y,[&](aztec::ParamID id){return owner->value(id);},rackState);[self setNeedsDisplay:YES];return;}
+  if(dragSlot>=0){routePointer=p;if(std::hypot(p.x-origin.x,p.y-origin.y)>8)routeMoved=true;if(routeMoved)dropSlot=aztec::mockup::routeInsertion(p.x,p.y,[&](aztec::ParamID id){return owner->value(id);},rackState);refresh.request();if(refresh.interactionDue(aztec::EditorRefresh::now()))[self setNeedsDisplay:YES];return;}
   if(dragXY){auto xy=rackState.position(aztec::mockup::xy);auto v=aztec::mockup::xyValue(xy,p.x,p.y);owner->dragChange(aztec::kXYX,v.first);owner->dragChange(aztec::kXYY,v.second);refresh.request();if(refresh.interactionDue(aztec::EditorRefresh::now()))[self setNeedsDisplay:YES];return;}
   if(dragID<0)return;double delta=(dragKind==aztec::Slider||dragKind==aztec::Pan)?(p.x-origin.x)/dragRect.size.width:(origin.y-p.y)/(dragKind==aztec::VSlider?std::max(1.,dragRect.size.height-42):180.);
   if(event.modifierFlags&NSEventModifierFlagShift)delta*=.1;
