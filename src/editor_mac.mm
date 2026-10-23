@@ -22,6 +22,7 @@
 #include "module_preset.h"
 #include "preset_banks.h"
 #include "preset_catalog.h"
+#include "preset_browser.h"
 #include "public.sdk/source/common/pluginview.h"
 #include <algorithm>
 #include <array>
@@ -171,6 +172,8 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
                        // own PNGs there to reskin without recompiling.
   NSMutableDictionary<NSString*,NSImage*>* sprites;
   NSString* presetName;
+  aztec::PresetBrowser presetBrowser;
+  NSArray<NSURL*>* browserFiles;
   std::vector<aztec::Control> controls;
   std::array<double,aztec::kCount> cached;
   int selectedGate,selectedReslice;
@@ -362,7 +365,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   (void)tick;if(owner)owner->flushHostEdits();if(!owner||self.hiddenOrHasHiddenAncestor||!self.window||!(self.window.occlusionState&NSWindowOcclusionStateVisible))return;
   const double now=aztec::EditorRefresh::now();
   if(refresh.interactionDue(now))[self setNeedsDisplay:YES];
-  if(dragID>=0||dragXY)return;
+  if(presetBrowser.open||dragID>=0||dragXY)return;
   if(!refresh.backgroundDue(now,1./15.))return;
   bool changed=false;
   NSString* currentLicense=[NSString stringWithUTF8String:aztec::license::status().c_str()];
@@ -577,6 +580,11 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
     painter.text(licenseText+(aztec::license::activationRequired?"  ·  ACTIVATE":""),licenseButton,11,{230,233,237},true);
   }
   }
+  if(presetBrowser.open){
+    [[NSColor colorWithCalibratedWhite:0 alpha:.38] setFill];NSRectFillUsingOperation(NSMakeRect(0,0,mockup::width,mockup::height),NSCompositingOperationSourceOver);
+    [[NSColor colorWithCalibratedRed:.075 green:.10 blue:.12 alpha:.94] setFill];[[NSBezierPath bezierPathWithRoundedRect:NSMakeRect(120,235,843,650) xRadius:14 yRadius:14] fill];
+    presetBrowser.draw(painter,std::string(presetName.UTF8String));
+  }
   [NSGraphicsContext restoreGraphicsState];
 }
 - (void)chooseSkin:(NSMenuItem*)item {
@@ -629,12 +637,20 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   if(![self loadPresetURL:url]){NSAlert* alert=[[NSAlert alloc] init];alert.messageText=@"Cannot load this preset";alert.informativeText=@"Invalid or incompatible preset. No settings changed.";[alert runModal];}
 }
 - (void)presetMenu:(NSEvent*)event {
-  NSURL* folder=[self presetFolder];if(!folder)return;NSMenu* menu=[[NSMenu alloc] initWithTitle:@"Presets"];
-  NSMenuItem* def=[[NSMenuItem alloc] initWithTitle:@"Default" action:@selector(choosePreset:) keyEquivalent:@""];def.target=self;def.tag=-2;[menu addItem:def];
-  NSMenu* saved=[[NSMenu alloc] initWithTitle:@"Saved Presets"];
-  for(NSURL* url in [self savedPresetFiles:folder]){NSString* name=url.lastPathComponent.stringByDeletingPathExtension;NSMenuItem* item=[[NSMenuItem alloc] initWithTitle:name action:@selector(choosePreset:) keyEquivalent:@""];item.target=self;item.representedObject=url;item.state=[name isEqualToString:presetName]?NSControlStateValueOn:NSControlStateValueOff;[saved addItem:item];}
-  if(saved.numberOfItems){NSMenuItem* group=[[NSMenuItem alloc] initWithTitle:@"Saved Presets" action:nullptr keyEquivalent:@""];group.submenu=saved;[menu addItem:group];}
-  [menu addItem:[NSMenuItem separatorItem]];NSMenuItem* open=[[NSMenuItem alloc] initWithTitle:@"Open Preset Folder…" action:@selector(choosePreset:) keyEquivalent:@""];open.target=self;open.tag=-1;open.representedObject=folder;[menu addItem:open];[NSMenu popUpContextMenu:menu withEvent:event forView:self];
+  (void)event;NSURL* folder=[self presetFolder];if(!folder)return;
+  browserFiles=[self savedPresetFiles:folder];
+  std::vector<aztec::PresetBrowser::Entry> entries{{"default","Default","Init"}};
+  for(NSURL* url in browserFiles){std::string name=url.lastPathComponent.stringByDeletingPathExtension.UTF8String;entries.push_back({url.lastPathComponent.UTF8String,name,aztec::PresetBrowser::categoryFor(name)});}
+  NSString* saved=[[[NSUserDefaults alloc] initWithSuiteName:@"com.danielmelegari.GrainsDosage"] stringForKey:@"com.danielmelegari.GrainsDosage.presetFavorites"];
+  presetBrowser.readFavorites(saved?saved.UTF8String:"");presetBrowser.show(std::move(entries));[self setNeedsDisplay:YES];
+}
+- (void)browserClick:(NSPoint)p {
+  int action=presetBrowser.click(p.x,p.y);
+  if(action==-2){auto text=presetBrowser.encodedFavorites();[[[NSUserDefaults alloc] initWithSuiteName:@"com.danielmelegari.GrainsDosage"] setObject:[NSString stringWithUTF8String:text.c_str()] forKey:@"com.danielmelegari.GrainsDosage.presetFavorites"];}
+  else if(action==-3){NSURL* folder=[self presetFolder];if(folder)[[NSWorkspace sharedWorkspace] openURL:folder];}
+  else if(action==0)[self defaultPreset];
+  else if(action>0&&action<=int(browserFiles.count)&&![self loadPresetURL:browserFiles[action-1]]){NSAlert* alert=[[NSAlert alloc] init];alert.messageText=@"Cannot load this preset";alert.informativeText=@"Invalid or incompatible preset. No settings changed.";[alert runModal];}
+  [self setNeedsDisplay:YES];
 }
 - (NSURL*)modulePresetFolder:(int)module {
   NSURL* root=[self presetFolder];if(!root)return nil;
@@ -691,6 +707,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   if(!owner)return;[self.window makeFirstResponder:self];NSPoint p=[self logical:event];[self layoutControls];
   using namespace aztec;
   auto hit=[&](mockup::Rect r){return r.contains(p.x,p.y);};
+  if(presetBrowser.open){[self browserClick:p];return;}
   if(license::activationRequired&&!license::status().empty()&&hit({450,88,220,25})){
     NSAlert* alert=[[NSAlert alloc] init];alert.messageText=@"GrainsDosage — Offline activation";
     alert.informativeText=@"Send this complete Device Code to the publisher for a signed 14-day trial or permanent activation. Permanent licenses support up to 3 computers. Paste the full GDS2 code from your TXT file. No internet connection is needed.";
@@ -785,6 +802,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
 }
 - (void)scrollWheel:(NSEvent*)event {
   if(!owner||dragID>=0||dragXY)return;NSPoint p=[self logical:event];
+  if(presetBrowser.open){presetBrowser.scroll(event.scrollingDeltaY>0?-3:3,p.x<383);[self setNeedsDisplay:YES];return;}
   if(event.modifierFlags&NSEventModifierFlagOption){[self layoutControls];for(const auto& c:controls)if(p.y>=aztec::mockup::bodyTop&&NSPointInRect(p,c.rect)&&(c.kind==aztec::Knob||c.kind==aztec::Slider||c.kind==aztec::VSlider)){int n=owner->info(c.id).stepCount;double step=n?1./n:.01;if(event.modifierFlags&NSEventModifierFlagShift)step*=.1;owner->edit(c.id,owner->value(c.id)+(event.scrollingDeltaY>0?step:-step));[self setNeedsDisplay:YES];return;}}
   double delta=event.scrollingDeltaY*(event.hasPreciseScrollingDeltas?1.:18.);[self setPageScroll:rackState.offset()-delta];
 }
