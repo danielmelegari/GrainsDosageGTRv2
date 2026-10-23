@@ -33,7 +33,16 @@ inline std::pair<double,double> xyPoint(Rect r,double x,double y){auto a=xyTrave
 inline std::pair<double,double> xyValue(Rect r,double x,double y){auto a=xyTravel(r);return {xyNormalized((x-a.x)/a.w),xyNormalized(1.-(y-a.y)/a.h)};}
 constexpr ParamID stageEnabled[]={kGrainEnabled,kGlitchEnabled,kRepeatEnabled,kResliceEnabled,kGaterEnabled};
 constexpr const char* moduleNames[]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLICE","GATER"};
-inline Rect pageRect(int i){return {60.+i*323,133,315,52};}
+// Keep the control coordinates stable while removing the former rack rails.
+constexpr double panelLeft=6,panelRight=1059;
+constexpr Rect bodyClip{panelLeft,bodyTop,panelRight-panelLeft,height-bodyTop};
+inline Rect panelBounds(Rect r){
+ const double right=r.x+r.w;
+ if(r.x==54){r.w+=r.x-panelLeft;r.x=panelLeft;}
+ if(right==1028)r.w+=panelRight-right;
+ return r;
+}
+inline Rect pageRect(int i){constexpr double gap=8,left=15,w=(width-30-2*gap)/3;return {left+i*(w+gap),133,w,52};}
 inline int hitPage(double x,double y){for(int i=0;i<3;++i)if(pageRect(i).contains(x,y))return i;return -1;}
 inline std::array<int,4> routeChain(const Value& value){int n=int(std::round(value(kRoutingOrder)*120))-1;if(n>=0)return fourModuleOrder(n);std::array<int,4> c{{0,2,3,4}};int old=int(std::round(value(kModuleOrder)*6));if(old<6){int i=0;for(int stage:moduleOrders[std::clamp(old,0,5)])if(stage!=1)c[i++]=stage;}return c;}
 inline double moveRoute(std::array<int,4> c,int from,int insertion){from=std::clamp(from,0,3);insertion=std::clamp(insertion,0,4);int to=insertion-(insertion>from?1:0),stage=c[from];if(to>from)for(int i=from;i<to;++i)c[i]=c[i+1];else for(int i=from;i>to;--i)c[i]=c[i-1];c[to]=stage;return fourModuleRouting(c);}
@@ -42,12 +51,12 @@ inline Rect moduleRect(int stage,const Value& value,const RackState& state){doub
 inline double contentBottom(int page,bool advanced=false){return page==0?430+340+350+moduleHeight(3,advanced)+330+56:page==1?1544:1042;}
 inline double maxScroll(const RackState& s){return std::max(0.,contentBottom(s.page,s.resliceAdvanced)-height+18);}
 inline void scrollBy(RackState& s,double delta){s.scroll[s.page]=std::clamp(s.offset()+delta,0.,maxScroll(s));}
-inline Rect scrollbar(){return {1037,bodyTop+8,12,height-bodyTop-20};}
+inline Rect scrollbar(){return {width-18,bodyTop+8,12,height-bodyTop-20};}
 inline Rect scrollThumb(const RackState& s){auto r=scrollbar();double h=std::max(50.,r.h*(height-bodyTop)/(contentBottom(s.page,s.resliceAdvanced)-bodyTop));return {r.x,r.y+(r.h-h)*(maxScroll(s)>0?s.offset()/maxScroll(s):0),r.w,h};}
 inline Rect headerRect(int stage,const Value& value,const RackState& s){auto r=moduleRect(stage,value,s);return {r.x+17,r.y+10,655,41};}
 inline Rect modulePresetRect(int stage,const Value& v,const RackState& s){auto r=moduleRect(stage,v,s);return {r.x+86,r.y+13,225,30};}
 inline int hitRoute(double x,double y,const Value& value,const RackState& s){if(s.page!=0||y<bodyTop||y>=height)return -1;auto chain=routeChain(value);for(int i=0;i<4;++i)if(headerRect(chain[i],value,s).contains(x,y)){auto r=moduleRect(chain[i],value,s);if(modulePresetRect(chain[i],value,s).contains(x,y)||Rect{r.x+330,r.y+13,281,30}.contains(x,y))return -1;return i;}return -1;}
-inline int routeInsertion(double x,double y,const Value& value,const RackState& s){if(s.page!=0||x<54||x>1028||y<bodyTop||y>=height)return -1;auto chain=routeChain(value);for(int i=0;i<4;++i){auto r=moduleRect(chain[i],value,s);if(y<r.y+r.h/2)return i;}return 4;}
+inline int routeInsertion(double x,double y,const Value& value,const RackState& s){if(s.page!=0||x<panelLeft||x>panelRight||y<bodyTop||y>=height)return -1;auto chain=routeChain(value);for(int i=0;i<4;++i){auto r=moduleRect(chain[i],value,s);if(y<r.y+r.h/2)return i;}return 4;}
 inline Rect randomRect(int stage,const Value& v,const RackState& s){if(stage==3&&!s.resliceAdvanced)return {};auto r=moduleRect(stage,v,s);return {r.x+(stage==3?650:805),r.y+(stage==3?710:13),stage==3?143.:119.,30};}
 inline Rect reslicePhraseRect(const Value& v,const RackState& s){if(!s.resliceAdvanced)return {};auto r=moduleRect(3,v,s);return {r.x+805,r.y+710,143,30};}
 inline Rect resliceAdvanceRect(const Value& v,const RackState& s){auto r=moduleRect(3,v,s);return {r.x+805,r.y+13,143,30};}
@@ -216,6 +225,7 @@ inline void panelScrews(Painter& p,Rect r){
 }
 inline void rackPanel(Painter& p,Rect r){
  if(!visible(r))return;
+ r=panelBounds(r);
  p.box(r,{29,32,38},edge,5);p.box({r.x+3,r.y+3,r.w-6,r.h-6},panel,{20,23,28},4);
  p.line(r.x+22,r.y+3,r.x+r.w-22,r.y+3,{53,58,67},1);panelScrews(p,r);
 }
@@ -234,7 +244,7 @@ inline void modulePanel(Painter& p,Rect r,int stage){
   for(int i=0;i<16;++i)for(int j=0;j<3;++j)p.box({r.x+28+i*57.,r.y+60+j*48.,18,18},{18,21,26},{38,42,50},9);
   p.line(r.x+20,r.y+r.h-26,r.x+260,r.y+60,{63,33,30},12);
  }
- panelScrews(p,r);
+ panelScrews(p,panelBounds(r));
 }
 
 inline bool monitorVisible(ParamID id,const Value& v,const RackState& s,int lfo){
@@ -254,9 +264,9 @@ inline void render(Painter& p,const Value& value,const Display& display,const st
  const bool fixed=pass!=RenderPass::Dynamic,live=pass!=RenderPass::Static;const Rgb white{230,233,237},muted{170,173,184},ink{20,22,24},screen{10,22,28},accent{255,122,32};
  if(live&&motion)motion->update(value,drag,insertion,state);
  auto button=[&](Rect r,const std::string& s){pill(p,r);p.text(s,r,14,orange,true);};
- if(fixed){p.box({0,0,width,height},{13,16,20},{13,16,20},0);if(p.image)p.image(Cables,{0,0,width,height},{0,0,1,1});p.box({6,6,width-12,109},{29,32,38},edge,6);if(p.image)p.image(Logo,{42,22,355,355.*412./2109.},{0,142,2109,412});p.box({51,122,981,75},{24,27,33},{11,12,16},5);for(int i=0;i<3;++i)pageButton(p,i,i==state.page);button(preset,presetName);button(previous,"<");button(next,">");button(load,"LOAD");button(save,"SAVE");button(randomAll,"RANDOM");p.text("INPUT DE-CLICKER",{835,40,172,20},13,white,true);}
+ if(fixed){p.box({0,0,width,height},{13,16,20},{13,16,20},0);if(p.image)p.image(Cables,{0,0,width,height},{0,0,1,1});p.box({6,6,width-12,109},{29,32,38},edge,6);if(p.image)p.image(Logo,{42,22,355,355.*412./2109.},{0,142,2109,412});p.box({6,122,width-12,75},{24,27,33},{11,12,16},5);for(int i=0;i<3;++i)pageButton(p,i,i==state.page);button(preset,presetName);button(previous,"<");button(next,">");button(load,"LOAD");button(save,"SAVE");button(randomAll,"RANDOM");p.text("INPUT DE-CLICKER",{835,40,172,20},13,white,true);}
  if(fixed)p.text("v" GRAINS_PLUGIN_VERSION,{300,94,85,16},10,muted,true);
- if(p.clip)p.clip({51,bodyTop,982,height-bodyTop});
+ if(p.clip)p.clip(bodyClip);
  auto pos=[&](Rect r){return state.position(r);};auto title=[&](Rect r,const std::string& s){if(fixed)p.text(s,{r.x+32,r.y+17,r.w-230,25},20,white,false);};
  Value drawnValue=value;std::array<double,5> tops{};for(int i=0;i<5;++i)tops[i]=moduleRect(i,value,state).y;
  auto list=controls(value,tab,lfo,repeat,gate,reslice,state);
@@ -272,7 +282,7 @@ inline void render(Painter& p,const Value& value,const Display& display,const st
 
    if(live&&(stage==2||stage==4))for(int i=0;i<16;++i){Rect sr=stepRect(i,stage,value,state);sr.y+=dy;bool on=stage==2?value(kRepeatStep0+i)>.5:stage==3?value(kResliceStep0+i)>.5:value(value(kGaterStepRnd)>.5?kUiGaterState0+i:kGaterState0+i)>.25;bool selected=i==(stage==2?repeat:stage==3?reslice:gate);if(stage==4){p.box(sr,ink,selected?white:muted,12);double len=value(kGaterLengthRnd)>.5?std::clamp(value(kUiGaterLength0+i),.05,1.):.05+.95*value(kGaterLength0+i),h=(sr.h-8)*len;if(on)p.box({sr.x+4,sr.y+sr.h-4-h,sr.w-8,h},skin::mix(ink,cyan,.65),ink,8);double progress=motion?motion->gate[i]:0;if(on&&progress>.001)p.box({sr.x+4,sr.y+sr.h-4-(sr.h-8)*progress,sr.w-8,(sr.h-8)*progress},cyan,cyan,8);if(value(kGaterRelease0+i)>.5)p.box({sr.x+10,sr.y+9,12,12},orange,white,6);}else p.box(sr,on?cyan:Rgb{18,54,63},selected?white:Rgb{35,86,96},10);p.text(std::to_string(i+1),{sr.x-5,sr.y+sr.h+5,sr.w+10,18},12,white,true);if(stage==3)p.text(std::to_string(1+int(std::round(value(value(kResliceRndOn)>.5?kUiResliceSource0+i:kResliceIndex0+i)*15))),{sr.x-5,sr.y+sr.h+24,sr.w+10,16},10,muted,true);int play=int(std::round(value(stage==2?kUiStep:stage==3?kUiResliceStep:kUiGaterStep)*15));if(i==play)p.line(sr.x+5,sr.y+sr.h-6,sr.x+sr.w-5,sr.y+sr.h-6,white,2);}
   }
-  if(drag>=0&&insertion>=0){auto c=routeChain(value);double y=insertion==4?moduleRect(c[3],value,state).y+moduleHeight(c[3],state.resliceAdvanced)+5:moduleRect(c[insertion],value,state).y-6;p.line(68,y,1014,y,accent,3);}
+  if(drag>=0&&insertion>=0){auto c=routeChain(value);double y=insertion==4?moduleRect(c[3],value,state).y+moduleHeight(c[3],state.resliceAdvanced)+5:moduleRect(c[insertion],value,state).y-6;p.line(panelLeft+14,y,panelRight-14,y,accent,3);}
  }else if(state.page==1){
   for(auto r:{Rect{54,210,974,475},Rect{54,699,480,294},Rect{548,699,480,294},Rect{54,1007,974,305},Rect{54,1326,974,210}})if(fixed)rackPanel(p,pos(r));title(pos({54,210,974,475}),"MODULATION");title(pos({54,699,480,294}),"FILTER");title(pos({548,699,480,294}),"FILTER SEQUENCER");title(pos({54,1007,974,305}),"REVERB");title(pos({54,1326,974,210}),"OUTPUT");
   if(fixed){for(int i=0;i<qg::lfoCount;++i){auto r=pos(lfoRect(i));pill(p,r);p.text(i==4?"RND":std::to_string(i+1),r,17,i==lfo?accent:white,true);}xyPanel(p,pos(scope),false);}

@@ -1,6 +1,6 @@
 # GrainsDosage — complete user manual
 
-**Windows VST3 · charcoal three-page edition · 0.13.20**\
+**Windows VST3 · charcoal three-page edition · 0.13.21**\
 Applies to the updated `work/mockup-purple-skin` branch. The pages are **Modules**, **Modulation**, and **Morph**. This manual describes the current generative Reslice, not the retired Preslicer or the old Reslice step editor. Shared sound controls also apply to the macOS build; installation and registration below describe Windows.
 
 ## Contents

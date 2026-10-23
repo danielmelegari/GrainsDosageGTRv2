@@ -561,7 +561,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
     for(const auto& control:patches){
       CGContextRef context=[NSGraphicsContext currentContext].CGContext;CGContextSaveGState(context);
       CGContextClipToRect(context,CGRectMake(control.r.x,control.r.y,control.r.w,control.r.h));
-      if(control.id!=kInputDeclick&&control.id!=kDeclickSensitivity)CGContextClipToRect(context,CGRectMake(51,mockup::bodyTop,982,mockup::height-mockup::bodyTop));
+      if(control.id!=kInputDeclick&&control.id!=kDeclickSensitivity)CGContextClipToRect(context,CGRectMake(mockup::bodyClip.x,mockup::bodyClip.y,mockup::bodyClip.w,mockup::bodyClip.h));
       mockup::restoreControlBackground(painter,control,[&](ParamID id){return owner->value(id);},rackState);
       mockup::renderControl(painter,control,[&](ParamID id){return owner->value(id);},[&](ParamID id,double v){return std::string([owner->display(id,v) UTF8String]);},selectedLfo);
       CGContextRestoreGState(context);++controlPatches;

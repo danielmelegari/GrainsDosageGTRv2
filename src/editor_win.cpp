@@ -560,7 +560,7 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
             if(found==list.end()||found->kind==mockup::Pad)continue;
             if(id!=kInputDeclick&&id!=kDeclickSensitivity&&!mockup::visible(found->r))continue;
             painter.clip(found->r);
-            if(id!=kInputDeclick&&id!=kDeclickSensitivity)painter.clip({51,mockup::bodyTop,982,mockup::height-mockup::bodyTop});
+            if(id!=kInputDeclick&&id!=kDeclickSensitivity)painter.clip(mockup::bodyClip);
             mockup::restoreControlBackground(painter,*found,val,rackState);
             mockup::renderControl(painter,*found,val,displayValue,selectedLfo);
             if(id!=kInputDeclick&&id!=kDeclickSensitivity)painter.unclip();
