@@ -1,4 +1,4 @@
-# GrainsDosage 0.13.19 — charcoal three-page edition
+# GrainsDosage 0.13.20 — charcoal three-page edition
 
 This branch builds the **Modules / Modulation / Morph** interface. The audio rack contains Granulizer, Beat Repeater, generative Reslice (CutDSG, WarpDSG and PushDSG), and Gater, with per-module capture loops. The Modulation page adds four six-slot LFOs, a 19-model filter, a dedicated filter sequencer, reverb and master controls.
 

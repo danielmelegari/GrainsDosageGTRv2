@@ -1,6 +1,6 @@
 # GrainsDosage — complete user manual
 
-**Windows VST3 · charcoal three-page edition · 0.13.19**\
+**Windows VST3 · charcoal three-page edition · 0.13.20**\
 Applies to the updated `work/mockup-purple-skin` branch. The pages are **Modules**, **Modulation**, and **Morph**. This manual describes the current generative Reslice, not the retired Preslicer or the old Reslice step editor. Shared sound controls also apply to the macOS build; installation and registration below describe Windows.
 
 ## Contents
@@ -484,3 +484,21 @@ computer between sessions. Use the mouse wheel or Previous/Next buttons to
 browse long lists. Click × to close. Open preset folder remains available at the
 bottom left. The browser uses the existing saved-preset collection and Default;
 previously hidden untouched factory files remain hidden.
+
+
+### Organize presets in folders
+
+Click **+ New folder** in the browser to create a folder. If a folder is selected
+on the left, the new folder is created inside it; choose **All presets** first
+to create one at the library root. Select a folder and click **Rename folder**
+to change its name. Empty folders also appear in the sidebar.
+
+Click **…** beside a preset and choose a destination folder to move it. Choose
+**Move to preset root** to bring it back out. The heart stays with the preset
+when it moves, including when its parent folder is renamed. Existing files
+with the same name are never overwritten. The built-in Default stays in Init.
+
+These are actual folders under the preset library, not tags. **Open preset
+folder** opens the selected folder in Finder or Explorer. Reopen the browser
+to see external file changes. Favorites follow moves made inside the plugin;
+moving or renaming files externally does not update favorite references.

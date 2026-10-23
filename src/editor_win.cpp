@@ -346,19 +346,19 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
     folder+=L"\\Presets";if(!CreateDirectoryW(folder.c_str(),nullptr)&&GetLastError()!=ERROR_ALREADY_EXISTS)return {};
     return folder;
   }
-  void setPresetName(const std::wstring& path){auto pos=path.find_last_of(L"\\/");presetName=path.substr(pos==std::wstring::npos?0:pos+1);auto dot=presetName.find_last_of(L'.');if(dot!=std::wstring::npos)presetName.resize(dot);rememberPresetName();}
-  void defaultPreset(){auto p=initialParameters();for(int id=0;id<kCount;++id)if(presetParameter(id))edit(id,p[id]);presetName=L"Default";rememberPresetName();}
+  void setPresetName(const std::wstring& path){auto normalized=utf8(path),root=utf8(presetFolder());std::replace(normalized.begin(),normalized.end(),'\\','/');std::replace(root.begin(),root.end(),'\\','/');editorState_->presetKey=normalized.rfind(root+"/",0)==0?normalized.substr(root.size()+1):"";auto pos=path.find_last_of(L"\\/");presetName=path.substr(pos==std::wstring::npos?0:pos+1);auto dot=presetName.find_last_of(L'.');if(dot!=std::wstring::npos)presetName.resize(dot);rememberPresetName();}
+  void defaultPreset(){auto p=initialParameters();for(int id=0;id<kCount;++id)if(presetParameter(id))edit(id,p[id]);presetName=L"Default";editorState_->presetKey="default";rememberPresetName();}
   std::vector<std::wstring> savedPresetNames(const std::wstring& folder){
-    auto names=presetFilesIn(folder);
+    presetFolders::Listing listing;presetFolders::scan(utf8(folder),listing);std::vector<std::wstring> names;for(const auto& path:listing.files)names.push_back(wide(path));
     names.erase(std::remove_if(names.begin(),names.end(),[&](const std::wstring& name){
-      std::string stem(name.begin(),name.end());stem.resize(stem.size()-presetExtLen);if(installedFactoryIndex(stem).first<0)return false;
+      std::string stem=presetFolders::leaf(utf8(name));stem.resize(stem.size()-presetExtLen);if(!presetFolders::parent(utf8(name)).empty()||installedFactoryIndex(stem).first<0)return false;
       auto path=folder+L"\\"+name;HANDLE f=CreateFileW(path.c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);if(f==INVALID_HANDLE_VALUE)return false;
       LARGE_INTEGER size{};bool hide=false;if(GetFileSizeEx(f,&size)&&size.QuadPart>0&&size.QuadPart<=65536){std::string bytes(size_t(size.QuadPart),'\0');DWORD read=0;if(ReadFile(f,bytes.data(),DWORD(bytes.size()),&read,nullptr)&&read==bytes.size())hide=untouchedFactoryPreset(stem,bytes);}CloseHandle(f);return hide;
     }),names.end());std::sort(names.begin(),names.end(),presetFileLess);return names;
   }
   void stepPreset(int direction){
     auto folder=presetFolder();if(folder.empty())return;auto names=savedPresetNames(folder);int current=-1;
-    for(size_t i=0;i<names.size();++i)if(names[i]==presetName+L".gdspreset")current=int(i);
+    for(size_t i=0;i<names.size();++i)if(utf8(names[i])==editorState_->presetKey)current=int(i);
     int next=adjacentPreset(current,direction,int(names.size()));if(next<0)defaultPreset();else loadPresetPath(folder+L"\\"+names[next]);
   }
   bool loadPresetPath(const std::wstring& path,int module=-1){
@@ -371,19 +371,47 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
     browserFolder=presetFolder();if(browserFolder.empty())return;
     browserFiles=savedPresetNames(browserFolder);
     std::vector<PresetBrowser::Entry> entries{{"default","Default","Init"}};
-    for(const auto& file:browserFiles){auto name=utf8(file.substr(0,file.find_last_of(L'.')));entries.push_back({utf8(file),name,PresetBrowser::categoryFor(name)});}
+    for(const auto& file:browserFiles){auto key=utf8(file);auto name=presetFolders::leaf(key);name.resize(name.size()-10);auto dir=presetFolders::parent(key);entries.push_back({key,name,dir.empty()?PresetBrowser::categoryFor(name):"Folder: "+dir});}
     HKEY key;std::wstring saved;
     if(RegOpenKeyExW(HKEY_CURRENT_USER,L"Software\\GrainsDosage",0,KEY_QUERY_VALUE,&key)==ERROR_SUCCESS){
       DWORD bytes=0,type=0;if(RegQueryValueExW(key,L"PresetFavorites",nullptr,&type,nullptr,&bytes)==ERROR_SUCCESS&&type==REG_SZ&&bytes<1024*1024){std::vector<wchar_t> data(bytes/sizeof(wchar_t)+1,0);if(RegQueryValueExW(key,L"PresetFavorites",nullptr,&type,reinterpret_cast<BYTE*>(data.data()),&bytes)==ERROR_SUCCESS)saved=data.data();}RegCloseKey(key);
     }
-    presetBrowser.readFavorites(utf8(saved));presetBrowser.show(std::move(entries));InvalidateRect(window,nullptr,FALSE);
+    presetFolders::Listing listing;presetFolders::scan(utf8(browserFolder),listing);presetBrowser.readFavorites(utf8(saved));presetBrowser.show(std::move(entries),std::move(listing.folders));InvalidateRect(window,nullptr,FALSE);
+  }
+  bool saveBrowserFavorites(){HKEY key;bool ok=false;auto saved=wide(presetBrowser.encodedFavorites());
+    if(RegCreateKeyExW(HKEY_CURRENT_USER,L"Software\\GrainsDosage",0,nullptr,0,KEY_SET_VALUE,nullptr,&key,nullptr)==ERROR_SUCCESS){ok=RegSetValueExW(key,L"PresetFavorites",0,REG_SZ,reinterpret_cast<const BYTE*>(saved.c_str()),DWORD((saved.size()+1)*sizeof(wchar_t)))==ERROR_SUCCESS;RegCloseKey(key);}return ok;
+  }
+  struct FolderDialog {std::wstring name;};
+  static INT_PTR CALLBACK folderDialogProc(HWND dialog,UINT msg,WPARAM wp,LPARAM lp){
+    auto* state=reinterpret_cast<FolderDialog*>(GetWindowLongPtrW(dialog,DWLP_USER));
+    if(msg==WM_INITDIALOG){state=reinterpret_cast<FolderDialog*>(lp);SetWindowLongPtrW(dialog,DWLP_USER,lp);SetWindowTextW(dialog,L"Preset folder name");SetWindowPos(dialog,nullptr,0,0,440,175,SWP_NOMOVE|SWP_NOZORDER);
+      CreateWindowW(L"STATIC",L"Folder name",WS_CHILD|WS_VISIBLE,16,12,390,22,dialog,(HMENU)102,nullptr,nullptr);
+      HWND input=CreateWindowExW(WS_EX_CLIENTEDGE,L"EDIT",state->name.c_str(),WS_CHILD|WS_VISIBLE|WS_TABSTOP|ES_AUTOHSCROLL,16,38,390,28,dialog,(HMENU)101,nullptr,nullptr);
+      SendMessageW(input,EM_SETLIMITTEXT,120,0);CreateWindowW(L"BUTTON",L"Save",WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_DEFPUSHBUTTON,220,85,85,28,dialog,(HMENU)IDOK,nullptr,nullptr);CreateWindowW(L"BUTTON",L"Cancel",WS_CHILD|WS_VISIBLE|WS_TABSTOP,315,85,85,28,dialog,(HMENU)IDCANCEL,nullptr,nullptr);SetFocus(input);SendMessageW(input,EM_SETSEL,0,-1);return FALSE;}
+    if(msg==WM_COMMAND&&state){if(LOWORD(wp)==IDCANCEL){EndDialog(dialog,0);return TRUE;}if(LOWORD(wp)==IDOK){wchar_t name[256]{};GetDlgItemTextW(dialog,101,name,256);if(presetFolders::validName(utf8(name))){state->name=name;EndDialog(dialog,1);}else SetDlgItemTextW(dialog,102,L"Use a valid folder name without / \\ : * ? or trailing dots.");return TRUE;}}
+    if(msg==WM_CLOSE){EndDialog(dialog,0);return TRUE;}return FALSE;
   }
   void browserClick(double x,double y){
     auto previous=presetBrowser.favorites;int action=presetBrowser.click(x,y);
-    if(action==-2){HKEY key;bool ok=false;auto saved=wide(presetBrowser.encodedFavorites());
-      if(RegCreateKeyExW(HKEY_CURRENT_USER,L"Software\\GrainsDosage",0,nullptr,0,KEY_SET_VALUE,nullptr,&key,nullptr)==ERROR_SUCCESS){ok=RegSetValueExW(key,L"PresetFavorites",0,REG_SZ,reinterpret_cast<const BYTE*>(saved.c_str()),DWORD((saved.size()+1)*sizeof(wchar_t)))==ERROR_SUCCESS;RegCloseKey(key);}
-      if(!ok){presetBrowser.favorites=std::move(previous);MessageBoxW(window,L"Could not save favorites.",L"GrainsDosage",MB_OK|MB_ICONERROR);}
-    }else if(action==-3)ShellExecuteW(window,L"open",browserFolder.c_str(),nullptr,nullptr,SW_SHOWNORMAL);
+    if(action==-2){if(!saveBrowserFavorites()){presetBrowser.favorites=std::move(previous);MessageBoxW(window,L"Could not save favorites.",L"GrainsDosage",MB_OK|MB_ICONERROR);}}
+    else if(action==-4||action==-5){
+      auto folder=presetBrowser.selectedFolder();FolderDialog state{action==-5?wide(presetFolders::leaf(folder)):L""};
+      alignas(DLGTEMPLATE) unsigned char storage[128]{};auto* t=reinterpret_cast<DLGTEMPLATE*>(storage);t->style=WS_POPUP|WS_CAPTION|WS_SYSMENU|DS_MODALFRAME|DS_CENTER;t->cx=230;t->cy=100;
+      if(DialogBoxIndirectParamW(GetModuleHandleW(nullptr),t,window,folderDialogProc,reinterpret_cast<LPARAM>(&state))==1){
+        auto name=utf8(state.name),destination=presetFolders::join(action==-5?presetFolders::parent(folder):folder,name);bool ok;
+        if(action==-5){ok=destination==folder||presetFolders::move(utf8(browserFolder),folder,destination);if(ok){presetBrowser.moved(folder,destination);if(!saveBrowserFavorites()){if(destination!=folder)presetFolders::move(utf8(browserFolder),destination,folder);presetBrowser.favorites=previous;ok=false;}}}
+        else ok=presetFolders::create(utf8(browserFolder),folder,name);
+        if(ok){if(action==-5)editorState_->presetKey=presetFolders::remap(editorState_->presetKey,folder,destination);presetMenu();presetBrowser.selectFolder(destination);}else MessageBoxW(window,L"Could not update the folder. Check the name, permissions, and whether it already exists.",L"GrainsDosage",MB_OK|MB_ICONERROR);
+      }
+    }else if(action==-6){
+      auto from=presetBrowser.entries[presetBrowser.moveIndex].key;HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,1,L"Move to preset root");
+      for(size_t i=0;i<presetBrowser.folders.size();++i){auto label=wide(presetBrowser.folders[i]);std::wstring escaped;for(auto ch:label){escaped+=ch;if(ch==L'&')escaped+=ch;}AppendMenuW(menu,MF_STRING,UINT_PTR(i+2),escaped.c_str());}
+      POINT point;GetCursorPos(&point);int choice=TrackPopupMenu(menu,TPM_RETURNCMD,point.x,point.y,0,window,nullptr);DestroyMenu(menu);
+      if(choice>0&&choice<=int(presetBrowser.folders.size()+1)){auto destinationFolder=choice==1?std::string{}:presetBrowser.folders[choice-2];auto to=presetFolders::join(destinationFolder,presetFolders::leaf(from));
+        if(to!=from){bool ok=presetFolders::move(utf8(browserFolder),from,to);if(ok){presetBrowser.moved(from,to);if(!saveBrowserFavorites()){presetFolders::move(utf8(browserFolder),to,from);presetBrowser.favorites=previous;ok=false;}}
+          if(ok){editorState_->presetKey=presetFolders::remap(editorState_->presetKey,from,to);presetMenu();presetBrowser.selectFolder(destinationFolder);}else MessageBoxW(window,L"Could not move the preset. An existing preset will not be overwritten.",L"GrainsDosage",MB_OK|MB_ICONERROR);}
+      }
+    }else if(action==-3)ShellExecuteW(window,L"open",wide(presetFolders::join(utf8(browserFolder),presetBrowser.selectedFolder())).c_str(),nullptr,nullptr,SW_SHOWNORMAL);
     else if(action==0)defaultPreset();
     else if(action>0&&action<=int(browserFiles.size())&&!loadPresetPath(browserFolder+L"\\"+browserFiles[action-1]))MessageBoxW(window,L"Invalid or incompatible preset. No settings changed.",L"GrainsDosage",MB_OK|MB_ICONERROR);
     InvalidateRect(window,nullptr,FALSE);
@@ -553,7 +581,7 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
       {PixelSpace pixels(dc);Gdiplus::Graphics g(dc);g.SetTransform(&pixels.transform);
        Gdiplus::SolidBrush shade(Gdiplus::Color(97,0,0,0)),panel(Gdiplus::Color(240,19,26,31));
        g.FillRectangle(&shade,0.f,0.f,float(mockup::width),float(mockup::height));g.FillRectangle(&panel,120.f,235.f,843.f,650.f);}
-      presetBrowser.draw(painter,utf8(presetName));
+      presetBrowser.draw(painter,editorState_->presetKey);
     }
 
   }

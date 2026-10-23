@@ -45,6 +45,7 @@ class Editor final:public CPluginView {
 public:
   explicit Editor(EditController* c,std::shared_ptr<EditorState> state);
   void rememberPresetName(NSString* name){editorState_->presetName=name.UTF8String?name.UTF8String:"";}
+  std::string& presetKey(){return editorState_->presetKey;}
   ~Editor() override;
   tresult PLUGIN_API isPlatformTypeSupported(FIDString type) override;
   tresult PLUGIN_API attached(void* parent,FIDString type) override;
@@ -198,6 +199,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
 - (void)stepPreset:(int)direction;
 - (void)restorePresetName:(NSString*)name;
 - (NSURL*)presetFolder;
+- (void)rememberPresetURL:(NSURL*)url;
 - (BOOL)loadPresetURL:(NSURL*)url;
 - (void)presetMenu:(NSEvent*)event;
 - (void)skinMenu:(NSEvent*)event;
@@ -583,7 +585,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   if(presetBrowser.open){
     [[NSColor colorWithCalibratedWhite:0 alpha:.38] setFill];NSRectFillUsingOperation(NSMakeRect(0,0,mockup::width,mockup::height),NSCompositingOperationSourceOver);
     [[NSColor colorWithCalibratedRed:.075 green:.10 blue:.12 alpha:.94] setFill];[[NSBezierPath bezierPathWithRoundedRect:NSMakeRect(120,235,843,650) xRadius:14 yRadius:14] fill];
-    presetBrowser.draw(painter,std::string(presetName.UTF8String));
+    presetBrowser.draw(painter,owner->presetKey());
   }
   [NSGraphicsContext restoreGraphicsState];
 }
@@ -616,18 +618,21 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   if(![[NSFileManager defaultManager] createDirectoryAtURL:folder withIntermediateDirectories:YES attributes:nil error:&error]){NSAlert* alert=[[NSAlert alloc] init];alert.messageText=@"Cannot create the preset folder";alert.informativeText=error.localizedDescription;[alert runModal];return nil;}
   return folder;
 }
+- (void)rememberPresetURL:(NSURL*)url {
+  NSURL* root=[self presetFolder];NSString* prefix=[root.path stringByAppendingString:@"/"];owner->presetKey()=root&&[url.path hasPrefix:prefix]?std::string([url.path substringFromIndex:prefix.length].UTF8String):std::string{};
+}
 - (BOOL)loadPresetURL:(NSURL*)url {
   NSNumber* size=nil;[url getResourceValue:&size forKey:NSURLFileSizeKey error:nil];if(!size||size.unsignedLongLongValue>65536)return NO;
   NSData* data=[NSData dataWithContentsOfURL:url];std::array<double,aztec::kCount> p{};
   if(!data||!data.length||!aztec::decodePreset(std::string((const char*)data.bytes,data.length),p))return NO;
   for(int id=0;id<aztec::kCount;++id)if(aztec::presetParameter(id))owner->edit(id,p[id]);
-  presetName=[[url lastPathComponent] stringByDeletingPathExtension];owner->rememberPresetName(presetName);[self setNeedsDisplay:YES];return YES;
+  [self rememberPresetURL:url];presetName=[[url lastPathComponent] stringByDeletingPathExtension];owner->rememberPresetName(presetName);[self setNeedsDisplay:YES];return YES;
 }
-- (void)defaultPreset {auto p=aztec::initialParameters();for(int id=0;id<aztec::kCount;++id)if(aztec::presetParameter(id))owner->edit(id,p[id]);presetName=@"Default";owner->rememberPresetName(presetName);[self setNeedsDisplay:YES];}
+- (void)defaultPreset {auto p=aztec::initialParameters();for(int id=0;id<aztec::kCount;++id)if(aztec::presetParameter(id))owner->edit(id,p[id]);presetName=@"Default";owner->presetKey()="default";owner->rememberPresetName(presetName);[self setNeedsDisplay:YES];}
 - (NSArray<NSURL*>*)savedPresetFiles:(NSURL*)folder {
-  NSArray<NSURL*>* files=[[NSFileManager defaultManager] contentsOfDirectoryAtURL:folder includingPropertiesForKeys:nil options:NSDirectoryEnumerationSkipsHiddenFiles error:nil];NSMutableArray<NSURL*>* saved=[NSMutableArray array];
+  aztec::presetFolders::Listing listing;aztec::presetFolders::scan(folder.path.UTF8String,listing);NSMutableArray<NSURL*>* files=[NSMutableArray array];for(const auto& relative:listing.files)[files addObject:[folder URLByAppendingPathComponent:[NSString stringWithUTF8String:relative.c_str()]]];NSMutableArray<NSURL*>* saved=[NSMutableArray array];
   for(NSURL* url in files){if(![url.pathExtension.lowercaseString isEqualToString:@"gdspreset"])continue;std::string stem(url.lastPathComponent.stringByDeletingPathExtension.UTF8String);BOOL hide=NO;
-    if(aztec::installedFactoryIndex(stem).first>=0){NSNumber* size=nil;[url getResourceValue:&size forKey:NSURLFileSizeKey error:nil];if(size&&size.unsignedLongLongValue<=65536){NSData* bytes=[NSData dataWithContentsOfURL:url];if(bytes)hide=aztec::untouchedFactoryPreset(stem,std::string((const char*)bytes.bytes,bytes.length));}}
+    if([url.URLByDeletingLastPathComponent.path isEqualToString:folder.path]&&aztec::installedFactoryIndex(stem).first>=0){NSNumber* size=nil;[url getResourceValue:&size forKey:NSURLFileSizeKey error:nil];if(size&&size.unsignedLongLongValue<=65536){NSData* bytes=[NSData dataWithContentsOfURL:url];if(bytes)hide=aztec::untouchedFactoryPreset(stem,std::string((const char*)bytes.bytes,bytes.length));}}
     if(!hide)[saved addObject:url];
   }
   return [saved sortedArrayUsingComparator:^NSComparisonResult(NSURL* a,NSURL* b){return [a.lastPathComponent localizedStandardCompare:b.lastPathComponent];}];
@@ -640,14 +645,40 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   (void)event;NSURL* folder=[self presetFolder];if(!folder)return;
   browserFiles=[self savedPresetFiles:folder];
   std::vector<aztec::PresetBrowser::Entry> entries{{"default","Default","Init"}};
-  for(NSURL* url in browserFiles){std::string name=url.lastPathComponent.stringByDeletingPathExtension.UTF8String;entries.push_back({url.lastPathComponent.UTF8String,name,aztec::PresetBrowser::categoryFor(name)});}
+  for(NSURL* url in browserFiles){std::string name=url.lastPathComponent.stringByDeletingPathExtension.UTF8String;std::string key=[url.path substringFromIndex:folder.path.length+1].UTF8String;auto dir=aztec::presetFolders::parent(key);entries.push_back({key,name,dir.empty()?aztec::PresetBrowser::categoryFor(name):"Folder: "+dir});}
   NSString* saved=[[[NSUserDefaults alloc] initWithSuiteName:@"com.danielmelegari.GrainsDosage"] stringForKey:@"com.danielmelegari.GrainsDosage.presetFavorites"];
-  presetBrowser.readFavorites(saved?saved.UTF8String:"");presetBrowser.show(std::move(entries));[self setNeedsDisplay:YES];
+  aztec::presetFolders::Listing listing;aztec::presetFolders::scan(folder.path.UTF8String,listing);presetBrowser.readFavorites(saved?saved.UTF8String:"");presetBrowser.show(std::move(entries),std::move(listing.folders));[self setNeedsDisplay:YES];
+}
+- (void)saveBrowserFavorites {
+  auto text=presetBrowser.encodedFavorites();[[[NSUserDefaults alloc] initWithSuiteName:@"com.danielmelegari.GrainsDosage"] setObject:[NSString stringWithUTF8String:text.c_str()] forKey:@"com.danielmelegari.GrainsDosage.presetFavorites"];
+}
+- (void)browserFolderError {
+  NSAlert* alert=[[NSAlert alloc] init];alert.messageText=@"Could not organize this preset folder";alert.informativeText=@"Check the name, permissions, and whether the destination already exists. Existing presets are not overwritten.";[alert runModal];
+}
+- (void)moveBrowserPreset:(NSMenuItem*)item {
+  using namespace aztec;int index=presetBrowser.moveIndex;if(index<0||index>=int(presetBrowser.entries.size()))return;
+  NSURL* root=[self presetFolder];if(!root)return;
+  auto from=presetBrowser.entries[index].key;std::string destination=[(NSString*)item.representedObject UTF8String];auto to=presetFolders::join(destination,presetFolders::leaf(from));
+  if(from!=to){if(!presetFolders::move(root.path.UTF8String,from,to)){[self browserFolderError];return;}presetBrowser.moved(from,to);owner->presetKey()=presetFolders::remap(owner->presetKey(),from,to);[self saveBrowserFavorites];[self presetMenu:nil];presetBrowser.selectFolder(destination);}
+  [self setNeedsDisplay:YES];
 }
 - (void)browserClick:(NSPoint)p {
-  int action=presetBrowser.click(p.x,p.y);
-  if(action==-2){auto text=presetBrowser.encodedFavorites();[[[NSUserDefaults alloc] initWithSuiteName:@"com.danielmelegari.GrainsDosage"] setObject:[NSString stringWithUTF8String:text.c_str()] forKey:@"com.danielmelegari.GrainsDosage.presetFavorites"];}
-  else if(action==-3){NSURL* folder=[self presetFolder];if(folder)[[NSWorkspace sharedWorkspace] openURL:folder];}
+  using namespace aztec;int action=presetBrowser.click(p.x,p.y);
+  if(action==-2)[self saveBrowserFavorites];
+  else if(action==-4||action==-5){
+    auto folder=presetBrowser.selectedFolder();NSAlert* dialog=[[NSAlert alloc] init];dialog.messageText=action==-5?@"Rename preset folder":@"New preset folder";
+    dialog.informativeText=folder.empty()?@"Create a folder in your preset library.":[NSString stringWithFormat:@"Selected folder: %s",folder.c_str()];
+    NSTextField* input=[[NSTextField alloc] initWithFrame:NSMakeRect(0,0,360,28)];input.stringValue=action==-5?[NSString stringWithUTF8String:presetFolders::leaf(folder).c_str()]:@"";dialog.accessoryView=input;[dialog addButtonWithTitle:@"Save"];[dialog addButtonWithTitle:@"Cancel"];[dialog.window setInitialFirstResponder:input];
+    if([dialog runModal]==NSAlertFirstButtonReturn){std::string name=input.stringValue.UTF8String;NSURL* root=[self presetFolder];
+      if(!root||!presetFolders::validName(name)){[self browserFolderError];return;}
+      auto destination=presetFolders::join(action==-5?presetFolders::parent(folder):folder,name);bool ok=action==-5?(destination==folder||presetFolders::move(root.path.UTF8String,folder,destination)):presetFolders::create(root.path.UTF8String,folder,name);
+      if(ok){if(action==-5){presetBrowser.moved(folder,destination);owner->presetKey()=presetFolders::remap(owner->presetKey(),folder,destination);[self saveBrowserFavorites];}[self presetMenu:nil];presetBrowser.selectFolder(destination);}else [self browserFolderError];
+    }
+  }else if(action==-6){
+    NSMenu* menu=[[NSMenu alloc] initWithTitle:@"Move preset to folder"];
+    auto add=[&](const std::string& path){NSMenuItem* item=[[NSMenuItem alloc] initWithTitle:path.empty()?@"Move to preset root":[NSString stringWithUTF8String:path.c_str()] action:@selector(moveBrowserPreset:) keyEquivalent:@""];item.target=self;item.representedObject=[NSString stringWithUTF8String:path.c_str()];[menu addItem:item];};add("");for(const auto& path:presetBrowser.folders)add(path);
+    mockup::Viewport viewport(self.bounds.size.width,self.bounds.size.height);[menu popUpMenuPositioningItem:nil atLocation:NSMakePoint(viewport.x+p.x*viewport.scale,viewport.y+p.y*viewport.scale) inView:self];
+  }else if(action==-3){NSURL* root=[self presetFolder];if(root){auto path=presetBrowser.selectedFolder();[[NSWorkspace sharedWorkspace] openURL:[root URLByAppendingPathComponent:[NSString stringWithUTF8String:path.c_str()]]];}}
   else if(action==0)[self defaultPreset];
   else if(action>0&&action<=int(browserFiles.count)&&![self loadPresetURL:browserFiles[action-1]]){NSAlert* alert=[[NSAlert alloc] init];alert.messageText=@"Cannot load this preset";alert.informativeText=@"Invalid or incompatible preset. No settings changed.";[alert runModal];}
   [self setNeedsDisplay:YES];
@@ -689,7 +720,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   if(!owner)return;NSURL* folder=module<0?[self presetFolder]:[self modulePresetFolder:module];if(!folder)return;NSError* error=nil;bool ok=false;
   if(save){NSSavePanel* panel=[NSSavePanel savePanel];panel.allowedFileTypes=module<0?@[@"gdspreset"]:@[@"gdmodule"];panel.nameFieldStringValue=module<0?@"GrainsDosage.gdspreset":[[NSString stringWithUTF8String:aztec::mockup::moduleNames[module]] stringByAppendingPathExtension:@"gdmodule"];panel.directoryURL=folder;
     if([panel runModal]!=NSModalResponseOK)return;
-    auto get=[&](int id){return owner->value(id);};auto text=module<0?aztec::encodePreset(get):aztec::encodeModulePreset(module,get);NSData* data=[NSData dataWithBytes:text.data() length:text.size()];ok=[data writeToURL:panel.URL options:NSDataWritingAtomic error:&error];if(ok&&module<0){presetName=[panel.URL.lastPathComponent stringByDeletingPathExtension];owner->rememberPresetName(presetName);}
+    auto get=[&](int id){return owner->value(id);};auto text=module<0?aztec::encodePreset(get):aztec::encodeModulePreset(module,get);NSData* data=[NSData dataWithBytes:text.data() length:text.size()];ok=[data writeToURL:panel.URL options:NSDataWritingAtomic error:&error];if(ok&&module<0){[self rememberPresetURL:panel.URL];presetName=[panel.URL.lastPathComponent stringByDeletingPathExtension];owner->rememberPresetName(presetName);}
   }else{NSOpenPanel* panel=[NSOpenPanel openPanel];panel.allowedFileTypes=module<0?@[@"gdspreset"]:@[@"gdmodule"];panel.allowsMultipleSelection=NO;panel.canChooseDirectories=NO;panel.directoryURL=folder;
     if([panel runModal]!=NSModalResponseOK)return;
     if(module<0)ok=[self loadPresetURL:panel.URL];else ok=[self loadModulePresetURL:panel.URL module:module];
@@ -700,7 +731,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
 // Cycle Default and user-saved files without modifying anything on disk.
 - (void)stepPreset:(int)direction {
   if(!owner)return;NSURL* folder=[self presetFolder];if(!folder)return;NSArray<NSURL*>* files=[self savedPresetFiles:folder];int current=-1;
-  for(NSUInteger i=0;i<files.count;++i)if([files[i].lastPathComponent.stringByDeletingPathExtension isEqualToString:presetName])current=int(i);
+  for(NSUInteger i=0;i<files.count;++i)if(std::string([files[i].path substringFromIndex:folder.path.length+1].UTF8String)==owner->presetKey())current=int(i);
   int next=aztec::adjacentPreset(current,direction,int(files.count));if(next<0)[self defaultPreset];else [self loadPresetURL:files[NSUInteger(next)]];
 }
 - (void)mouseDown:(NSEvent*)event {
