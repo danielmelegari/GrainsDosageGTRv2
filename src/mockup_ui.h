@@ -22,6 +22,7 @@ enum class RenderPass {All,Static,Dynamic};
 using Value=std::function<double(ParamID)>;using Display=std::function<std::string(ParamID,double)>;
 struct RackState {bool resliceAdvanced=false;int page=0;std::array<double,3> scroll{};double offset()const{return scroll[page];}Rect position(Rect r)const{r.y-=offset();return r;}};
 constexpr Rect preset{419,41,172,39},previous{600,42,32,38},next{638,42,32,38},load{677,42,63,38},save{747,42,68,38};
+constexpr double inputOptionsHeight=94,chainTop=210+inputOptionsHeight+32;
 constexpr Rect randomAll{680,85,135,25};
 constexpr Rect zoomMenu{926,bodyTop+1300,80,30};
 constexpr Rect xy{211,270,660,660},scope{78,290,285,258};
@@ -47,8 +48,8 @@ inline int hitPage(double x,double y){for(int i=0;i<3;++i)if(pageRect(i).contain
 inline std::array<int,4> routeChain(const Value& value){int n=int(std::round(value(kRoutingOrder)*120))-1;if(n>=0)return fourModuleOrder(n);std::array<int,4> c{{0,2,3,4}};int old=int(std::round(value(kModuleOrder)*6));if(old<6){int i=0;for(int stage:moduleOrders[std::clamp(old,0,5)])if(stage!=1)c[i++]=stage;}return c;}
 inline double moveRoute(std::array<int,4> c,int from,int insertion){from=std::clamp(from,0,3);insertion=std::clamp(insertion,0,4);int to=insertion-(insertion>from?1:0),stage=c[from];if(to>from)for(int i=from;i<to;++i)c[i]=c[i+1];else for(int i=from;i>to;--i)c[i]=c[i-1];c[to]=stage;return fourModuleRouting(c);}
 inline double moduleHeight(int stage,bool advanced=false){constexpr double h[]={340,270,350,770,330};return stage==3&&!advanced?220:h[stage];}
-inline Rect moduleRect(int stage,const Value& value,const RackState& state){double y=430;for(int s:routeChain(value)){if(s==stage)return state.position({54,y,974,moduleHeight(s,state.resliceAdvanced)});y+=moduleHeight(s,state.resliceAdvanced)+14;}return {};}
-inline double contentBottom(int page,bool advanced=false){return page==0?430+340+350+moduleHeight(3,advanced)+330+56:page==1?1544:1042;}
+inline Rect moduleRect(int stage,const Value& value,const RackState& state){double y=chainTop;for(int s:routeChain(value)){if(s==stage)return state.position({54,y,974,moduleHeight(s,state.resliceAdvanced)});y+=moduleHeight(s,state.resliceAdvanced)+14;}return {};}
+inline double contentBottom(int page,bool advanced=false){return page==0?chainTop+340+350+moduleHeight(3,advanced)+330+56:page==1?1544:1042;}
 inline double maxScroll(const RackState& s){return std::max(0.,contentBottom(s.page,s.resliceAdvanced)-height+18);}
 inline void scrollBy(RackState& s,double delta){s.scroll[s.page]=std::clamp(s.offset()+delta,0.,maxScroll(s));}
 inline Rect scrollbar(){return {width-18,bodyTop+8,12,height-bodyTop-20};}
@@ -82,6 +83,7 @@ inline std::vector<Control> controls(const Value& value,int currentTab,int selec
  return result;
 }
 inline Rect valueRect(Rect r,Kind kind,ParamID id,const std::string& label){
+ if(kind==Knob&&(id==kTranspose||id==kStretchSpeed))return {r.x+72,r.y+34,r.w-72,22};
  if(kind==Knob)return {r.x+10,r.y+r.h-22,r.w-20,22};
  if(kind==VSlider)return {r.x,r.y+r.h-16,r.w,16};
  if(kind==Slider||kind==Pan){if(id>=kLfoSlots0&&id<kLfoSpeed0)return {r.x+r.w-33,r.y,33,r.h};if(r.h>=40)return {r.x,r.y+r.h-19,r.w,19};return {r.x+r.w-32,r.y,32,r.h};}
@@ -118,7 +120,7 @@ struct ModulationScopeCache {
 struct Motion {
  ModulationScopeCache scopeShape;
  std::array<double,5> y{};std::array<double,16> gate{};bool ready=false,routing=false;std::chrono::steady_clock::time_point last{};
- void update(const Value& value,int drag,int insertion,const RackState& state=RackState{}){auto now=std::chrono::steady_clock::now();double dt=ready?std::clamp(std::chrono::duration<double>(now-last).count(),0.,.1):0.;last=now;auto chain=routeChain(value);if(drag>=0&&insertion>=0)chain=fourModuleOrder(int(std::round(moveRoute(chain,drag,insertion)*120))-1);double ease=1-std::exp(-dt/.065),top=430;routing=false;for(int stage:chain){y[stage]=ready?y[stage]+ease*(top-y[stage]):top;if(std::abs(top-y[stage])>.8)routing=true;top+=moduleHeight(stage,state.resliceAdvanced)+14;}int playing=int(std::round(value(kUiGaterStep)*15));for(int i=0;i<16;++i){double target=i==playing&&value(kGaterEnabled)>.5?std::min(value(kUiGaterPhase),value(kUiGaterLength0+i)):0.;gate[i]+=(1-std::exp(-dt/.025))*(target-gate[i]);}ready=true;}
+ void update(const Value& value,int drag,int insertion,const RackState& state=RackState{}){auto now=std::chrono::steady_clock::now();double dt=ready?std::clamp(std::chrono::duration<double>(now-last).count(),0.,.1):0.;last=now;auto chain=routeChain(value);if(drag>=0&&insertion>=0)chain=fourModuleOrder(int(std::round(moveRoute(chain,drag,insertion)*120))-1);double ease=1-std::exp(-dt/.065),top=chainTop;routing=false;for(int stage:chain){y[stage]=ready?y[stage]+ease*(top-y[stage]):top;if(std::abs(top-y[stage])>.8)routing=true;top+=moduleHeight(stage,state.resliceAdvanced)+14;}int playing=int(std::round(value(kUiGaterStep)*15));for(int i=0;i<16;++i){double target=i==playing&&value(kGaterEnabled)>.5?std::min(value(kUiGaterPhase),value(kUiGaterLength0+i)):0.;gate[i]+=(1-std::exp(-dt/.025))*(target-gate[i]);}ready=true;}
 };
 struct WaveVisual {std::array<double,waveformBins> lo{},hi{};double active=0;void update(const Value& v){for(int i=0;i<waveformBins;++i){lo[i]+=.06*((v(kUiWaveLow0+i)*2-1)-lo[i]);hi[i]+=.06*((v(kUiWaveHigh0+i)*2-1)-hi[i]);}active+=.06*((v(kUiGrainActive)>.5?1.:0.)-active);}};
 enum Art {Backplate, Atlas, RoundScrew, Logo, Cables};
@@ -173,7 +175,12 @@ inline void rackKnob(Painter& p,Rect r,double v,double modulated=-1.,bool overla
 inline void renderControl(Painter& p,const Control& c,const Value& value,const Display& display,int lfo,double modulated=-1.,bool overlayOnly=false){
  const auto r=c.r;const double v=std::clamp(value(c.id),0.,1.);
  const Rgb white{230,233,237},muted{170,173,184},accent{255,122,32},ink{20,22,24};
- if(c.kind==Knob){
+ if(c.kind==Knob&&(c.id==kTranspose||c.id==kStretchSpeed)){
+  rackKnob(p,{r.x+4,r.y+4,56,56},v,modulated,overlayOnly);
+  if(overlayOnly)return;
+  p.text(c.label,{r.x+72,r.y+6,r.w-72,21},14,white,true);
+  auto read=valueRect(r,c.kind,c.id,c.label);pill(p,read);p.text(display(c.id,v),read,12,cyan,true);
+ }else if(c.kind==Knob){
   double diameter=std::min(r.w-22,r.h-60);
   if(!overlayOnly)p.text(c.label,{r.x,r.y,r.w,21},14,white,true);
   rackKnob(p,{r.x+(r.w-diameter)/2,r.y+29,diameter,diameter},v,modulated,overlayOnly);
@@ -256,7 +263,7 @@ inline bool monitorVisible(ParamID id,const Value& v,const RackState& s,int lfo)
 }
 inline void restoreControlBackground(Painter& p,const Control& c,const Value& v,const RackState& s){
  if(c.id==kInputDeclick||c.id==kDeclickSensitivity){p.box({6,6,width-12,109},{29,32,38},edge,6);return;}
- if(s.page==0){if(c.id==kTranspose||c.id==kStretchSpeed||c.id==kStretchOn){inputOptionsPanel(p,s.position({54,210,974,188}));return;}for(int stage=0;stage<5;++stage){auto r=moduleRect(stage,v,s);if(c.r.y>=r.y&&c.r.y<r.y+r.h){modulePanel(p,r,stage);return;}}}
+ if(s.page==0){if(c.id==kTranspose||c.id==kStretchSpeed||c.id==kStretchOn){inputOptionsPanel(p,s.position({54,210,974,inputOptionsHeight}));return;}for(int stage=0;stage<5;++stage){auto r=moduleRect(stage,v,s);if(c.r.y>=r.y&&c.r.y<r.y+r.h){modulePanel(p,r,stage);return;}}}
  if(s.page==1)for(auto r:{Rect{54,210,974,475},Rect{54,699,480,294},Rect{548,699,480,294},Rect{54,1007,974,305},Rect{54,1326,974,210}}){r=s.position(r);if(r.contains(c.r.x,c.r.y)){rackPanel(p,r);return;}}
  if(s.page==2)rackPanel(p,s.position({54,210,974,832}));
 }
@@ -271,7 +278,7 @@ inline void render(Painter& p,const Value& value,const Display& display,const st
  Value drawnValue=value;std::array<double,5> tops{};for(int i=0;i<5;++i)tops[i]=moduleRect(i,value,state).y;
  auto list=controls(value,tab,lfo,repeat,gate,reslice,state);
  if(state.page==0){
-  Rect master=pos({54,210,974,188});if(fixed){inputOptionsPanel(p,master);p.text("INPUT OPTIONS",{master.x+53,master.y+24,153,25},13,white,true);p.text("SIGNAL CHAIN ↓  •  FIRST MODULE AT THE TOP",pos({78,404,520,20}),11,muted,false);p.text("DRAG A MODULE UP OR DOWN TO REORDER",pos({619,404,385,20}),11,muted,true);}
+  Rect master=pos({54,210,974,inputOptionsHeight});if(fixed){inputOptionsPanel(p,master);p.text("INPUT OPTIONS",{master.x+53,master.y+34,153,25},13,white,true);p.text("SIGNAL CHAIN ↓  •  FIRST MODULE AT THE TOP",pos({78,chainTop-26,520,20}),11,muted,false);p.text("DRAG A MODULE UP OR DOWN TO REORDER",pos({619,chainTop-26,385,20}),11,muted,true);}
   auto chain=routeChain(value);for(int stage:chain){auto r=moduleRect(stage,value,state);double dy=(motion&&motion->ready&&(drag>=0||motion->routing))?motion->y[stage]-state.offset()-r.y:0;r.y+=dy;if(!visible(r))continue;
    if(fixed){modulePanel(p,r,stage);p.box({r.x+36,r.y+13,32,30},orange,{15,18,22},5);p.text(std::to_string(1+int(std::find(chain.begin(),chain.end(),stage)-chain.begin())),{r.x+36,r.y+13,32,30},14,ink,true);auto pr=modulePresetRect(stage,value,state);pr.y+=dy;button(pr,std::string(moduleNames[stage])+" ▾");for(int j=0;j<3;++j)for(int k=0;k<2;++k)p.box({r.x+635+k*6,r.y+20+j*6,2,2},muted,muted,1);if(stage!=3||state.resliceAdvanced){auto rr=randomRect(stage,value,state);rr.y+=dy;button(rr,"RANDOM");}if(stage==3){auto ar=resliceAdvanceRect(value,state);ar.y+=dy;button(ar,"ADVANCE");if(state.resliceAdvanced)p.line(ar.x+14,ar.y+ar.h-5,ar.x+ar.w-14,ar.y+ar.h-5,accent,2);}if(stage==3&&state.resliceAdvanced){auto phrase=reslicePhraseRect(value,state);phrase.y+=dy;button(phrase,"NEW PHRASE");}}
 

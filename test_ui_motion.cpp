@@ -56,7 +56,7 @@ int main(){using namespace aztec;
  }
  assert(reverbRate(5./6.,0.,false)==1.5&&reverbRate(1.,0.,true)==.75);
  qg::Gater gate;qg::GaterSettings gs;gs.enabled=true;gate.prepare(8000);gate.set(gs);float l=.1f,r=.1f;gate.process(l,r,.125,120.,true);assert(gate.phase()==.5);gate.process(l,r,.125,120.,false);assert(gate.phase()==0);
- mockup::Motion motion;motion.update(value,-1,-1);double oldY=motion.y[4];motion.last-=std::chrono::milliseconds(16);motion.update(value,3,0);assert(motion.y[4]<oldY&&motion.y[4]>430);
+ mockup::Motion motion;motion.update(value,-1,-1);double oldY=motion.y[4];motion.last-=std::chrono::milliseconds(16);motion.update(value,3,0);assert(motion.y[4]<oldY&&motion.y[4]>mockup::chainTop);
 
  p[kReverbRateV2]=5./6.;std::array<double,kCount> restored{};assert(decodePreset(encodePreset(value),restored));assert(restored[kReverbRateV2]==5./6.);
  std::cout<<"PASS: 3600 insertion moves, bounded waveform transitions, display independent of grain pitch/location, outside-drop cancellation\n";
