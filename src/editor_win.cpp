@@ -13,12 +13,15 @@
 #include <shlwapi.h>
 #include <filesystem>
 #include "editor.h"
+#include "editor_refresh.h"
+#include "host_edit_queue.h"
 #include "license.h"
 #include "value_entry.h"
 #include "parameters.h"
 #include "skin_spec.h"
 #include "skin_theme.h"
 #include "mockup_ui.h"
+#include "preset_browser.h"
 #include <memory>
 #include "filter_sequencer.h"
 #include "randomize.h"
@@ -29,6 +32,7 @@
 #include <cstring>
 #include <string>
 #include <vector>
+#include <map>
 namespace aztec {
 using namespace Steinberg;using namespace Steinberg::Vst;
 // Astral/Filigree Green: resolve a shared skin colour to a Win32 COLORREF.
@@ -51,6 +55,9 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
   mockup::WaveVisual waveVisual;
   std::array<double,kCount> lastDisplayValues{};
   int animationFrames=0;std::string licenseLabel;
+  EditorRefresh refresh;
+  HostEditQueue hostEdits;
+  void flushHostEdits(bool force=false){hostEdits.flush(EditorRefresh::now(),[&](uint32_t id,double v){controller->performEdit(id,v);},force);}
   aztec::mockup::Motion motion;
   std::array<int,4> routingAtDrag;
   double originX=0,originY=0,dragValue=0,dragWidth=1,dragHeight=180;Kind dragKind=Knob;bool dragXY=false,routeMoved=false;
@@ -58,6 +65,67 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
   std::unique_ptr<Gdiplus::Bitmap> mockupKnob, rackBackplate, rackAtlas, rackLogo, rackCables;
   std::array<std::unique_ptr<Gdiplus::Bitmap>,6> moduleImages;
   ULONG_PTR imaging=0;HBITMAP skin=nullptr;HDC skinDC=nullptr;HGDIOBJ oldSkin=nullptr;std::array<HBITMAP,6> sprites{};std::array<HDC,6> spriteDC{};std::array<HGDIOBJ,6> oldSprite{};
+  // Cache drawing resources per editor, never across host/plugin instances.
+  std::map<int,HFONT> fonts;
+  HDC backDC=nullptr;HBITMAP backBitmap=nullptr;HGDIOBJ oldBack=nullptr;
+  int backWidth=0,backHeight=0;
+  HDC sceneDC=nullptr;HBITMAP sceneBitmap=nullptr;HGDIOBJ oldScene=nullptr;
+  bool sceneValid=false,sceneAdvanced=false;int scenePage=-1;
+  double sceneScroll=-1.;std::wstring scenePreset;
+  std::array<double,kCount> sceneValues{};
+  std::array<int,5> sceneSelection{};
+  unsigned staticBuilds=0,controlPatches=0;
+  void releaseScene(){
+    if(sceneDC){SelectObject(sceneDC,oldScene);DeleteDC(sceneDC);}
+    if(sceneBitmap)DeleteObject(sceneBitmap);
+    sceneDC=nullptr;sceneBitmap=nullptr;oldScene=nullptr;sceneValid=false;
+  }
+  bool prepareScene(){
+    if(sceneDC)return true;
+    if(!backDC)return false;
+    sceneDC=CreateCompatibleDC(backDC);if(!sceneDC)return false;
+    sceneBitmap=CreateCompatibleBitmap(backDC,backWidth,backHeight);
+    if(!sceneBitmap){releaseScene();return false;}
+    oldScene=SelectObject(sceneDC,sceneBitmap);return true;
+  }
+  HFONT font(int height){
+    auto& f=fonts[height];
+    if(!f)f=CreateFontW(-height,0,0,0,FW_SEMIBOLD,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,ANTIALIASED_QUALITY,DEFAULT_PITCH,L"Arial");
+    return f;
+  }
+  void releaseBackBuffer(){
+    releaseScene();
+    if(backDC){SelectObject(backDC,oldBack);DeleteDC(backDC);}
+    if(backBitmap)DeleteObject(backBitmap);
+    backDC=nullptr;backBitmap=nullptr;oldBack=nullptr;backWidth=backHeight=0;
+  }
+  bool prepareBackBuffer(HDC screen,int width,int height){
+    if(backDC&&width==backWidth&&height==backHeight)return true;
+    releaseBackBuffer();
+    backDC=CreateCompatibleDC(screen);if(!backDC)return false;
+    backBitmap=CreateCompatibleBitmap(screen,width,height);
+    if(!backBitmap){DeleteDC(backDC);backDC=nullptr;return false;}
+    oldBack=SelectObject(backDC,backBitmap);backWidth=width;backHeight=height;
+    return true;
+  }
+  void paint(HDC screen,const RECT& r){
+    // Client pixels already include host DPI scaling. Avoid an additional 2x
+    // render plus downsample on every frame; retain letterboxing and hit mapping.
+    const bool buffered=prepareBackBuffer(screen,r.right,r.bottom);
+    HDC target=buffered?backDC:screen;const int scale=1;
+    const int saved=SaveDC(target);
+    PatBlt(target,0,0,r.right*scale,r.bottom*scale,BLACKNESS);
+    mockup::Viewport fit(r.right,r.bottom);
+    SetMapMode(target,MM_ANISOTROPIC);
+    SetWindowExtEx(target,int(mockup::width),int(mockup::height),nullptr);
+    SetViewportExtEx(target,int(std::round(mockup::width*fit.scale*scale)),int(std::round(mockup::height*fit.scale*scale)),nullptr);
+    SetViewportOrgEx(target,int(std::round(fit.x*scale)),int(std::round(fit.y*scale)),nullptr);
+    dc=target;draw();dc=nullptr;RestoreDC(target,saved);
+    if(buffered){const int savedScreen=SaveDC(screen);
+      BitBlt(screen,0,0,r.right,r.bottom,backDC,0,0,SRCCOPY);
+      RestoreDC(screen,savedScreen);
+    }
+  }
   void loadSprite(int id,int index){
     // Runtime skin folder first: <plugin dir>\GrainsDosage-spriteNN.png lets
     // users reskin by swapping PNGs only, no rebuild. Bundled RC resource is
@@ -187,7 +255,11 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
   }
   double value(ParamID id)const{return controller->getParamNormalized(id);}
   ParameterInfo info(ParamID id)const{auto* p=controller->getParameterObject(id);return p?p->getInfo():ParameterInfo{};}
-  void change(ParamID id,double v){auto p=info(id);v=std::clamp(v,0.,1.);if(p.stepCount)v=std::round(v*p.stepCount)/p.stepCount;controller->setParamNormalized(id,v);controller->performEdit(id,v);InvalidateRect(window,nullptr,FALSE);}
+  void change(ParamID id,double v){auto p=info(id);v=std::clamp(v,0.,1.);if(p.stepCount)v=std::round(v*p.stepCount)/p.stepCount;bool dragging=(dragID==int(id))||(dragXY&&(id==kXYX||id==kXYY));
+    if(dragging&&value(id)==v)return;
+    controller->setParamNormalized(id,v);
+    if(dragging){hostEdits.queue(id,v);flushHostEdits();}else controller->performEdit(id,v);
+    if(dragID>=0||dragXY){refresh.request();if(refresh.interactionDue(EditorRefresh::now()))InvalidateRect(window,nullptr,FALSE);}else InvalidateRect(window,nullptr,FALSE);}
   void edit(ParamID id,double v){controller->beginEdit(id);change(id,v);controller->endEdit(id);}
   std::wstring display(ParamID id,double v){String128 s{};controller->getParamStringByValue(id,v,s);std::wstring out(reinterpret_cast<wchar_t*>(s));auto p=info(id);
     if(!(p.flags&ParameterInfo::kIsList)&&out.find(L'.')!=std::wstring::npos){wchar_t b[64];swprintf(b,64,L"%.2f",wcstod(out.c_str(),nullptr));out=b;while(out.back()==L'0')out.pop_back();if(out.back()==L'.')out.pop_back();}
@@ -245,10 +317,14 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
   void activationDialog(){alignas(DLGTEMPLATE) unsigned char storage[128]{};auto* t=reinterpret_cast<DLGTEMPLATE*>(storage);t->style=WS_POPUP|WS_CAPTION|WS_SYSMENU|DS_MODALFRAME|DS_CENTER;t->cx=360;t->cy=230;DialogBoxIndirectParamW(GetModuleHandleW(nullptr),t,window,licenseDialogProc,0);InvalidateRect(window,nullptr,FALSE);}
   std::shared_ptr<EditorState> editorState_;
   std::wstring presetName=L"PRESETS ▾";
+  PresetBrowser presetBrowser;
+  std::vector<std::wstring> browserFiles;
+  std::wstring browserFolder;
   void rememberPresetName(){editorState_->presetName=utf8(presetName);}
   void loadSkinArt(){aztec::theme::loadSkinFile(aztec::theme::defaultPath());}
   void saveSkin(){aztec::theme::saveSkinFile(aztec::theme::defaultPath());}
   void skinMenu(){
+    sceneValid=false;
     HMENU m=CreatePopupMenu();int n=1;for(size_t i=0;i<aztec::theme::themes().size();++i){auto& t=aztec::theme::themes()[i];std::wstring title;for(const char* c=t.title;*c;++c)title+=wchar_t(*c);AppendMenuW(m,MF_STRING,n++,title.c_str());}
     AppendMenuW(m,MF_SEPARATOR,0,nullptr);
     int origId=n++;AppendMenuW(m,MF_STRING,origId,L"Original (Astral)");
@@ -270,19 +346,19 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
     folder+=L"\\Presets";if(!CreateDirectoryW(folder.c_str(),nullptr)&&GetLastError()!=ERROR_ALREADY_EXISTS)return {};
     return folder;
   }
-  void setPresetName(const std::wstring& path){auto pos=path.find_last_of(L"\\/");presetName=path.substr(pos==std::wstring::npos?0:pos+1);auto dot=presetName.find_last_of(L'.');if(dot!=std::wstring::npos)presetName.resize(dot);rememberPresetName();}
-  void defaultPreset(){auto p=initialParameters();for(int id=0;id<kCount;++id)if(presetParameter(id))edit(id,p[id]);presetName=L"Default";rememberPresetName();}
+  void setPresetName(const std::wstring& path){auto normalized=utf8(path),root=utf8(presetFolder());std::replace(normalized.begin(),normalized.end(),'\\','/');std::replace(root.begin(),root.end(),'\\','/');editorState_->presetKey=normalized.rfind(root+"/",0)==0?normalized.substr(root.size()+1):"";auto pos=path.find_last_of(L"\\/");presetName=path.substr(pos==std::wstring::npos?0:pos+1);auto dot=presetName.find_last_of(L'.');if(dot!=std::wstring::npos)presetName.resize(dot);rememberPresetName();}
+  void defaultPreset(){auto p=initialParameters();for(int id=0;id<kCount;++id)if(presetParameter(id))edit(id,p[id]);presetName=L"Default";editorState_->presetKey="default";rememberPresetName();}
   std::vector<std::wstring> savedPresetNames(const std::wstring& folder){
-    auto names=presetFilesIn(folder);
+    presetFolders::Listing listing;presetFolders::scan(utf8(folder),listing);std::vector<std::wstring> names;for(const auto& path:listing.files)names.push_back(wide(path));
     names.erase(std::remove_if(names.begin(),names.end(),[&](const std::wstring& name){
-      std::string stem(name.begin(),name.end());stem.resize(stem.size()-presetExtLen);if(installedFactoryIndex(stem).first<0)return false;
+      std::string stem=presetFolders::leaf(utf8(name));stem.resize(stem.size()-presetExtLen);if(!presetFolders::parent(utf8(name)).empty()||installedFactoryIndex(stem).first<0)return false;
       auto path=folder+L"\\"+name;HANDLE f=CreateFileW(path.c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);if(f==INVALID_HANDLE_VALUE)return false;
       LARGE_INTEGER size{};bool hide=false;if(GetFileSizeEx(f,&size)&&size.QuadPart>0&&size.QuadPart<=65536){std::string bytes(size_t(size.QuadPart),'\0');DWORD read=0;if(ReadFile(f,bytes.data(),DWORD(bytes.size()),&read,nullptr)&&read==bytes.size())hide=untouchedFactoryPreset(stem,bytes);}CloseHandle(f);return hide;
     }),names.end());std::sort(names.begin(),names.end(),presetFileLess);return names;
   }
   void stepPreset(int direction){
     auto folder=presetFolder();if(folder.empty())return;auto names=savedPresetNames(folder);int current=-1;
-    for(size_t i=0;i<names.size();++i)if(names[i]==presetName+L".gdspreset")current=int(i);
+    for(size_t i=0;i<names.size();++i)if(utf8(names[i])==editorState_->presetKey)current=int(i);
     int next=adjacentPreset(current,direction,int(names.size()));if(next<0)defaultPreset();else loadPresetPath(folder+L"\\"+names[next]);
   }
   bool loadPresetPath(const std::wstring& path,int module=-1){
@@ -292,14 +368,52 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
     if(ok){for(int i=0;i<kCount;++i)if(module<0?presetParameter(i):modulePresetParameter(module,i))edit(i,p[i]);if(module<0)setPresetName(path);}return ok;
   }
   void presetMenu(){
-    auto folder=presetFolder();if(folder.empty()){MessageBoxW(window,L"Cannot create or populate the preset folder.",L"GrainsDosage",MB_OK|MB_ICONERROR);return;}
-    auto names=savedPresetNames(folder);HMENU menu=CreatePopupMenu();
-    AppendMenuW(menu,MF_STRING|(presetName==L"Default"?MF_CHECKED:0),UINT_PTR(names.size()+1),L"Default");
-    if(!names.empty()){HMENU saved=CreatePopupMenu();for(size_t i=0;i<names.size();++i){auto label=names[i].substr(0,names[i].find_last_of(L'.'));AppendMenuW(saved,MF_STRING|(label==presetName?MF_CHECKED:0),UINT_PTR(i+1),label.c_str());}AppendMenuW(menu,MF_POPUP,UINT_PTR(saved),L"Saved Presets");}
-    AppendMenuW(menu,MF_SEPARATOR,0,nullptr);AppendMenuW(menu,MF_STRING,UINT_PTR(names.size()+2),L"Open Preset Folder…");POINT point;GetCursorPos(&point);int choice=TrackPopupMenu(menu,TPM_RETURNCMD,point.x,point.y,0,window,nullptr);DestroyMenu(menu);
-    if(choice==int(names.size()+1))defaultPreset();
-    else if(choice==int(names.size()+2))ShellExecuteW(window,L"open",folder.c_str(),nullptr,nullptr,SW_SHOWNORMAL);
-    else if(choice>0&&choice<=int(names.size())&&!loadPresetPath(folder+L"\\"+names[size_t(choice-1)]))MessageBoxW(window,L"Invalid or incompatible preset. No settings changed.",L"GrainsDosage",MB_OK|MB_ICONERROR);
+    browserFolder=presetFolder();if(browserFolder.empty())return;
+    browserFiles=savedPresetNames(browserFolder);
+    std::vector<PresetBrowser::Entry> entries{{"default","Default","Init"}};
+    for(const auto& file:browserFiles){auto key=utf8(file);auto name=presetFolders::leaf(key);name.resize(name.size()-10);auto dir=presetFolders::parent(key);entries.push_back({key,name,dir.empty()?PresetBrowser::categoryFor(name):"Folder: "+dir});}
+    HKEY key;std::wstring saved;
+    if(RegOpenKeyExW(HKEY_CURRENT_USER,L"Software\\GrainsDosage",0,KEY_QUERY_VALUE,&key)==ERROR_SUCCESS){
+      DWORD bytes=0,type=0;if(RegQueryValueExW(key,L"PresetFavorites",nullptr,&type,nullptr,&bytes)==ERROR_SUCCESS&&type==REG_SZ&&bytes<1024*1024){std::vector<wchar_t> data(bytes/sizeof(wchar_t)+1,0);if(RegQueryValueExW(key,L"PresetFavorites",nullptr,&type,reinterpret_cast<BYTE*>(data.data()),&bytes)==ERROR_SUCCESS)saved=data.data();}RegCloseKey(key);
+    }
+    presetFolders::Listing listing;presetFolders::scan(utf8(browserFolder),listing);presetBrowser.readFavorites(utf8(saved));presetBrowser.show(std::move(entries),std::move(listing.folders));InvalidateRect(window,nullptr,FALSE);
+  }
+  bool saveBrowserFavorites(){HKEY key;bool ok=false;auto saved=wide(presetBrowser.encodedFavorites());
+    if(RegCreateKeyExW(HKEY_CURRENT_USER,L"Software\\GrainsDosage",0,nullptr,0,KEY_SET_VALUE,nullptr,&key,nullptr)==ERROR_SUCCESS){ok=RegSetValueExW(key,L"PresetFavorites",0,REG_SZ,reinterpret_cast<const BYTE*>(saved.c_str()),DWORD((saved.size()+1)*sizeof(wchar_t)))==ERROR_SUCCESS;RegCloseKey(key);}return ok;
+  }
+  struct FolderDialog {std::wstring name;};
+  static INT_PTR CALLBACK folderDialogProc(HWND dialog,UINT msg,WPARAM wp,LPARAM lp){
+    auto* state=reinterpret_cast<FolderDialog*>(GetWindowLongPtrW(dialog,DWLP_USER));
+    if(msg==WM_INITDIALOG){state=reinterpret_cast<FolderDialog*>(lp);SetWindowLongPtrW(dialog,DWLP_USER,lp);SetWindowTextW(dialog,L"Preset folder name");SetWindowPos(dialog,nullptr,0,0,440,175,SWP_NOMOVE|SWP_NOZORDER);
+      CreateWindowW(L"STATIC",L"Folder name",WS_CHILD|WS_VISIBLE,16,12,390,22,dialog,(HMENU)102,nullptr,nullptr);
+      HWND input=CreateWindowExW(WS_EX_CLIENTEDGE,L"EDIT",state->name.c_str(),WS_CHILD|WS_VISIBLE|WS_TABSTOP|ES_AUTOHSCROLL,16,38,390,28,dialog,(HMENU)101,nullptr,nullptr);
+      SendMessageW(input,EM_SETLIMITTEXT,120,0);CreateWindowW(L"BUTTON",L"Save",WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_DEFPUSHBUTTON,220,85,85,28,dialog,(HMENU)IDOK,nullptr,nullptr);CreateWindowW(L"BUTTON",L"Cancel",WS_CHILD|WS_VISIBLE|WS_TABSTOP,315,85,85,28,dialog,(HMENU)IDCANCEL,nullptr,nullptr);SetFocus(input);SendMessageW(input,EM_SETSEL,0,-1);return FALSE;}
+    if(msg==WM_COMMAND&&state){if(LOWORD(wp)==IDCANCEL){EndDialog(dialog,0);return TRUE;}if(LOWORD(wp)==IDOK){wchar_t name[256]{};GetDlgItemTextW(dialog,101,name,256);if(presetFolders::validName(utf8(name))){state->name=name;EndDialog(dialog,1);}else SetDlgItemTextW(dialog,102,L"Use a valid folder name without / \\ : * ? or trailing dots.");return TRUE;}}
+    if(msg==WM_CLOSE){EndDialog(dialog,0);return TRUE;}return FALSE;
+  }
+  void browserClick(double x,double y){
+    auto previous=presetBrowser.favorites;int action=presetBrowser.click(x,y);
+    if(action==-2){if(!saveBrowserFavorites()){presetBrowser.favorites=std::move(previous);MessageBoxW(window,L"Could not save favorites.",L"GrainsDosage",MB_OK|MB_ICONERROR);}}
+    else if(action==-4||action==-5){
+      auto folder=presetBrowser.selectedFolder();FolderDialog state{action==-5?wide(presetFolders::leaf(folder)):L""};
+      alignas(DLGTEMPLATE) unsigned char storage[128]{};auto* t=reinterpret_cast<DLGTEMPLATE*>(storage);t->style=WS_POPUP|WS_CAPTION|WS_SYSMENU|DS_MODALFRAME|DS_CENTER;t->cx=230;t->cy=100;
+      if(DialogBoxIndirectParamW(GetModuleHandleW(nullptr),t,window,folderDialogProc,reinterpret_cast<LPARAM>(&state))==1){
+        auto name=utf8(state.name),destination=presetFolders::join(action==-5?presetFolders::parent(folder):folder,name);bool ok;
+        if(action==-5){ok=destination==folder||presetFolders::move(utf8(browserFolder),folder,destination);if(ok){presetBrowser.moved(folder,destination);if(!saveBrowserFavorites()){if(destination!=folder)presetFolders::move(utf8(browserFolder),destination,folder);presetBrowser.favorites=previous;ok=false;}}}
+        else ok=presetFolders::create(utf8(browserFolder),folder,name);
+        if(ok){if(action==-5)editorState_->presetKey=presetFolders::remap(editorState_->presetKey,folder,destination);presetMenu();presetBrowser.selectFolder(destination);}else MessageBoxW(window,L"Could not update the folder. Check the name, permissions, and whether it already exists.",L"GrainsDosage",MB_OK|MB_ICONERROR);
+      }
+    }else if(action==-6){
+      auto from=presetBrowser.entries[presetBrowser.moveIndex].key;HMENU menu=CreatePopupMenu();AppendMenuW(menu,MF_STRING,1,L"Move to preset root");
+      for(size_t i=0;i<presetBrowser.folders.size();++i){auto label=wide(presetBrowser.folders[i]);std::wstring escaped;for(auto ch:label){escaped+=ch;if(ch==L'&')escaped+=ch;}AppendMenuW(menu,MF_STRING,UINT_PTR(i+2),escaped.c_str());}
+      POINT point;GetCursorPos(&point);int choice=TrackPopupMenu(menu,TPM_RETURNCMD,point.x,point.y,0,window,nullptr);DestroyMenu(menu);
+      if(choice>0&&choice<=int(presetBrowser.folders.size()+1)){auto destinationFolder=choice==1?std::string{}:presetBrowser.folders[choice-2];auto to=presetFolders::join(destinationFolder,presetFolders::leaf(from));
+        if(to!=from){bool ok=presetFolders::move(utf8(browserFolder),from,to);if(ok){presetBrowser.moved(from,to);if(!saveBrowserFavorites()){presetFolders::move(utf8(browserFolder),to,from);presetBrowser.favorites=previous;ok=false;}}
+          if(ok){editorState_->presetKey=presetFolders::remap(editorState_->presetKey,from,to);presetMenu();presetBrowser.selectFolder(destinationFolder);}else MessageBoxW(window,L"Could not move the preset. An existing preset will not be overwritten.",L"GrainsDosage",MB_OK|MB_ICONERROR);}
+      }
+    }else if(action==-3)ShellExecuteW(window,L"open",wide(presetFolders::join(utf8(browserFolder),presetBrowser.selectedFolder())).c_str(),nullptr,nullptr,SW_SHOWNORMAL);
+    else if(action==0)defaultPreset();
+    else if(action>0&&action<=int(browserFiles.size())&&!loadPresetPath(browserFolder+L"\\"+browserFiles[action-1]))MessageBoxW(window,L"Invalid or incompatible preset. No settings changed.",L"GrainsDosage",MB_OK|MB_ICONERROR);
     InvalidateRect(window,nullptr,FALSE);
   }
   std::wstring modulePresetFolder(int module){
@@ -353,7 +467,7 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
   void point(LPARAM lp,double& x,double& y){RECT r;GetClientRect(window,&r);mockup::Viewport viewport(r.right,r.bottom);auto logical=viewport.logical(GET_X_LPARAM(lp),GET_Y_LPARAM(lp));x=logical.first;y=logical.second;}
   static COLORREF green(){return AZSKIN(kAccent);}static COLORREF cream(){return AZSKIN(kCream);}static COLORREF dark(){return AZSKIN(kBgDeep);}
   void box(double x,double y,double w,double h,COLORREF fill,COLORREF stroke){HBRUSH b=CreateSolidBrush(fill);HPEN p=CreatePen(PS_SOLID,1,stroke);auto ob=SelectObject(dc,b),op=SelectObject(dc,p);RoundRect(dc,int(x),int(y),int(x+w),int(y+h),8,8);SelectObject(dc,ob);SelectObject(dc,op);DeleteObject(b);DeleteObject(p);}
-  void text(std::wstring s,double x,double y,double w,double h,int size,COLORREF color,bool center=false,int minimumSize=14){HFONT f=CreateFontW(-std::max(minimumSize,size),0,0,0,FW_SEMIBOLD,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,ANTIALIASED_QUALITY,DEFAULT_PITCH,L"Arial");auto old=SelectObject(dc,f);SetTextColor(dc,color);SetBkMode(dc,TRANSPARENT);int extra=std::max(0,minimumSize-size);RECT r{int(x),int(y)-extra/2,int(x+w),int(y+h)+extra/2};DrawTextW(dc,s.c_str(),-1,&r,DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS|(center?DT_CENTER:DT_LEFT));SelectObject(dc,old);DeleteObject(f);}
+  void text(std::wstring s,double x,double y,double w,double h,int size,COLORREF color,bool center=false,int minimumSize=14){HFONT f=font(std::max(minimumSize,size));auto old=SelectObject(dc,f);SetTextColor(dc,color);SetBkMode(dc,TRANSPARENT);int extra=std::max(0,minimumSize-size);RECT r{int(x),int(y)-extra/2,int(x+w),int(y+h)+extra/2};DrawTextW(dc,s.c_str(),-1,&r,DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS|(center?DT_CENTER:DT_LEFT));SelectObject(dc,old);}
   void line(double x,double y,double xx,double yy,COLORREF color,int width=1){auto p=CreatePen(PS_SOLID,width,color);auto old=SelectObject(dc,p);MoveToEx(dc,int(x),int(y),nullptr);LineTo(dc,int(xx),int(yy));SelectObject(dc,old);DeleteObject(p);}
   static std::wstring wide(const std::string& s){int n=MultiByteToWideChar(CP_UTF8,0,s.data(),int(s.size()),nullptr,0);std::wstring out(size_t(n),L' ');if(n)MultiByteToWideChar(CP_UTF8,0,s.data(),int(s.size()),out.data(),n);return out;}
   static std::string utf8(const std::wstring& s){int n=WideCharToMultiByte(CP_UTF8,0,s.data(),int(s.size()),nullptr,0,nullptr,nullptr);std::string out(size_t(n),' ');if(n)WideCharToMultiByte(CP_UTF8,0,s.data(),int(s.size()),out.data(),n,nullptr,nullptr);return out;}
@@ -394,7 +508,7 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
       Gdiplus::LinearGradientBrush brush(Gdiplus::PointF(x,y),Gdiplus::PointF(x,y+h),Gdiplus::Color(255,top.r,top.g,top.b),Gdiplus::Color(255,fill.r,fill.g,fill.b));
       Gdiplus::Pen pen(Gdiplus::Color(255,edge.r,edge.g,edge.b),1.3f);g.FillPath(&brush,&path);g.DrawPath(&pen,&path);
     };
-    painter.text=[&](const std::string& s,mockup::Rect r,double size,skin::Rgb col,bool center){auto str=wide(s);HFONT f=CreateFontW(-int(size),0,0,0,FW_SEMIBOLD,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,ANTIALIASED_QUALITY,DEFAULT_PITCH,L"Arial");auto old=SelectObject(dc,f);SIZE extent{};GetTextExtentPoint32W(dc,str.c_str(),int(str.size()),&extent);SelectObject(dc,old);DeleteObject(f);if(extent.cx>r.w)size*=r.w/extent.cx;text(str,r.x,r.y,r.w,r.h,int(size),C(col),center,0);};
+    painter.text=[&](const std::string& s,mockup::Rect r,double size,skin::Rgb col,bool center){auto str=wide(s);HFONT f=font(int(size));auto old=SelectObject(dc,f);SIZE extent{};GetTextExtentPoint32W(dc,str.c_str(),int(str.size()),&extent);SelectObject(dc,old);if(extent.cx>r.w)size*=r.w/extent.cx;text(str,r.x,r.y,r.w,r.h,int(size),C(col),center,0);};
     painter.line=[&](double x,double y,double xx,double yy,skin::Rgb col,double width){line(x,y,xx,yy,C(col),int(std::max(1.,width)));};
     painter.polyline=[&](const std::vector<std::pair<double,double>>& pts,skin::Rgb col,double width){
       if(pts.size()<2)return;PixelSpace pixels(dc);Gdiplus::Graphics g(dc);g.SetTransform(&pixels.transform);g.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
@@ -409,13 +523,72 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
       g.DrawImage(mockupKnob.get(),Gdiplus::RectF(float(-r.w/2),float(-r.h/2),float(r.w),float(r.h)));
     };
     painter.clip=[&](mockup::Rect r){SaveDC(dc);IntersectClipRect(dc,int(r.x),int(r.y),int(r.x+r.w),int(r.y+r.h));};painter.unclip=[&](){RestoreDC(dc,-1);};
-    mockup::render(painter,[&](ParamID id){return value(id);},[&](ParamID id,double v){return utf8(display(id,v));},utf8(presetName),tab(),selectedLfo,selectedRepeat,selectedGate,selectedReslice,&waveVisual,dragSlot,dropSlot,&motion,mockup::RenderPass::All,rackState);
+    auto val=[&](ParamID id){return value(id);};
+    auto displayValue=[&](ParamID id,double v){return utf8(display(id,v));};
+    auto render=[&](mockup::RenderPass pass){mockup::render(painter,val,displayValue,utf8(presetName),tab(),selectedLfo,selectedRepeat,selectedGate,selectedReslice,&waveVisual,dragSlot,dropSlot,&motion,pass,rackState);};
+    // Keep panel artwork and unchanged controls out of the drag/render path.
+    bool rebuild=!sceneValid||scenePreset!=presetName||scenePage!=rackState.page||
+      sceneScroll!=rackState.offset()||sceneAdvanced!=rackState.resliceAdvanced;
+    std::array<int,5> selection{{tab(),selectedLfo,selectedRepeat,selectedGate,selectedReslice}};
+    if(selection!=sceneSelection)rebuild=true;
+    std::vector<ParamID> changed;
+    for(int id=0;id<kCount;++id)if(!isMonitor(id)){
+      double v=value(id);if(sceneValues[id]!=v){sceneValues[id]=v;changed.push_back(ParamID(id));
+        if(mockup::structural(id)||id==lfoID(selectedLfo,lWave))rebuild=true;}
+    }
+    int activeWave=modParam(kUiModWave0,selectedLfo);
+    if(modWaveSelection(val,selectedLfo)>0&&sceneValues[activeWave]!=value(activeWave)){
+      sceneValues[activeWave]=value(activeWave);rebuild=true;
+    }
+    if(dragSlot>=0||motion.routing||dc!=backDC||!prepareScene()){
+      sceneValid=false;render(mockup::RenderPass::All);
+    }else{
+      HDC target=dc;
+      if(rebuild||!changed.empty()){
+        SIZE viewport{},logical{};POINT origin{};
+        GetViewportExtEx(target,&viewport);GetWindowExtEx(target,&logical);GetViewportOrgEx(target,&origin);
+        int saved=SaveDC(sceneDC);
+        if(rebuild)PatBlt(sceneDC,0,0,backWidth,backHeight,BLACKNESS);
+        SetMapMode(sceneDC,MM_ANISOTROPIC);SetWindowExtEx(sceneDC,logical.cx,logical.cy,nullptr);
+        SetViewportExtEx(sceneDC,viewport.cx,viewport.cy,nullptr);SetViewportOrgEx(sceneDC,origin.x,origin.y,nullptr);
+        dc=sceneDC;
+        if(rebuild){render(mockup::RenderPass::Static);++staticBuilds;}
+        else{
+          auto list=mockup::controls(val,tab(),selectedLfo,selectedRepeat,selectedGate,selectedReslice,rackState);
+          for(auto id:changed){
+            auto found=std::find_if(list.begin(),list.end(),[&](const mockup::Control& c){return c.id==id;});
+            if(found==list.end()||found->kind==mockup::Pad)continue;
+            if(id!=kInputDeclick&&id!=kDeclickSensitivity&&!mockup::visible(found->r))continue;
+            painter.clip(found->r);
+            if(id!=kInputDeclick&&id!=kDeclickSensitivity)painter.clip(mockup::bodyClip);
+            mockup::restoreControlBackground(painter,*found,val,rackState);
+            mockup::renderControl(painter,*found,val,displayValue,selectedLfo);
+            if(id!=kInputDeclick&&id!=kDeclickSensitivity)painter.unclip();
+            painter.unclip();++controlPatches;
+          }
+        }
+        dc=target;RestoreDC(sceneDC,saved);
+      }
+      sceneValid=true;sceneSelection=selection;scenePreset=presetName;scenePage=rackState.page;
+      sceneScroll=rackState.offset();sceneAdvanced=rackState.resliceAdvanced;
+      int saved=SaveDC(target);SetMapMode(target,MM_TEXT);SetViewportOrgEx(target,0,0,nullptr);
+      BitBlt(target,0,0,backWidth,backHeight,sceneDC,0,0,SRCCOPY);RestoreDC(target,saved);
+      render(mockup::RenderPass::Dynamic);
+    }
     const auto status=license::status();if(!status.empty()){mockup::Rect button{450,88,220,25};mockup::pill(painter,button);painter.text(status+(license::activationRequired?"  ·  ACTIVATE":""),button,11,{230,233,237},true);}
 
+    if(presetBrowser.open){
+      {PixelSpace pixels(dc);Gdiplus::Graphics g(dc);g.SetTransform(&pixels.transform);
+       Gdiplus::SolidBrush shade(Gdiplus::Color(97,0,0,0)),panel(Gdiplus::Color(240,19,26,31));
+       g.FillRectangle(&shade,0.f,0.f,float(mockup::width),float(mockup::height));g.FillRectangle(&panel,120.f,235.f,843.f,650.f);}
+      presetBrowser.draw(painter,editorState_->presetKey);
+    }
+
   }
-  void end(){if(dragID>=0)controller->endEdit(ParamID(dragID));if(dragXY){controller->endEdit(kXYX);controller->endEdit(kXYY);}dragID=dragSlot=dropSlot=-1;dragXY=routeMoved=dragScroll=false;animationFrames=12;}
+  void end(){flushHostEdits(true);hostEdits.clear();if(dragID>=0)controller->endEdit(ParamID(dragID));if(dragXY){controller->endEdit(kXYX);controller->endEdit(kXYY);}dragID=dragSlot=dropSlot=-1;dragXY=routeMoved=dragScroll=false;animationFrames=12;}
   void down(double x,double y,bool dbl){layout();SetFocus(window);
     auto hit=[&](mockup::Rect r){return r.contains(x,y);};
+    if(presetBrowser.open){browserClick(x,y);return;}
     if(license::activationRequired&&!license::status().empty()&&hit({450,88,220,25})){activationDialog();return;}
     if(hit(mockup::previous)){stepPreset(-1);return;}
     if(hit(mockup::next)){stepPreset(1);return;}
@@ -432,11 +605,11 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
     int lfo=mockup::hitLfo(x,y,rackState);if(lfo>=0){selectedLfo=lfo;InvalidateRect(window,nullptr,FALSE);return;}
     if(rackState.page==0&&y>=mockup::bodyTop&&hit(mockup::reslicePhraseRect(val,rackState))){reseedReslice(seed,val,[&](ParamID id,double v){edit(id,v);});return;}
     if(rackState.page==0&&y>=mockup::bodyTop)for(int t:{0,2,3,4})if(hit(mockup::randomRect(t,val,rackState))){if(t<3)randomizeModule(t,selectedRepeat,seed,val,[&](ParamID id,double v){edit(id,v);});else if(t==3)randomizeReslice(seed,val,[&](ParamID id,double v){edit(id,v);});else for(int i=0;i<16;++i){seed=seed*1664525u+1013904223u;edit(kGaterState0+i,(seed>>31)?1.:0.);}return;}
-    int st=-1,step=mockup::hitStep(x,y,val,rackState,st);if(step>=0){ParamID id=st==2?kRepeatStep0+step:st==3?kResliceStep0+step:kGaterState0+step;if(GetKeyState(VK_SHIFT)&0x8000){edit(id,info(id).defaultNormalizedValue);return;}if(dbl){editValue(id);return;}if(st==2){selectedRepeat=step;if(dbl)edit(kRepeatStep0+step,value(kRepeatStep0+step)>.5?0.:1.);}if(st==3){selectedReslice=step;if(dbl)edit(kResliceStep0+step,value(kResliceStep0+step)>.5?0.:1.);}if(st==4){selectedGate=step;if(GetKeyState(VK_MENU)&0x8000){double v=value(kGaterRelease0+step)>.5?0.:1.;edit(kGaterRelease0+step,v);if(v>.5)edit(kGaterState0+step,0.);}else{edit(kGaterRelease0+step,0.);edit(kGaterState0+step,value(kGaterState0+step)>.25?0.:1.);}}InvalidateRect(window,nullptr,FALSE);return;}
+    int st=-1,step=mockup::hitStep(x,y,val,rackState,st);if(step>=0){ParamID id=st==2?kRepeatStep0+step:st==3?kResliceStep0+step:kGaterState0+step;if(GetKeyState(VK_SHIFT)&0x8000){edit(id,info(id).defaultNormalizedValue);return;}if(st==2){selectedRepeat=step;if(dbl)edit(kRepeatStep0+step,value(kRepeatStep0+step)>.5?0.:1.);}if(st==3){selectedReslice=step;if(dbl)edit(kResliceStep0+step,value(kResliceStep0+step)>.5?0.:1.);}if(st==4){selectedGate=step;if(GetKeyState(VK_MENU)&0x8000){double v=value(kGaterRelease0+step)>.5?0.:1.;edit(kGaterRelease0+step,v);if(v>.5)edit(kGaterState0+step,0.);}else{edit(kGaterRelease0+step,0.);edit(kGaterState0+step,value(kGaterState0+step)>.25?0.:1.);}}InvalidateRect(window,nullptr,FALSE);return;}
     auto xy=rackState.position(mockup::xy);if(rackState.page==2&&y>=mockup::bodyTop&&hit(xy)){if(GetKeyState(VK_SHIFT)&0x8000){edit(kXYX,info(kXYX).defaultNormalizedValue);edit(kXYY,info(kXYY).defaultNormalizedValue);return;}dragXY=true;controller->beginEdit(kXYX);controller->beginEdit(kXYY);auto v=mockup::xyValue(xy,x,y);change(kXYX,v.first);change(kXYY,v.second);SetCapture(window);return;}
     for(const auto& c:controls)if((y>=mockup::bodyTop||c.id==kInputDeclick||c.id==kDeclickSensitivity)&&inside(x,y,c.x,c.y,c.w,c.h)){
       if(GetKeyState(VK_SHIFT)&0x8000){edit(c.id,info(c.id).defaultNormalizedValue);return;}
-      if(dbl){bool readout=mockup::valueRect({c.x,c.y,c.w,c.h},mockup::Kind(c.kind),c.id,c.label).contains(x,y);if(!readout&&(c.kind==Knob||c.kind==Slider||c.kind==VSlider||c.kind==Pan))edit(c.id,info(c.id).defaultNormalizedValue);else editValue(c.id);return;}
+      if(dbl){bool readout=mockup::valueRect({c.x,c.y,c.w,c.h},mockup::Kind(c.kind),c.id,c.label).contains(x,y);if(!readout&&(c.kind==Knob||c.kind==Slider||c.kind==VSlider||c.kind==Pan))edit(c.id,info(c.id).defaultNormalizedValue);else if(readout)editValue(c.id);return;}
       if(mockup::valueRect({c.x,c.y,c.w,c.h},mockup::Kind(c.kind),c.id,c.label).contains(x,y))return;
       if(c.kind==PanMode){edit(c.id,std::clamp(int((x-c.x)/(c.w/3)),0,2)/2.);return;}
       if(c.kind==Toggle||c.kind==Pad){edit(c.id,value(c.id)>.5?0:1);return;}
@@ -447,6 +620,8 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
   static LRESULT CALLBACK proc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp){auto* e=reinterpret_cast<WinEditor*>(GetWindowLongPtrW(hwnd,GWLP_USERDATA));if(msg==WM_NCCREATE){e=static_cast<WinEditor*>(reinterpret_cast<CREATESTRUCTW*>(lp)->lpCreateParams);SetWindowLongPtrW(hwnd,GWLP_USERDATA,reinterpret_cast<LONG_PTR>(e));e->window=hwnd;}if(!e)return DefWindowProcW(hwnd,msg,wp,lp);
     double x=0,y=0;
     switch(msg){
+      case WM_APP+75:return e->staticBuilds;
+      case WM_APP+76:return e->controlPatches;
       case WM_APP+74:e->alignToParent();return 0;
       case WM_SIZE:InvalidateRect(hwnd,nullptr,FALSE);return 0;
       case WM_APP+72:return e->rackState.page;
@@ -454,17 +629,25 @@ class WinEditor final:public CPluginView,public IPlugViewContentScaleSupport{
       case WM_APP+71:for(int stage:{0,2,3,4,mockup::inputOptionsBackground})if(!e->moduleImages[stage]||e->moduleImages[stage]->GetLastStatus()!=Gdiplus::Ok)return 0;return e->rackCables&&e->rackCables->GetLastStatus()==Gdiplus::Ok&&e->rackLogo&&e->rackLogo->GetLastStatus()==Gdiplus::Ok&&e->rackBackplate&&e->rackAtlas&&e->rackBackplate->GetLastStatus()==Gdiplus::Ok&&e->rackAtlas->GetLastStatus()==Gdiplus::Ok;
       case WM_ERASEBKGND:return 1;
       case WM_TIMER:{
+        e->flushHostEdits();
         if(!IsWindowVisible(hwnd)||IsIconic(GetAncestor(hwnd,GA_ROOT)))return 0;
+        const double now=EditorRefresh::now();
+        if(e->refresh.interactionDue(now))InvalidateRect(hwnd,nullptr,FALSE);
+        // Mouse gestures have priority over polling and decorative animation.
+        if(e->presetBrowser.open||e->dragID>=0||e->dragXY)return 0;
+        if(!e->refresh.backgroundDue(now))return 0;
         const auto currentLicense=license::status();bool changed=currentLicense!=e->licenseLabel;e->licenseLabel=currentLicense;for(int id=0;id<kCount;++id){double v=e->value(id);if(e->lastDisplayValues[id]!=v){e->lastDisplayValues[id]=v;if(!isMonitor(id)||mockup::monitorVisible(id,[&](ParamID p){return e->value(p);},e->rackState,e->selectedLfo))changed=true;}}
         if(e->dragSlot>=0&&e->routeMoved){double d=e->routePointerY<mockup::bodyTop+45?-18:e->routePointerY>mockup::height-45?18:0;if(d){mockup::scrollBy(e->rackState,d);e->dropSlot=mockup::routeInsertion(e->routePointerX,e->routePointerY,[&](ParamID id){return e->value(id);},e->rackState);}}if(changed)e->animationFrames=12;
-        if(e->animationFrames>0||e->dragSlot>=0){--e->animationFrames;if(e->rackState.page==0&&mockup::visible(mockup::waveRect([&](ParamID id){return e->value(id);},e->rackState)))e->waveVisual.update([&](ParamID id){return e->lastDisplayValues[id];});InvalidateRect(hwnd,nullptr,FALSE);}return 0;}
-      case WM_PAINT:{PAINTSTRUCT ps;HDC screen=BeginPaint(hwnd,&ps);RECT r;GetClientRect(hwnd,&r);if(r.right<=0||r.bottom<=0){EndPaint(hwnd,&ps);return 0;}HDC mem=CreateCompatibleDC(screen);auto bitmap=CreateCompatibleBitmap(screen,r.right*2,r.bottom*2);auto old=SelectObject(mem,bitmap);PatBlt(mem,0,0,r.right*2,r.bottom*2,BLACKNESS);mockup::Viewport fit(r.right,r.bottom);SetMapMode(mem,MM_ANISOTROPIC);SetWindowExtEx(mem,int(mockup::width),int(mockup::height),nullptr);SetViewportExtEx(mem,int(std::round(mockup::width*fit.scale*2)),int(std::round(mockup::height*fit.scale*2)),nullptr);SetViewportOrgEx(mem,int(std::round(fit.x*2)),int(std::round(fit.y*2)),nullptr);e->dc=mem;e->draw();SetMapMode(mem,MM_TEXT);SetViewportOrgEx(mem,0,0,nullptr);SetStretchBltMode(screen,HALFTONE);SetBrushOrgEx(screen,0,0,nullptr);StretchBlt(screen,0,0,r.right,r.bottom,mem,0,0,r.right*2,r.bottom*2,SRCCOPY);SelectObject(mem,old);DeleteObject(bitmap);DeleteDC(mem);EndPaint(hwnd,&ps);return 0;}
-      case WM_RBUTTONDOWN:e->point(lp,x,y);e->layout();for(const auto& c:e->controls)if((y>=mockup::bodyTop||c.id==kInputDeclick||c.id==kDeclickSensitivity)&&inside(x,y,c.x,c.y,c.w,c.h)){e->editValue(c.id);break;}return 0;
+        if(e->animationFrames>0||e->dragSlot>=0){--e->animationFrames;if(e->rackState.page==0&&mockup::visible(mockup::waveRect([&](ParamID id){return e->value(id);},e->rackState)))e->waveVisual.update([&](ParamID id){return e->lastDisplayValues[id];});if(e->dragSlot>=0){e->refresh.request();if(e->refresh.interactionDue(now))InvalidateRect(hwnd,nullptr,FALSE);}else InvalidateRect(hwnd,nullptr,FALSE);}return 0;}
+      case WM_PAINT:{PAINTSTRUCT ps;HDC screen=BeginPaint(hwnd,&ps);RECT r;GetClientRect(hwnd,&r);
+        if(r.right>0&&r.bottom>0)e->paint(screen,r);
+        EndPaint(hwnd,&ps);return 0;}
+      case WM_RBUTTONDOWN:return 0;
       case WM_LBUTTONDOWN:case WM_LBUTTONDBLCLK:e->point(lp,x,y);e->down(x,y,msg==WM_LBUTTONDBLCLK);return 0;
-      case WM_MOUSEMOVE:e->point(lp,x,y);if(e->dragScroll){auto b=mockup::scrollbar(),t=mockup::scrollThumb(e->rackState);e->rackState.scroll[e->rackState.page]=std::clamp(e->scrollOrigin+(y-e->originY)*mockup::maxScroll(e->rackState)/std::max(1.,b.h-t.h),0.,mockup::maxScroll(e->rackState));InvalidateRect(hwnd,nullptr,FALSE);}else if(e->dragSlot>=0){e->routePointerX=x;e->routePointerY=y;if(std::hypot(x-e->originX,y-e->originY)>8)e->routeMoved=true;if(e->routeMoved)e->dropSlot=mockup::routeInsertion(x,y,[&](ParamID id){return e->value(id);},e->rackState);InvalidateRect(hwnd,nullptr,FALSE);}else if(e->dragXY){auto xy=e->rackState.position(mockup::xy);auto v=mockup::xyValue(xy,x,y);e->change(kXYX,v.first);e->change(kXYY,v.second);}else if(e->dragID>=0){double delta=(e->dragKind==Slider||e->dragKind==Pan)?(x-e->originX)/e->dragWidth:(e->originY-y)/(e->dragKind==VSlider?std::max(1.,e->dragHeight-42):180.);if(GetKeyState(VK_SHIFT)&0x8000)delta*=.1;e->dragValue=std::clamp(e->dragValue+delta,0.,1.);e->originX=x;e->originY=y;e->change(ParamID(e->dragID),e->dragValue);}return 0;
+      case WM_MOUSEMOVE:e->point(lp,x,y);if(e->dragScroll){auto b=mockup::scrollbar(),t=mockup::scrollThumb(e->rackState);e->rackState.scroll[e->rackState.page]=std::clamp(e->scrollOrigin+(y-e->originY)*mockup::maxScroll(e->rackState)/std::max(1.,b.h-t.h),0.,mockup::maxScroll(e->rackState));InvalidateRect(hwnd,nullptr,FALSE);}else if(e->dragSlot>=0){e->routePointerX=x;e->routePointerY=y;if(std::hypot(x-e->originX,y-e->originY)>8)e->routeMoved=true;if(e->routeMoved)e->dropSlot=mockup::routeInsertion(x,y,[&](ParamID id){return e->value(id);},e->rackState);e->refresh.request();if(e->refresh.interactionDue(EditorRefresh::now()))InvalidateRect(hwnd,nullptr,FALSE);}else if(e->dragXY){auto xy=e->rackState.position(mockup::xy);auto v=mockup::xyValue(xy,x,y);e->change(kXYX,v.first);e->change(kXYY,v.second);}else if(e->dragID>=0){double delta=(e->dragKind==Slider||e->dragKind==Pan)?(x-e->originX)/e->dragWidth:(e->originY-y)/(e->dragKind==VSlider?std::max(1.,e->dragHeight-42):180.);if(GetKeyState(VK_SHIFT)&0x8000)delta*=.1;e->dragValue=std::clamp(e->dragValue+delta,0.,1.);e->originX=x;e->originY=y;e->change(ParamID(e->dragID),e->dragValue);}return 0;
       case WM_LBUTTONUP:if(e->dragSlot>=0&&e->dropSlot>=0&&e->dropSlot!=e->dragSlot&&e->dropSlot!=e->dragSlot+1)e->edit(kRoutingOrder,mockup::moveRoute(e->routingAtDrag,e->dragSlot,e->dropSlot));e->end();ReleaseCapture();InvalidateRect(hwnd,nullptr,FALSE);return 0;
       case WM_CAPTURECHANGED:e->end();return 0;
-      case WM_MOUSEWHEEL:{mockup::scrollBy(e->rackState,-GET_WHEEL_DELTA_WPARAM(wp)/120.*72);InvalidateRect(hwnd,nullptr,FALSE);return 0;}
+      case WM_MOUSEWHEEL:{if(e->presetBrowser.open){POINT pt{GET_X_LPARAM(lp),GET_Y_LPARAM(lp)};ScreenToClient(hwnd,&pt);e->point(MAKELPARAM(pt.x,pt.y),x,y);e->presetBrowser.scroll(GET_WHEEL_DELTA_WPARAM(wp)>0?-3:3,x<383);InvalidateRect(hwnd,nullptr,FALSE);return 0;}mockup::scrollBy(e->rackState,-GET_WHEEL_DELTA_WPARAM(wp)/120.*72);InvalidateRect(hwnd,nullptr,FALSE);return 0;}
 
     }return DefWindowProcW(hwnd,msg,wp,lp);
   }
@@ -482,10 +665,10 @@ public:
     return onSize(&wanted);
   }
   explicit WinEditor(EditController* c,std::shared_ptr<EditorState> state):controller(c){editorState_=state?state:std::make_shared<EditorState>();presetName=wide(editorState_->presetName);controller->addRef();rect=ViewRect(0,0,int(mockup::width*.90),int(mockup::height*.90));seed=uint32_t(GetTickCount64())^uint32_t(reinterpret_cast<uintptr_t>(this));seed|=1;loadSkin();}
-  ~WinEditor()override{removed();for(auto& image:moduleImages)image.reset();mockupKnob.reset();rackBackplate.reset();rackAtlas.reset();rackLogo.reset();rackCables.reset();if(skinDC){SelectObject(skinDC,oldSkin);DeleteDC(skinDC);}if(skin)DeleteObject(skin);for(size_t i=0;i<sprites.size();++i){if(spriteDC[i]){SelectObject(spriteDC[i],oldSprite[i]);DeleteDC(spriteDC[i]);}if(sprites[i])DeleteObject(sprites[i]);}if(imaging)Gdiplus::GdiplusShutdown(imaging);controller->release();}
+  ~WinEditor()override{removed();for(auto& entry:fonts)if(entry.second)DeleteObject(entry.second);for(auto& image:moduleImages)image.reset();mockupKnob.reset();rackBackplate.reset();rackAtlas.reset();rackLogo.reset();rackCables.reset();if(skinDC){SelectObject(skinDC,oldSkin);DeleteDC(skinDC);}if(skin)DeleteObject(skin);for(size_t i=0;i<sprites.size();++i){if(spriteDC[i]){SelectObject(spriteDC[i],oldSprite[i]);DeleteDC(spriteDC[i]);}if(sprites[i])DeleteObject(sprites[i]);}if(imaging)Gdiplus::GdiplusShutdown(imaging);controller->release();}
   tresult PLUGIN_API isPlatformTypeSupported(FIDString type)override{return type&&std::strcmp(type,kPlatformTypeHWND)==0?kResultTrue:kResultFalse;}
-  tresult PLUGIN_API attached(void* parent,FIDString type)override{if(!parent||window||isPlatformTypeSupported(type)!=kResultTrue)return kResultFalse;HINSTANCE instance=nullptr;GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,reinterpret_cast<LPCWSTR>(&proc),&instance);WNDCLASSW wc{};wc.style=CS_DBLCLKS;wc.lpfnWndProc=proc;wc.hInstance=instance;wc.hCursor=LoadCursor(nullptr,IDC_ARROW);wc.lpszClassName=L"GrainsDosage070";RegisterClassW(&wc);window=CreateWindowExW(0,wc.lpszClassName,L"GrainsDosage",WS_CHILD|WS_VISIBLE,0,0,rect.getWidth(),rect.getHeight(),static_cast<HWND>(parent),nullptr,instance,this);if(!window)return kResultFalse;license::firstOpen();SetTimer(window,1,33,nullptr);auto result=CPluginView::attached(parent,type);userZoom=.90;ViewRect opening(0,0,int(std::round(mockup::width*userZoom*contentScale)),int(std::round(mockup::height*userZoom*contentScale)));if(plugFrame)plugFrame->resizeView(this,&opening);alignToParent();PostMessageW(window,WM_APP+74,0,0);return result;}
-  tresult PLUGIN_API removed()override{end();if(window){KillTimer(window,1);DestroyWindow(window);window=nullptr;}return CPluginView::removed();}
+  tresult PLUGIN_API attached(void* parent,FIDString type)override{if(!parent||window||isPlatformTypeSupported(type)!=kResultTrue)return kResultFalse;HINSTANCE instance=nullptr;GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,reinterpret_cast<LPCWSTR>(&proc),&instance);WNDCLASSW wc{};wc.style=CS_DBLCLKS;wc.lpfnWndProc=proc;wc.hInstance=instance;wc.hCursor=LoadCursor(nullptr,IDC_ARROW);wc.lpszClassName=L"GrainsDosage070";RegisterClassW(&wc);window=CreateWindowExW(0,wc.lpszClassName,L"GrainsDosage",WS_CHILD|WS_VISIBLE,0,0,rect.getWidth(),rect.getHeight(),static_cast<HWND>(parent),nullptr,instance,this);if(!window)return kResultFalse;license::firstOpen();SetTimer(window,1,16,nullptr);auto result=CPluginView::attached(parent,type);userZoom=.90;ViewRect opening(0,0,int(std::round(mockup::width*userZoom*contentScale)),int(std::round(mockup::height*userZoom*contentScale)));if(plugFrame)plugFrame->resizeView(this,&opening);alignToParent();PostMessageW(window,WM_APP+74,0,0);return result;}
+  tresult PLUGIN_API removed()override{end();if(window){KillTimer(window,1);DestroyWindow(window);window=nullptr;}releaseBackBuffer();return CPluginView::removed();}
   tresult PLUGIN_API onSize(ViewRect* r)override{if(!r||r->getWidth()<=0||r->getHeight()<=0)return kInvalidArgument;auto result=CPluginView::onSize(r);userZoom=std::clamp(r->getWidth()/(mockup::width*contentScale),.5,1.);if(window){SetWindowPos(window,nullptr,0,0,r->getWidth(),r->getHeight(),SWP_NOZORDER|SWP_NOMOVE|SWP_NOACTIVATE);InvalidateRect(window,nullptr,FALSE);}return result;}
   tresult PLUGIN_API canResize()override{return kResultTrue;}
   tresult PLUGIN_API checkSizeConstraint(ViewRect* r)override{if(!r)return kInvalidArgument;double f=std::clamp(r->getWidth()/(mockup::width*contentScale),.5,1.);r->right=r->left+int(std::round(mockup::width*f*contentScale));r->bottom=r->top+int(std::round(mockup::height*f*contentScale));return kResultTrue;}

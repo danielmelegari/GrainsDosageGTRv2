@@ -12,6 +12,10 @@ void runGuiScenarios(Controller* c,Click click,Drag drag,Scroll scroll,Page actu
  mockup::RackState rack;auto val=[&](ParamID id){return c->getParamNormalized(id);};int lfo=0;
  auto rectClick=[&](mockup::Rect r,int count=1){click(r.x+r.w/2,r.y+r.h/2,count);};
  auto page=[&](int p){rectClick(mockup::pageRect(p));rack.page=p;check(actualPage()==p,"Fixed page navigation");};
+ // The preset overlay captures clicks until its explicit close button is used.
+ page(0);rectClick(mockup::preset);rectClick(mockup::pageRect(1));
+ check(actualPage()==0,"Preset browser blocks controls underneath");
+ click(927,267,1);page(1);page(0);
  auto setScroll=[&](double d){rack.scroll[rack.page]=std::clamp(d,0.,mockup::maxScroll(rack));scroll(rack.offset());};
  auto focus=[&](int stage){page(0);setScroll(0);auto r=mockup::moduleRect(stage,val,rack);setScroll(r.y-220);};
  auto control=[&](ParamID id){for(auto c:mockup::controls(val,0,lfo,0,0,0,rack))if(c.id==id)return c.r;throw std::runtime_error("Control missing from page: parameter "+std::to_string(id));};

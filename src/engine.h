@@ -73,7 +73,7 @@ class Engine {
   double glitchOffset_=0.,lastGlitchChance_=-1.,glitchSlice_=0.,nextGlitch_=-1e30;
   double repeatUntil_=-1e30;int64_t repeatCycle_=INT64_MIN;
   bool previousHold_=false;
-  Settings settings_{},baseSettings_{};
+  Settings settings_{};
   std::array<int,5> chain_{{0,1,2,-1,-1}};
   std::array<bool,modTargetCount> modRouted_{};bool extendedMod_=false;
   Modulation modulation_;
@@ -383,7 +383,7 @@ public:
       // Re-freezing while a release fade is still running: fold the remaining
       // snapshot tail into the new 50 ms fade-in instead of stacking ramps.
       freezeFadingOut_=false;
-      settings_.freeze = baseSettings_.freeze = true;
+      settings_.freeze = true;
       freezeRamp_ = int64_t(std::llround(0.050*sr));   // 50 ms fade-IN of the frozen span
       freezeBlend_ = 0.;                               // start from the live stream
       // Snapshot the last bufferSeconds of ring history: grains keep looping it.
@@ -392,11 +392,11 @@ public:
         const int64_t keep = std::min<int64_t>(int64_t(cap), std::max(int64_t(1), int64_t(std::llround(std::clamp(bufferSeconds_,1.,64.)*sr))));
         // Keep an absolute anchor; rawRead wraps only the physical storage.
         freezeStart_ = double(write_-keep); freezeLength_ = double(keep);
-        settings_.freezeBucket = baseSettings_.freezeBucket = bucketForSeconds(bufferSeconds_);
+        settings_.freezeBucket = bucketForSeconds(bufferSeconds_);
       }
     } else {
-      settings_.freeze = baseSettings_.freeze = false;
-      settings_.freezeBucket = baseSettings_.freezeBucket = -1;
+      settings_.freeze = false;
+      settings_.freezeBucket = -1;
       if(freezeLength_>0.) {
         // Keep whatever blend was reached so far and ride the rest of the
         // snapshot down to silence over a full 100 ms fade-OUT.
@@ -423,16 +423,16 @@ public:
   // the selection — switching buckets re-captures the frozen span around the
   // new BUFFER SIZE (with the same 50 ms fade-in).
   void applyFreezeSelection(int bucket) {
-    if(!settings_.freeze) { settings_.freezeBucket = baseSettings_.freezeBucket = -1; return; }
+    if(!settings_.freeze) { settings_.freezeBucket = -1; return; }
     if(bucket==settings_.freezeBucket) return;
     const double sizes[]={1.,2.,4.,8.,16.};
     const double sr = std::max(8000., settings_.sampleRate);
     const size_t cap = buffer_[0].empty()?0:buffer_[0].size();
-    if(!cap) { settings_.freezeBucket = baseSettings_.freezeBucket = bucket; return; }
+    if(!cap) { settings_.freezeBucket = bucket; return; }
     const int64_t keep = std::min<int64_t>(int64_t(cap), std::max(int64_t(1), int64_t(std::llround(sizes[std::clamp(bucket,0,4)]*sr))));
     freezeStart_ = double(write_-keep); freezeLength_ = double(keep);
     freezeRamp_ = int64_t(std::llround(0.050*sr)); freezeBlend_ = 0.; freezeFadingOut_=false;
-    settings_.freezeBucket = baseSettings_.freezeBucket = bucket;
+    settings_.freezeBucket = bucket;
   }
   void prepare(double sampleRate) {
     settings_.sampleRate = std::max(8000., sampleRate);
@@ -449,7 +449,7 @@ public:
     modulation_.prepare(); grainLevel_=settings_.grainMix;
     // Reset the FREEZE crossfade engine with the buffers (no stale snapshot).
     freezeStart_=0.; freezeLength_=0.; freezeRamp_=0; freezeBlend_=0.;
-    settings_.freezeBucket = baseSettings_.freezeBucket = settings_.freeze ? bucketForSeconds(bufferSeconds_) : -1;
+    settings_.freezeBucket = settings_.freeze ? bucketForSeconds(bufferSeconds_) : -1;
     if(settings_.freeze) { const int64_t keep=std::min<int64_t>(int64_t(capacity),std::max(int64_t(1),int64_t(std::llround(std::clamp(bufferSeconds_,1.,64.)*settings_.sampleRate)))); freezeStart_=0.; freezeLength_=double(keep); freezeBlend_=1.; }
     levelSmoothing_=std::exp(-1./(.003*settings_.sampleRate));voiceScale_=1.;meterTick_=0;
     for(int i=0;i<=2048;++i)grainWindows_[i]=.5-.5*std::cos(2.*pi*i/2048.);
@@ -469,7 +469,7 @@ public:
     // per-block copy instead of silently unfreezing mid-hold. (set() takes the
     // Settings by value precisely so these two lines stay local to this frame.)
     s.freeze=settings_.freeze; s.freezeBucket=settings_.freezeBucket;
-    settings_ = baseSettings_ = s;modulation_.configure(s.lfos);modRouted_.fill(false);extendedMod_=false;
+    settings_ = s;modulation_.configure(s.lfos);modRouted_.fill(false);extendedMod_=false;
     // BUFFER SELECTION drives FREEZE: switching buckets while frozen re-freezes
     // around the newly selected span (50 ms fade-in).
     applyFreezeSelection(bucketForSeconds(std::clamp(s.bufferSeconds,1.,64.)));

@@ -1,0 +1,124 @@
+name: GrainsDosage — macOS Trial and Licensed installers (Mojave+)
+on:
+  workflow_dispatch:
+  workflow_call:
+permissions:
+  contents: read
+concurrency:
+  group: grains-macos-commercial-installers-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    uses: ./.github/workflows/build-all.yml
+    with:
+      macos_only: true
+  package:
+    name: Package and install ${{ matrix.edition }} on Intel
+    needs: build
+    runs-on: macos-15-intel
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        edition: [trial, licensed]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: GrainsDosage-${{ matrix.edition }}-macOS
+          path: source
+      - uses: actions/download-artifact@v4
+        with:
+          name: VST3-validation-tools-${{ matrix.edition }}
+          path: tools-archive
+      - name: Create installer from this run's validated bundles
+        run: python3 tools/package-trial-macos.py source dist --edition ${{ matrix.edition }}
+      - name: Install and compare exact payload
+        run: |
+          set -euo pipefail
+          sudo installer -pkg dist/*.pkg -target /
+          mkdir -p expected
+          ditto -x -k source/GrainsDosage-${{ matrix.edition }}.vst3.zip expected
+          ditto -x -k source/GrainsDosage-${{ matrix.edition }}.component.zip expected
+          diff -qr expected/GrainsDosage.vst3 /Library/Audio/Plug-Ins/VST3/GrainsDosage.vst3
+          diff -qr expected/GrainsDosage.component /Library/Audio/Plug-Ins/Components/GrainsDosage.component
+          for bundle in /Library/Audio/Plug-Ins/VST3/GrainsDosage.vst3 /Library/Audio/Plug-Ins/Components/GrainsDosage.component; do
+            codesign --verify --deep --strict "$bundle"
+            python3 tools/check-au-deployment.py "$bundle"
+          done
+      - name: Validate installed AU and VST3 on Intel
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          ditto -x -k tools-archive/validation-tools.zip .
+          arch -x86_64 validation-tools/validator /Library/Audio/Plug-Ins/VST3/GrainsDosage.vst3 2>&1 | tee vst3-intel.txt
+          killall -9 AudioComponentRegistrar || true
+          python3 tools/run-au-validation.py --diagnostics auval-diagnostics -- arch -x86_64 /usr/bin/auval -v aufx Gdsg Dmeg 2>&1 | tee auval-intel.txt
+          grep -F 'AU VALIDATION SUCCEEDED.' auval-intel.txt
+      - name: Include instructions and checksums
+        run: |
+          cp docs/macos-installers.md dist/READ-ME.md
+          cp USER-MANUAL.html dist/
+          cd dist
+          shasum -a 256 *.pkg > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GrainsDosage-${{ matrix.edition }}-macOS-Installer
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Installer-${{ matrix.edition }}-Intel-diagnostics
+          path: |
+            auval-intel.txt
+            vst3-intel.txt
+            auval-diagnostics/
+          if-no-files-found: ignore
+  apple-silicon:
+    name: Install ${{ matrix.edition }} on Apple Silicon
+    needs: package
+    runs-on: macos-15
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        edition: [trial, licensed]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: GrainsDosage-${{ matrix.edition }}-macOS-Installer
+          path: shipped
+      - uses: actions/download-artifact@v4
+        with:
+          name: VST3-validation-tools-${{ matrix.edition }}
+          path: tools-archive
+      - name: Install distributed package and verify deployment
+        run: |
+          set -euo pipefail
+          (cd shipped && shasum -a 256 -c SHA256SUMS.txt)
+          sudo installer -pkg shipped/*.pkg -target /
+          for bundle in /Library/Audio/Plug-Ins/VST3/GrainsDosage.vst3 /Library/Audio/Plug-Ins/Components/GrainsDosage.component; do
+            codesign --verify --deep --strict "$bundle"
+            python3 tools/check-au-deployment.py "$bundle"
+          done
+      - name: Validate installed AU and VST3 on Apple Silicon
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          ditto -x -k tools-archive/validation-tools.zip .
+          arch -arm64 validation-tools/validator /Library/Audio/Plug-Ins/VST3/GrainsDosage.vst3 2>&1 | tee vst3-arm64.txt
+          killall -9 AudioComponentRegistrar || true
+          python3 tools/run-au-validation.py --diagnostics auval-diagnostics -- arch -arm64 /usr/bin/auval -v aufx Gdsg Dmeg 2>&1 | tee auval-arm64.txt
+          grep -F 'AU VALIDATION SUCCEEDED.' auval-arm64.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Installer-${{ matrix.edition }}-Apple-Silicon-diagnostics
+          path: |
+            auval-arm64.txt
+            vst3-arm64.txt
+            auval-diagnostics/
+          if-no-files-found: ignore

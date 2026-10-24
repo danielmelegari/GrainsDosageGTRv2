@@ -6,7 +6,7 @@
 namespace aztec {
 // UI-only state owned by the controller, which outlives individual windows.
 // Each plugin instance gets its own state; no global preset selection is shared.
-struct EditorState { std::string presetName="PRESETS ▾"; };
+struct EditorState { std::string presetName="PRESETS ▾",presetKey; };
 Steinberg::IPlugView* createEditor(Steinberg::Vst::EditController* controller,
                                  std::shared_ptr<EditorState> state = {});
 // Lock-free transport for the audio thread's live modulation magnitudes. The

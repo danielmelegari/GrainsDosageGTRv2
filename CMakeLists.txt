@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(GrainsDosage VERSION 0.13.15 LANGUAGES CXX)
+project(GrainsDosage VERSION 0.13.22 LANGUAGES CXX)
 # Keep the visible GUI version aligned with the built plugin metadata.
 add_compile_definitions(GRAINS_PLUGIN_VERSION="${PROJECT_VERSION}")
 set(GRAINS_EDITION "development" CACHE STRING "development, trial, licensed, or unlocked")
@@ -91,6 +91,10 @@ smtg_add_vst3plugin(GrainsDosage
   src/parameters.h
   src/editor.h
 )
+option(GRAINS_DISABLE_HOST_TELEMETRY "Diagnostic build: suppress GUI monitor output, keep audio processing" OFF)
+if(GRAINS_DISABLE_HOST_TELEMETRY)
+  target_compile_definitions(GrainsDosage PRIVATE GRAINS_DISABLE_HOST_TELEMETRY=1)
+endif()
 option(GRAINS_TRIAL "Build the Windows 14-day trial" OFF)
 if(GRAINS_EDITION STREQUAL "unlocked")
   if(GRAINS_TRIAL)
@@ -223,6 +227,20 @@ if(APPLE)
         COMMAND ${CMAKE_COMMAND} -E make_directory "${_trial_au_resources}"
         COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:GrainsDosageTrialHelper>" "${_trial_au_resources}/GrainsDosageTrialHelper")
     endif()
+    # Staging changes the SDK-signed bundle after its POST_BUILD validation.
+    # Seal the helper first, then its containing plugin, after all copies finish.
+    # Otherwise a plain local build can fail a host scan with an invalid seal.
+    list(APPEND _trial_stage_commands
+      COMMAND /usr/bin/codesign --force --sign - --timestamp=none "${_trial_vst_resources}/GrainsDosageTrialHelper"
+      COMMAND /usr/bin/codesign --force --sign - --timestamp=none "${CMAKE_BINARY_DIR}/VST3/$<CONFIG>/GrainsDosage.vst3"
+      COMMAND /usr/bin/codesign --verify --deep --strict "${CMAKE_BINARY_DIR}/VST3/$<CONFIG>/GrainsDosage.vst3")
+    if(TARGET GrainsDosageAU)
+      list(APPEND _trial_stage_commands
+        COMMAND /usr/bin/codesign --force --sign - --timestamp=none "${_trial_au_resources}/GrainsDosageTrialHelper"
+        COMMAND /usr/bin/codesign --force --sign - --timestamp=none "${CMAKE_BINARY_DIR}/AU/$<CONFIG>/GrainsDosage.component/Contents/Resources/plugin.vst3"
+        COMMAND /usr/bin/codesign --force --sign - --timestamp=none "${CMAKE_BINARY_DIR}/AU/$<CONFIG>/GrainsDosage.component"
+        COMMAND /usr/bin/codesign --verify --deep --strict "${CMAKE_BINARY_DIR}/AU/$<CONFIG>/GrainsDosage.component")
+    endif()
     add_custom_target(grains_stage_trial_helper ALL ${_trial_stage_commands}
       DEPENDS ${_trial_stage_dependencies} VERBATIM)
   endif()
@@ -243,7 +261,7 @@ if(WIN32)
       "$<TARGET_FILE_DIR:GrainsDosage>/GrainsDosage-skin"
     COMMENT "Copying replaceable skin PNGs next to GrainsDosage.vst3")
   add_executable(aztec_gui_smoke_win src/gui_smoke_win.cpp src/editor_win.cpp "${CMAKE_CURRENT_BINARY_DIR}/grains_skin.rc")
-  target_link_libraries(aztec_gui_smoke_win PRIVATE sdk user32 gdi32 comdlg32 shell32 gdiplus ole32)
+  target_link_libraries(aztec_gui_smoke_win PRIVATE sdk advapi32 user32 gdi32 comdlg32 shell32 gdiplus ole32)
   set_target_properties(aztec_gui_smoke_win PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gui-test/$<CONFIG>")
 endif()
 
@@ -353,7 +371,7 @@ if(GRAINS_BUILD_TESTS)
   endif()
   add_executable(grains_export_presets tools/export_factory_presets.cpp)
   set_target_properties(grains_export_presets PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/preset-bank/$<CONFIG>")
-  foreach(suite rnd_regressions random_trigger audio_quality wave_library modulation_display module_preset reslice_destinations audio_float_mode module_loop input_options reslice_controls reslice_dsg bank_collection modwave_rate buffer_memory engine modulation features rhythm random master upgrade gater declick expansion state glitch_trigger musical gui_layout knob_rotation routing_polarity ui_motion preset_bank trial)
+  foreach(suite preset_folders preset_browser display_transport editor_refresh capture_snapshot host_buffers rnd_regressions random_trigger audio_quality wave_library modulation_display module_preset reslice_destinations audio_float_mode module_loop input_options reslice_controls reslice_dsg bank_collection modwave_rate buffer_memory engine modulation features rhythm random master upgrade gater declick expansion state glitch_trigger musical gui_layout knob_rotation routing_polarity ui_motion preset_bank trial)
     add_executable(grains_test_${suite} test_${suite}.cpp)
     target_include_directories(grains_test_${suite} PRIVATE "${VST3_SDK_ROOT}")
     if(MSVC)
@@ -363,12 +381,17 @@ if(GRAINS_BUILD_TESTS)
     endif()
     # parameters.h uses Steinberg::Vst::ParamID only when built against the SDK;
     # standalone DSP tests get a binary-identical uint32 fallback instead.
-    if(suite STREQUAL "state")
+    if(suite STREQUAL "state" OR suite STREQUAL "host_buffers" OR suite STREQUAL "display_transport")
       target_compile_definitions(grains_test_${suite} PRIVATE GRAINS_HAVE_VST3_SDK)
       target_sources(grains_test_${suite} PRIVATE
         "${VST3_SDK_ROOT}/public.sdk/source/common/memorystream.cpp"
         "${VST3_SDK_ROOT}/public.sdk/source/vst/hosting/parameterchanges.cpp")
       target_link_libraries(grains_test_${suite} PRIVATE sdk)
+      if(suite STREQUAL "display_transport")
+        target_sources(grains_test_${suite} PRIVATE
+          "${VST3_SDK_ROOT}/public.sdk/source/vst/hosting/hostclasses.cpp"
+          "${VST3_SDK_ROOT}/public.sdk/source/vst/hosting/pluginterfacesupport.cpp")
+      endif()
       # test_state includes plugin.cpp, whose controller references createEditor.
       # Link the real platform editor and its frameworks, just as for the plugin.
       if(APPLE)

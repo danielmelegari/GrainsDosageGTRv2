@@ -4,9 +4,9 @@ ADD(kDeclickSensitivity,895,62,108,27,Slider,"");
 auto addBody=[&](ParamID id,double x,double y,double w,double h,mockup::Kind kind,const char* label){auto r=state.position({x,y,w,h});result.push_back({id,r,kind,label});};
 #define BODY(ID,X,Y,W,H,K,L) addBody(ParamID(ID),X,Y,W,H,mockup::K,L)
 if(state.page==0){
- BODY(kTranspose,362,242,140,128,Knob,"TRANSPOSE");
- BODY(kStretchSpeed,574,242,140,128,Knob,"STRETCH");
- BODY(kStretchOn,776,319,192,28,Toggle,"FREE STRETCH");
+ BODY(kTranspose,326,225,180,64,Knob,"TRANSPOSE");
+ BODY(kStretchSpeed,562,225,180,64,Knob,"STRETCH");
+ BODY(kStretchOn,776,243,192,28,Toggle,"FREE STRETCH");
  for(int stage:mockup::routeChain(value)){
   auto r=mockup::moduleRect(stage,value,state);double y=r.y+state.offset(),x=r.x;
   const int loopIndex=moduleLoopIndex(stage);if(loopIndex>=0){BODY(moduleLoopOn(loopIndex),x+330,y+13,96,30,Toggle,"LOOP");BODY(moduleLoopWindow(loopIndex),x+438,y+13,173,30,Select,"WINDOW");}

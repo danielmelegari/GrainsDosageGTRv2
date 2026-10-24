@@ -84,3 +84,49 @@ jobs:
           path: dist/*.zip
           if-no-files-found: error
           retention-days: 30
+      - name: Stage universal VST3 validator
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p native-checks
+          cp build/bin/Release/validator native-checks/validator
+          ditto -c -k --keepParent native-checks native-checks.zip
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'macOS'
+        with:
+          name: Unlocked-macOS-validation-tools
+          path: native-checks.zip
+          retention-days: 7
+  apple-silicon:
+    name: Validate shipped unlocked VST3 on Apple Silicon
+    needs: vst3
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: GrainsDosage-macOS-VST3-Full-Unlocked
+          path: shipped
+      - uses: actions/download-artifact@v4
+        with:
+          name: Unlocked-macOS-validation-tools
+          path: validation-tools
+      - name: Validate the distributed VST3 natively on ARM64
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          ditto -x -k shipped/GrainsDosage-macOS-Full-Unlocked-VST3.zip unpacked
+          ditto -x -k validation-tools/native-checks.zip .
+          VST="$PWD/unpacked/GrainsDosage.vst3"
+          python3 tools/check-au-deployment.py "$VST"
+          python3 tools/check-public-only.py --unlocked unpacked
+          codesign --verify --deep --strict "$VST"
+          for attempt in 1 2 3; do
+            arch -arm64 native-checks/validator "$VST" 2>&1 | tee "vst3-arm64-$attempt.txt"
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Unlocked-VST3-Apple-Silicon-validation
+          path: vst3-arm64-*.txt
+          if-no-files-found: warn

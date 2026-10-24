@@ -1,7 +1,7 @@
 # Keyboard values, MOD W rates and preset banks
 
-Click a numeric readout to type its value. Right-click any control to enter its
-value or exact option label, including menu controls and switches. Apply commits
+Double-click a numeric value rectangle to type its value. Right-clicking,
+clicking step pads, or double-clicking labels does not open keyboard entry. Apply commits
 one host edit gesture; Cancel leaves the value unchanged. Numeric entry accepts
 the displayed units and decimal commas. Invalid or out-of-range input leaves the
 dialog open. Double-clicking a knob still restores its default.

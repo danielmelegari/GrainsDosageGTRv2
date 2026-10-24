@@ -1,5 +1,6 @@
 #include "engine.h"
 #include "audio_float_mode.h"
+#include "host_transport.h"
 #include "license.h"
 #include "parameter_settings.h"
 #include "declick.h"
@@ -12,6 +13,7 @@
 #include "public.sdk/source/vst/vstaudioeffect.h"
 #include "public.sdk/source/vst/vsteditcontroller.h"
 #include "base/source/fstreamer.h"
+#include "base/source/timer.h"
 #include "pluginterfaces/base/ustring.h"
 #include "pluginterfaces/vst/ivstparameterchanges.h"
 #include "public.sdk/source/vst/vstparameters.h"
@@ -34,6 +36,7 @@ std::array<double,kCount> defaults(){return initialParameters();}
 // by getState; everything after it up to kCount is appended in the tail layout.
 static constexpr int kParamEnd = int(kUiFilterSeqStep) + 1;
 bool loadState(IBStream* stream, std::array<double,kCount>& p) {
+  if(!stream)return false;
   IBStreamer in(stream,kLittleEndian); int32 magic=0;
   if(!in.readInt32(magic) || (magic!=0x51473130 && magic!=0x51473131 && magic!=0x51473132 && magic!=0x51473133 && magic!=0x51473134 && magic!=0x51473135 && magic!=0x51473136 && magic!=0x51473137 && magic!=0x51473138 && magic!=0x51473139 && magic!=0x5147313A && magic!=0x5147313B && magic!=0x5147313C && magic!=0x5147313D && magic!=0x5147313E && magic!=0x5147313F && magic!=0x51473140 && magic!=0x51473141 && magic!=0x51473142 && magic!=0x51473143 && magic!=0x51473144 && magic!=0x51473145 && magic!=0x51473146 && magic!=0x51473147 && magic!=0x51473148 && magic!=0x51473149 && magic!=0x5147314A && magic!=0x5147314B && magic!=0x5147314C && magic!=0x5147314D && magic!=0x5147314E && magic!=0x5147314F && magic!=0x51473150 && magic!=0x51473151)) return false;
   auto result=defaults();
@@ -102,11 +105,19 @@ class Processor final : public AudioEffect {
   qg::InputDeclick declick_;
   qg::MasterFx master_;
   std::array<double, kCount> p_{};
-  int waveCountdown_=0;
+  int waveCountdown_=0,meterCountdown_=0;
+  std::array<double,kCount> lastTelemetry_{};
+  bool telemetrySinkAvailable_=false;
+  // Per-instance latest display values. Only lock-free stores run on the audio
+  // thread; VST3 message allocation/delivery happens on the controller timer.
+  static_assert(std::atomic<double>::is_always_lock_free,"Display transport must be lock-free");
+  std::array<std::atomic<double>,kCount> monitorValues_{};
+  std::atomic<bool> messageMonitoring_{false},resetMonitorCache_{false},monitorRequested_{false};
+  double meterPeak_=0.;
   double rate_ = 44100., tempo_ = 120., fallbackBeat_ = 0.;
+  aztec::HostTransport transport_;
   // The parameter array covers every legacy + monitor ID; the VST parameter list stops before the new UI controls.
   bool freezePending_ = false; // queued FREEZE toggle (from editor click or automation): consumed by the next process() call
-  int8_t freezeApplied_ = -1;  // last freeze state pushed to the engine (-1 unknown): lets setState drive setFrozen() directly so a restored session fades in with the 50 ms crossfade instead of blind-toggling
   uint32_t randomSeed_ = 0x9E3779B9u; // xorshift seed for RANDOM ALL one-shots
   bool randomAllPending_ = false;    // RANDOM ALL is a momentary button, like a trigger pulse
   // FREEZE is a sustained toggle: when the incoming value differs from the
@@ -114,7 +125,7 @@ class Processor final : public AudioEffect {
   // This keeps editor clicks AND DAW automation in sync with the audio thread.
   // RANDOM ALL stays momentary: any pulse >= .5 queues a single re-roll.
   void handleTrigger(ParamID id,double v) {
-    if(id==kFreeze){if((v>=.5)!=engine_.isFrozen())freezePending_=true;return;}
+    if(id==kFreeze){p_[id]=v>=.5?1.:0.;freezePending_=true;return;}
     if(id==kRandomAll&&v>=.5){randomAllPending_=true;p_[id]=0.;return;}
     // TAB is UI state that lives in the parameter array (persisted through
     // getState/loadState), but it must stay writable for the editor even though
@@ -127,10 +138,28 @@ class Processor final : public AudioEffect {
 public:
   Processor() {
     setControllerClass(controllerID);
-    p_=defaults();
+    p_=defaults();for(int id=0;id<kCount;++id)monitorValues_[id].store(p_[id],std::memory_order_relaxed);
     processContextRequirements.needTempo().needProjectTimeMusic().needTransportState().needTimeSignature();
   }
   static FUnknown* create(void*) { return static_cast<IAudioProcessor*>(new Processor); }
+  tresult PLUGIN_API notify(IMessage* message) override {
+    if(!message||!message->getMessageID())return kInvalidArgument;
+    if(std::strcmp(message->getMessageID(),"GrainsDosage.Display.Request.v1")!=0)return AudioEffect::notify(message);
+    if(!getPeer())return kResultFalse;
+    monitorRequested_.store(true,std::memory_order_release);
+    auto reply=owned(allocateMessage());if(!reply)return kResultFalse;
+    std::array<double,kCount> snapshot{};
+    for(int id=0;id<kCount;++id)snapshot[id]=monitorValues_[id].load(std::memory_order_relaxed);
+    reply->setMessageID("GrainsDosage.Display.Values.v1");
+    if(!reply->getAttributes()||reply->getAttributes()->setBinary("values",snapshot.data(),uint32(sizeof(snapshot)))!=kResultOk)return kResultFalse;
+    auto result=sendMessage(reply);
+    if(result==kResultOk)messageMonitoring_.store(true,std::memory_order_release);
+    return result;
+  }
+  tresult PLUGIN_API disconnect(IConnectionPoint* other) override {
+    messageMonitoring_.store(false,std::memory_order_release);resetMonitorCache_.store(true,std::memory_order_release);
+    return AudioEffect::disconnect(other);
+  }
   tresult PLUGIN_API initialize(FUnknown* c) override {
     if(AudioEffect::initialize(c) != kResultOk) return kResultFalse;
     aztec::license::initialize();
@@ -139,6 +168,7 @@ public:
     return kResultOk;
   }
   tresult PLUGIN_API setupProcessing(ProcessSetup& setup) override {
+    if(!std::isfinite(setup.sampleRate)||setup.sampleRate<=0.||setup.maxSamplesPerBlock<0||canProcessSampleSize(setup.symbolicSampleSize)!=kResultTrue)return kInvalidArgument;
     rate_ = setup.sampleRate; engine_.prepare(rate_);declick_.prepare(rate_,p_[kInputDeclick]>=.5);
     return AudioEffect::setupProcessing(setup);
   }
@@ -149,10 +179,11 @@ public:
     // getState writes). Queue it so the next process() block applies it on the
     // audio thread, where touching settings_ is safe. engine_.set() below copies
     // s.freeze=false into settings_, which would otherwise silently unfreeze.
-    if(p_[kFreeze]>=.5) freezePending_=true;
+    freezePending_=true;randomAllPending_=false;
     return kResultOk;
   }
   tresult PLUGIN_API getState(IBStream* stream) override {
+    if(!stream)return kInvalidArgument;
     IBStreamer out(stream,kLittleEndian);
     if(!out.writeInt32(0x51473151)) return kResultFalse;
     for(int i=0;i<kParamEnd;++i) if(!out.writeDouble(p_[i])) return kResultFalse;
@@ -170,7 +201,7 @@ public:
     return size==kSample32 || size==kSample64 ? kResultTrue : kResultFalse;
   }
   tresult PLUGIN_API setBusArrangements(SpeakerArrangement* in,int32 ni,SpeakerArrangement* out,int32 no) override {
-    if(ni!=1 || no!=1 || in[0]!=SpeakerArr::kStereo || out[0]!=SpeakerArr::kStereo) return kResultFalse;
+    if(ni!=1 || no!=1 || !in || !out || in[0]!=SpeakerArr::kStereo || out[0]!=SpeakerArr::kStereo) return kResultFalse;
     return AudioEffect::setBusArrangements(in,ni,out,no);
   }
   tresult PLUGIN_API setActive(TBool active) override {
@@ -178,7 +209,7 @@ public:
 #if defined(GRAINS_TRIAL) && GRAINS_TRIAL
       aztec::license::firstOpen(); // Host lifecycle thread, never process().
 #endif
-      engine_.prepare(rate_);declick_.prepare(rate_,p_[kInputDeclick]>=.5);master_.prepare(rate_); fallbackBeat_=0.;waveCountdown_=0; }
+      lastTelemetry_.fill(-1.);engine_.prepare(rate_);declick_.prepare(rate_,p_[kInputDeclick]>=.5);master_.prepare(rate_); fallbackBeat_=0.;transport_.reset();waveCountdown_=meterCountdown_=0;meterPeak_=0.; }
     return AudioEffect::setActive(active);
   }
   // NOTE: Processor must NOT override setComponentState — AudioEffect does not
@@ -198,10 +229,10 @@ public:
       }
     }
     auto applyChanges = [&](int32 sample) {
-      bool changed=false;
+      bool changed=false;int remaining=0;
       for(int qi=0;qi<queueCount;++qi) {int id=queueIDs[qi];
-        auto* q=queues[id]; int32 offset=0; ParamValue v=0.;
-        while(cursors[id]<q->getPointCount() && q->getPoint(cursors[id],offset,v)==kResultOk && offset<=sample) {
+        auto* q=queues[id];const int32 points=q->getPointCount();int32 offset=0; ParamValue v=0.;
+        while(cursors[id]<points && q->getPoint(cursors[id],offset,v)==kResultOk && offset<=sample) {
           if(std::isfinite(v)) {
             // FREEZE / RANDOM ALL arrive as momentary triggers (>= .5): consume
             // them here instead of storing, so p_ only ever holds 0 for those ids.
@@ -211,42 +242,53 @@ public:
           }
           ++cursors[id];
         }
+        // Retain only queues with future points; presets commonly deliver
+        // hundreds of offset-zero events, which must not be rescanned per sample.
+        if(cursors[id]<points)queueIDs[remaining++]=id;
       }
+      queueCount=remaining;
       return changed;
     };
     applyChanges(0);
     if(data.processContext) {
       if(data.processContext->state & ProcessContext::kTempoValid) tempo_ = std::isfinite(data.processContext->tempo) ? std::clamp(data.processContext->tempo,20.,400.) : 120.;
-      if((data.processContext->state & ProcessContext::kProjectTimeMusicValid) && std::isfinite(data.processContext->projectTimeMusic)) {
-        const double beat=data.processContext->projectTimeMusic;
-        if(std::abs(beat-fallbackBeat_)>2.*tempo_/(60.*rate_)) engine_.resetTransport();
-        fallbackBeat_=beat;
-      }
     }
-    if(data.numInputs < 1 || data.numOutputs < 1 || data.inputs[0].numChannels<1 || data.outputs[0].numChannels<1) return kResultOk;
-    data.outputs[0].silenceFlags=3;
+    const bool playing=!data.processContext||(data.processContext->state&ProcessContext::kPlaying);
+    const bool positionValid=data.processContext&&(data.processContext->state&ProcessContext::kProjectTimeMusicValid)&&std::isfinite(data.processContext->projectTimeMusic);
+    if(transport_.update(fallbackBeat_,positionValid?data.processContext->projectTimeMusic:0.,positionValid,playing,data.numSamples,tempo_/(60.*rate_)))engine_.resetTransport();
+    // Hosts may flush automation without audio during scanning or activation.
+    if(data.numSamples <= 0) return kResultOk;
+    if(data.numInputs < 1 || data.numOutputs < 1) return kResultOk;
+    if(!data.inputs || !data.outputs) return kResultFalse;
+    auto& inputBus=data.inputs[0];auto& outputBus=data.outputs[0];
+    if(inputBus.numChannels<1 || outputBus.numChannels<1) return kResultOk;
+    if(data.symbolicSampleSize==kSample32) {
+      if(!outputBus.channelBuffers32 || !outputBus.channelBuffers32[0] ||
+         (outputBus.numChannels>1 && !outputBus.channelBuffers32[1])) return kResultFalse;
+    } else if(data.symbolicSampleSize==kSample64) {
+      if(!outputBus.channelBuffers64 || !outputBus.channelBuffers64[0] ||
+         (outputBus.numChannels>1 && !outputBus.channelBuffers64[1])) return kResultFalse;
+    } else return kResultFalse;
+    outputBus.silenceFlags=outputBus.numChannels>1?3:1;
     double barBeats=4.;if(data.processContext&&(data.processContext->state&ProcessContext::kTimeSigValid)&&data.processContext->timeSigNumerator>0&&data.processContext->timeSigDenominator>0)barBeats=std::clamp(4.*data.processContext->timeSigNumerator/data.processContext->timeSigDenominator,.25,32.);
+    auto consumeRandom=[&](){if(randomAllPending_){applyRandomAll();randomAllPending_=false;p_[kRandomAll]=0.;}};
+    auto consumeFreeze=[&](){if(freezePending_){engine_.setFrozen(p_[kFreeze]>=.5);freezePending_=false;}p_[kFreeze]=engine_.isFrozen()?1.:0.;};
+    consumeRandom();
     auto s = settings(p_, tempo_, rate_,barBeats);s.playing=!data.processContext||(data.processContext->state & ProcessContext::kPlaying); engine_.set(s);
     auto setMaster=[&](){const double ceilings[]={0.,-6.,-10.};master_.set(false,0,1000.,0.,value(p_,kMasterLimiter)>=.5,0,0.,ceilings[int(std::round(value(p_,kLimiterCeiling)*2.))]);};
     setMaster();
-    // Momentary UI triggers consumed once per block (before the engine receives
-    // this block's settings, so a freeze toggle takes effect on the first sample).
-    // Toggle only when the engine actually disagrees with the queued request:
-    // a stale pending flag (e.g. an automation pulse that raced a preset load)
-    // must not double-toggle FREEZE back to its original state.
-    if(freezePending_) { const bool want=p_[kFreeze]>=.5; if(want!=engine_.isFrozen()) engine_.setFrozen(want); freezePending_=false; }
-    if(randomAllPending_) { applyRandomAll(); randomAllPending_=false; p_[kRandomAll]=0.; }
-    p_[kFreeze]=engine_.isFrozen()?1.:0.; // mirror the sustained state for save/load + readback
+    // Apply the requested freeze state after updating the selected buffer window.
+    consumeFreeze();
     const double beatIncrement = tempo_ / (60. * rate_);
-    double peak=0.,squareL=0.,squareR=0.;
+    double peak=0.;
     const double licenseTarget=aztec::license::processingAllowed()?1.:0.;
     for(int32 n=0;n<data.numSamples;++n) {
       licenseGain_+=std::clamp(licenseTarget-licenseGain_,-1./(.02*rate_),1./(.02*rate_));
-      if(n>0 && applyChanges(n)) { s=settings(p_,tempo_,rate_,barBeats);s.playing=!data.processContext||(data.processContext->state & ProcessContext::kPlaying); engine_.set(s);setMaster(); }
+      if(n>0 && applyChanges(n)) { consumeRandom();s=settings(p_,tempo_,rate_,barBeats);s.playing=!data.processContext||(data.processContext->state & ProcessContext::kPlaying); engine_.set(s);setMaster();consumeFreeze(); }
       const double beat = fallbackBeat_ + n * beatIncrement;
       if(data.symbolicSampleSize == kSample32) {
         auto& in = data.inputs[0]; auto& out = data.outputs[0];
-        float l = (in.silenceFlags & 1) ? 0.f : in.channelBuffers32[0][n], r = in.numChannels > 1 ? ((in.silenceFlags & 2) ? 0.f : in.channelBuffers32[1][n]) : l;
+        float l = ((in.silenceFlags & 1) || !in.channelBuffers32 || !in.channelBuffers32[0]) ? 0.f : in.channelBuffers32[0][n], r = in.numChannels > 1 ? (((in.silenceFlags & 2) || !in.channelBuffers32 || !in.channelBuffers32[1]) ? 0.f : in.channelBuffers32[1][n]) : l;
         double dl=l,dr=r;declick_.process(dl,dr,value(p_,kInputDeclick)>=.5,value(p_,kDeclickSensitivity),s.bypass||licenseGain_<=0.);l=float(dl);r=float(dr);
         const float rawL=float(declick_.dry(0)),rawR=float(declick_.dry(1));
         float a=l,b=r;if(licenseGain_>0.)engine_.process(l,r,beat,a,b);
@@ -257,15 +299,14 @@ public:
         if(licenseGain_<1.){a=float(rawL+licenseGain_*(double(a)-rawL));b=float(rawR+licenseGain_*(double(b)-rawR));}
 #endif
         peak=std::max({peak,std::abs(double(a)),std::abs(double(b))});
-        squareL+=double(a)*a;squareR+=double(b)*b;
         out.channelBuffers32[0][n] = a;
         if(a!=0.f) out.silenceFlags &= ~uint64(1);
-        if(b!=0.f) out.silenceFlags &= ~uint64(2);
+        if(out.numChannels>1 && b!=0.f) out.silenceFlags &= ~uint64(2);
         if(out.numChannels > 1) out.channelBuffers32[1][n] = b;
       } else if(data.symbolicSampleSize == kSample64) {
         auto& in = data.inputs[0]; auto& out = data.outputs[0];
-        double l = (in.silenceFlags & 1) ? 0. : in.channelBuffers64[0][n];
-        double r = in.numChannels>1 ? ((in.silenceFlags & 2) ? 0. : in.channelBuffers64[1][n]) : l;
+        double l = ((in.silenceFlags & 1) || !in.channelBuffers64 || !in.channelBuffers64[0]) ? 0. : in.channelBuffers64[0][n];
+        double r = in.numChannels>1 ? (((in.silenceFlags & 2) || !in.channelBuffers64 || !in.channelBuffers64[1]) ? 0. : in.channelBuffers64[1][n]) : l;
         declick_.process(l,r,value(p_,kInputDeclick)>=.5,value(p_,kDeclickSensitivity),s.bypass||licenseGain_<=0.);
         const double rawL=declick_.dry(0),rawR=declick_.dry(1);
         float a=float(l),b=float(r);if(licenseGain_>0.)engine_.process(float(l),float(r),beat,a,b);
@@ -278,7 +319,6 @@ public:
         const double finalR=licenseGain_<1.?rawR+licenseGain_*(wetR-rawR):wetR;
 #endif
         peak=std::max({peak,std::abs(finalL),std::abs(finalR)});
-        squareL+=finalL*finalL;squareR+=finalR*finalR;
         out.channelBuffers64[0][n]=finalL;
         if(out.numChannels>1)out.channelBuffers64[1][n]=finalR;
         if(finalL!=0.)out.silenceFlags&=~uint64(1);
@@ -286,17 +326,39 @@ public:
       }
     }
     aztec::modCell().packed.store(engine_.lastModPacked_.load(std::memory_order_relaxed),std::memory_order_relaxed);
-    if(data.outputParameterChanges&&data.numSamples>0){
-      for(int ch=0;ch<2;++ch){int32 index=0;auto* q=data.outputParameterChanges->addParameterData(ParamID(kUiOutputL+ch),index);if(q)q->addPoint(data.numSamples-1,std::clamp(std::sqrt((ch?squareR:squareL)/data.numSamples),0.,1.),index);}
-      const double beat=fallbackBeat_+(data.numSamples-1)*beatIncrement;
-      const int step=int((int64_t(std::floor(beat/.25))%16+16)%16);
-      const double meters[]={step/15.,(!s.bypass&&engine_.glitchRunning())?1.:0.,(!s.bypass&&engine_.repeatRunning())?1.:0.,std::clamp(peak,0.,1.),double((int64_t(std::floor(beat/s.reverbGrid))%16+16)%16)/15.};
-      for(int i=0;i<5;++i){int32 index=0;auto id=ParamID(i==4?kUiReverb:kUiStep+i);auto* q=data.outputParameterChanges->addParameterData(id,index);if(q)q->addPoint(data.numSamples-1,meters[i],index);}
+#ifndef GRAINS_DISABLE_HOST_TELEMETRY
+    if(resetMonitorCache_.exchange(false,std::memory_order_acq_rel)||(data.outputParameterChanges&&!telemetrySinkAvailable_))lastTelemetry_.fill(-1.);
+    telemetrySinkAvailable_=data.outputParameterChanges!=nullptr;
+    const bool privateDisplay=messageMonitoring_.load(std::memory_order_acquire);
+    auto publish=[&](int id,double v){
+      monitorValues_[id].store(v,std::memory_order_relaxed);
+      if(privateDisplay||!data.outputParameterChanges)return true;
+      int32 index=0;auto* queue=data.outputParameterChanges->addParameterData(ParamID(id),index);
+      return queue&&queue->addPoint(data.numSamples-1,v,index)==kResultOk;
+    };
+    meterCountdown_=std::max(0,meterCountdown_-data.numSamples);
+    meterPeak_=std::max(meterPeak_,peak);
+    if(meterCountdown_==0){
+      if(privateDisplay||data.outputParameterChanges){
+        const double beat=fallbackBeat_+(data.numSamples-1)*beatIncrement;
+        const int step=int((int64_t(std::floor(beat/.25))%16+16)%16);
+        const double meters[]={step/15.,(!s.bypass&&engine_.glitchRunning())?1.:0.,(!s.bypass&&engine_.repeatRunning())?1.:0.,std::clamp(meterPeak_,0.,1.),double((int64_t(std::floor(beat/s.reverbGrid))%16+16)%16)/15.};
+        for(int i=0;i<5;++i)publish(i==4?kUiReverb:kUiStep+i,meters[i]);
+      }
+      meterCountdown_=std::max(1,int(rate_/30.));
+      meterPeak_=0.;
     }
-    waveCountdown_-=data.numSamples;
-    if(data.outputParameterChanges&&data.numSamples>0&&waveCountdown_<=0){
-      waveCountdown_=std::max(1,int(rate_/30.));auto wave=engine_.grainView();
-      auto emit=[&](int id,double v){int32 index=0;auto* q=data.outputParameterChanges->addParameterData(ParamID(id),index);if(q)q->addPoint(data.numSamples-1,v,index);};
+    // Stay bounded even if the host never provides a monitor sink.
+    waveCountdown_=std::max(0,waveCountdown_-data.numSamples);
+    if((privateDisplay?monitorRequested_.load(std::memory_order_acquire):data.outputParameterChanges!=nullptr)&&data.numSamples>0&&waveCountdown_<=0){
+      monitorRequested_.store(false,std::memory_order_relaxed);
+      waveCountdown_=std::max(1,int(rate_/10.));auto wave=engine_.grainView();
+      auto emit=[&](int id,double v){
+        // Avoid notifying the host about hundreds of unchanged hidden values.
+        // Retain the legacy first bin as a refresh heartbeat for the editor.
+        if(id!=kUiWave0&&lastTelemetry_[id]==v)return;
+        if(publish(id,v))lastTelemetry_[id]=v;
+      };
       emit(kUiRndEnvelope,engine_.rndEnvelope());
       emit(kUiModulationActive,!s.bypass&&licenseGain_>0.?1.:0.);
       for(int i=0;i<qg::lfoCount;++i)emit(modParam(kUiLfoValue0,i),(engine_.lfoOutput(i)+1.)*.5);
@@ -304,6 +366,7 @@ public:
       for(int i=0;i<waveformBins;++i){emit(kUiWaveLow0+i,(wave.low[i]+1.)*.5);emit(kUiWaveHigh0+i,(wave.high[i]+1.)*.5);}
       for(int i=0;i<16;++i)emit(kUiResliceSource0+i,engine_.resliceSource(i)/15.);emit(kUiFilterSeqStep,engine_.filterSequenceStep()/31.);emit(kUiResliceStep,engine_.resliceStep()/15.);emit(kUiResliceActive,engine_.resliceActive()?1.:0.);emit(kUiGaterStep,engine_.gaterStep()/15.);emit(kUiGaterPhase,engine_.gaterPhase());for(int i=0;i<16;++i){emit(kUiGaterState0+i,engine_.gaterState(i)?1.:0.);emit(kUiGaterLength0+i,engine_.gaterLength(i));}emit(kUiReverbGate,!s.bypass&&engine_.reverbGate()?1.:0.);emit(kUiGrainStart,wave.start);emit(kUiGrainEnd,wave.end);emit(kUiGrainHead,wave.head);emit(kUiGrainActive,!s.bypass&&wave.active?1.:0.);emit(kUiWaveSeconds,wave.seconds/16.);for(int i=0;i<qg::lfoCount;++i){emit(modParam(kUiModWave0,i),engine_.lfoWave(i)/double(qg::maxWave));emit(modParam(kUiLfoPhase0,i),engine_.lfoPhase(i));emit(modParam(kUiLfoCycle0,i),std::clamp((double(engine_.lfoCycle(i))+2147483648.)/4294967295.,0.,1.));emit(modParam(kUiLfoEpoch0,i),std::clamp((double(engine_.lfoEpoch(i))+2147483648.)/4294967295.,0.,1.));}
     }
+#endif
     fallbackBeat_ += data.numSamples * beatIncrement;
     return kResultOk;
   }
@@ -314,9 +377,29 @@ public:
   ParamValue toPlain(ParamValue v)const override{return 20.*std::pow(1000.,v);}
   ParamValue toNormalized(ParamValue v)const override{return std::log(std::clamp(v,20.,20000.)/20.)/std::log(1000.);}
 };
-class Controller final : public EditController {
+class Controller final : public EditController, public ITimerCallback {
+  Timer* displayTimer_=nullptr;
+  void stopDisplayTimer(){if(displayTimer_){displayTimer_->stop();displayTimer_->release();displayTimer_=nullptr;}}
   std::shared_ptr<aztec::EditorState> editorState_=std::make_shared<aztec::EditorState>();
 public:
+  ~Controller() override {stopDisplayTimer();}
+  tresult PLUGIN_API terminate() override {stopDisplayTimer();return EditController::terminate();}
+  void onTimer(Timer*) override {
+    // No display traffic when every editor window has been destroyed.
+    if(editorState_.use_count()<=1||!getPeer())return;
+    sendMessageID("GrainsDosage.Display.Request.v1");
+  }
+  tresult PLUGIN_API notify(IMessage* message) override {
+    if(!message||!message->getMessageID())return kInvalidArgument;
+    if(std::strcmp(message->getMessageID(),"GrainsDosage.Display.Values.v1")!=0)return EditController::notify(message);
+    const void* bytes=nullptr;uint32 size=0;
+    if(!message->getAttributes()||message->getAttributes()->getBinary("values",bytes,size)!=kResultOk||!bytes||size!=sizeof(std::array<double,kCount>))return kInvalidArgument;
+    std::array<double,kCount> snapshot;std::memcpy(snapshot.data(),bytes,size);
+    for(int id=0;id<kCount;++id)if(isMonitor(id)&&id!=kUiTab&&std::isfinite(snapshot[id]))
+      if(auto* param=getParameterObject(ParamID(id)))param->setNormalized(std::clamp(snapshot[id],0.,1.));
+    // Display-only updates: never performEdit/restartComponent/setDirty here.
+    return kResultOk;
+  }
   std::shared_ptr<aztec::EditorState> editorState()const{return editorState_;}
   static FUnknown* create(void*) { return static_cast<IEditController*>(new Controller); }
   tresult PLUGIN_API initialize(FUnknown* c) override {
@@ -608,7 +691,10 @@ public:
   }
   IPlugView* PLUGIN_API createView(FIDString name) override {
 #if defined(__APPLE__) || defined(_WIN32)
-    if(name && std::strcmp(name,ViewType::kEditor)==0) return aztec::createEditor(this,editorState_);
+    if(name && std::strcmp(name,ViewType::kEditor)==0){
+      if(!displayTimer_)displayTimer_=Timer::create(this,67);
+      return aztec::createEditor(this,editorState_);
+    }
 #endif
     return nullptr;
   }

@@ -3,8 +3,17 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      macos_installers:
+        description: Build macOS Trial and Licensed PKG installers only
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
   commercial:
+    if: ${{ !inputs.macos_installers }}
     uses: ./.github/workflows/build-all.yml
+  macos-installers:
+    if: ${{ inputs.macos_installers }}
+    uses: ./.github/workflows/macos-commercial-installers.yml
