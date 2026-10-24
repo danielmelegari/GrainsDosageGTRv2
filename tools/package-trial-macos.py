@@ -3,6 +3,7 @@
 import argparse
 from pathlib import Path
 import plistlib
+import shutil
 import subprocess
 import tempfile
 import xml.etree.ElementTree as ET
@@ -61,8 +62,17 @@ def main():
         if edition == 'licensed':
             resources = work / 'licensed-resources'
             resources.mkdir()
+            shutil.copyfile(Path(__file__).resolve().parents[1] / 'assets/approved-rack/logo.png',
+                            resources / 'grainsdosage-logo.png')
             (resources / 'welcome.html').write_text(
-                '<html><body><h1>GrainsDosage Licensed</h1>'
+                '<!doctype html><html><head><meta charset="utf-8"><style>'
+                'body{font:12px Helvetica,sans-serif;color:#222;background:#fff;margin:0}'
+                '.art{background:#171b20;padding:12px;text-align:center}'
+                '.art img{width:400px;max-width:100%;height:auto}'
+                'h1{font-size:20px}h1,p{margin:12px}'
+                '</style></head><body><div class="art">'
+                '<img src="grainsdosage-logo.png" width="400" height="133" alt="GrainsDosage">'
+                '</div><h1>GrainsDosage Licensed</h1>'
                 '<p>Installs Audio Unit and VST3. Close your DAW before installing.</p>'
                 '<p>Intel: macOS Mojave 10.14 or later. Apple Silicon: macOS 11 or later.</p>'
                 '<p>Replaces the Trial edition. Open ACTIVATE in the plugin to enter your device activation.</p>'

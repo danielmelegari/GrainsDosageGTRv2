@@ -33,6 +33,9 @@ in macOS Security settings. For a public release without that warning, Developer
 ID Application/Installer certificates and Apple notarization credentials must be
 configured separately. Never disable Gatekeeper system-wide.
 
+Both installers include GrainsDosage artwork on the welcome screen: the trial
+installation image for Trial, and the official logo for Licensed.
+
 Each artifact includes the manual and SHA-256 checksum of its package. Package
 versions come from the built AU/VST3 metadata, not a hardcoded installer version.
 No private license signing key is included. See `docs/licensing.md` for activation.
