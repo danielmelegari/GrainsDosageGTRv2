@@ -5,6 +5,10 @@ Actions on the desired source branch. It builds both commercial editions from
 that exact commit and packages them only after Intel and Apple Silicon bundle
 validation succeeds. It does not select older artifacts from another run.
 
+Before the new workflow is registered on the default branch, run the existing
+**Build commercial installers** workflow on the source branch with
+`macos_installers=true`; it calls this same workflow.
+
 Artifacts:
 - `GrainsDosage-trial-macOS-Installer`: 14-day automatic trial `.pkg`.
 - `GrainsDosage-licensed-macOS-Installer`: full edition `.pkg`, requiring device activation through ACTIVATE.
