@@ -3,6 +3,10 @@ on:
   workflow_dispatch:
   workflow_call:
     inputs:
+      macos_only:
+        description: Build both macOS commercial editions only
+        type: boolean
+        default: false
       macos_trial_only:
         description: Build and validate only the macOS Trial
         type: boolean
@@ -25,14 +29,14 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: grains-commercial-${{ github.ref }}
+  group: grains-commercial-${{ github.ref }}-${{ inputs.macos_only }}-${{ inputs.macos_trial_only }}
   cancel-in-progress: true
 jobs:
   generator:
-    if: ${{ !inputs.macos_trial_only }}
+    if: ${{ !inputs.macos_trial_only && !inputs.macos_only }}
     uses: ./.github/workflows/license-generator.yml
   windows:
-    if: ${{ !inputs.macos_trial_only }}
+    if: ${{ !inputs.macos_trial_only && !inputs.macos_only }}
     name: Windows VST3 ${{ matrix.edition }}
     runs-on: windows-2022
     timeout-minutes: 45
@@ -282,7 +286,7 @@ jobs:
             vst3-arm64-*.txt
             auval-diagnostics/
   manual:
-    if: ${{ !inputs.macos_trial_only }}
+    if: ${{ !inputs.macos_trial_only && !inputs.macos_only }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
