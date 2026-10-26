@@ -6,26 +6,34 @@
 #include <vector>
 namespace qg {
 // Live input history and a separate held slice. All storage is allocated in
-// prepare(); captures copy a bounded slice, never allocate in the audio callback.
+// prepare(); capture is constant-time. Preserve held samples just before the
+// recording ring overwrites them, at most one stereo sample per process call.
 class RhythmicLoop {
   std::array<std::vector<float>,2> history_,capture_;
-  int64_t written_=0,firstSignal_=-1;
-  double capturedLength_=16.,length_=16.,position_=0.,blend_=0.,smooth_=0.,pitch_=0.;
+  int64_t written_=0,firstSignal_=-1,snapshotStart_=0;
+  size_t snapshotIndex_=0;
+  double capturedLength_=16.,length_=16.,position_=0.,blend_=0.,smooth_=0.,pitch_=0.,increment_=1.;
   bool frozen_=false,requested_=false,reverse_=false;
   std::array<float,2> previous_{};
   int transition_=0;
-  float read(int ch,double p)const{
+  float snapshot(int ch,int index)const{
+    const int64_t absolute=snapshotStart_+index;
+    // Samples still in the live ring have not needed a copy yet.
+    if(absolute<written_-int64_t(history_[0].size()))return capture_[ch][index];
+    size_t slot=snapshotIndex_+size_t(index);
+    if(slot>=history_[0].size())slot-=history_[0].size();
+    return history_[ch][slot];
+  }
+  void read(double p,float (&wet)[2])const{
     p=std::fmod(p,length_);if(p<0)p+=length_;
     int a=int(p);double f=p-a,fade=std::min(32.,length_*.1);
     double env=std::min(1.,std::min(p,length_-p)/fade);
-    return float((capture_[ch][a]*(1.-f)+capture_[ch][(a+1)%int(length_)]*f)*env);
+    for(int ch=0;ch<2;++ch)wet[ch]=float((snapshot(ch,a)*(1.-f)+snapshot(ch,(a+1)%int(length_))*f)*env);
   }
   void capture(double samples,double offset){
     capturedLength_=length_=samples;int64_t available=std::min(written_,int64_t(history_[0].size()));
     int64_t start=written_-int64_t(length_)-int64_t(std::clamp(std::round(offset),0.,double(available)-length_));
-    size_t index=size_t(start%int64_t(history_[0].size()));size_t n=size_t(length_);
-    size_t first=std::min(n,history_[0].size()-index);
-    for(int ch=0;ch<2;++ch){std::copy_n(history_[ch].data()+index,first,capture_[ch].data());std::copy_n(history_[ch].data(),n-first,capture_[ch].data()+first);}
+    snapshotStart_=start;snapshotIndex_=size_t(start%int64_t(history_[0].size()));
     position_=0.;frozen_=true;transition_=64;
   }
 public:
@@ -36,9 +44,23 @@ public:
   void prepare(double rate){for(auto& b:history_)b.assign(size_t(rate*16.),0.f);for(auto& b:capture_)b.assign(size_t(rate*16.),0.f);smooth_=std::exp(-1./(.002*rate));reset();}
   void reset(){written_=0;firstSignal_=-1;frozen_=requested_=false;position_=blend_=0.;previous_={};transition_=0;}
   bool active()const{return frozen_&&blend_>.01;}
+  // Keep the per-sample path inline as it was before snapshot preservation;
+  // otherwise the larger body defeats specialization of inactive modules.
+#if defined(_MSC_VER)
+  __forceinline
+#elif defined(__GNUC__) || defined(__clang__)
+  __attribute__((always_inline)) inline
+#endif
   void process(float& l,float& r,bool request,bool audible,double samples,double pitch,bool reverse,double mix,double offset=0.,bool recapture=false){
     if(history_[0].empty())return;
-    size_t index=size_t(written_%int64_t(history_[0].size()));history_[0][index]=l;history_[1][index]=r;++written_;
+    size_t index=size_t(written_%int64_t(history_[0].size()));
+    if(frozen_){
+      const int64_t displaced=written_-int64_t(history_[0].size());
+      const int64_t held=displaced-snapshotStart_;
+      if(held>=0&&held<int64_t(capturedLength_))
+        for(int ch=0;ch<2;++ch)capture_[ch][size_t(held)]=history_[ch][index];
+    }
+    history_[0][index]=l;history_[1][index]=r;++written_;
     if(firstSignal_<0&&(std::abs(l)>1e-7||std::abs(r)>1e-7))firstSignal_=written_;
     samples=std::clamp(std::round(samples),16.,double(history_[0].size()-2));
     if(!request){frozen_=false;requested_=false;}
@@ -49,13 +71,14 @@ public:
       requested_=true;
     }
     if(frozen_&&(reverse!=reverse_||pitch!=pitch_))transition_=64;
+    if(pitch!=pitch_)increment_=std::pow(2.,std::clamp(pitch,-48.,48.)/12.);
     reverse_=reverse;pitch_=pitch;
     double target=frozen_&&audible?std::clamp(mix,0.,1.):0.;blend_=target+smooth_*(blend_-target);
     if(frozen_){
-      float wet[2];for(int ch=0;ch<2;++ch){wet[ch]=read(ch,reverse?length_-1.-position_:position_);if(transition_>0){double t=1.-transition_/64.;wet[ch]=float(previous_[ch]*(1.-t)+wet[ch]*t);}}
+      float wet[2];read(reverse?length_-1.-position_:position_,wet);for(int ch=0;ch<2;++ch){if(transition_>0){double t=1.-transition_/64.;wet[ch]=float(previous_[ch]*(1.-t)+wet[ch]*t);}}
       if(transition_>0)--transition_;previous_={wet[0],wet[1]};
       l=float(l*(1.-blend_)+wet[0]*blend_);r=float(r*(1.-blend_)+wet[1]*blend_);
-      position_=std::fmod(position_+std::pow(2.,std::clamp(pitch,-48.,48.)/12.),length_);
+      position_=std::fmod(position_+increment_,length_);
     }else if(blend_>1e-8){l=float(l*(1.-blend_)+previous_[0]*blend_);r=float(r*(1.-blend_)+previous_[1]*blend_);}
   }
 };

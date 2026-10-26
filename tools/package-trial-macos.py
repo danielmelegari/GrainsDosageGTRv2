@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Wrap validated Trial archives in a system-wide, non-relocatable installer."""
+"""Wrap validated commercial archives in a system-wide, non-relocatable installer."""
 import argparse
 from pathlib import Path
 import plistlib
+import shutil
 import subprocess
 import tempfile
 import xml.etree.ElementTree as ET
@@ -16,7 +17,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('source', type=Path)
     parser.add_argument('output', type=Path)
+    parser.add_argument('--edition', choices=['trial', 'licensed'], default='trial')
     args = parser.parse_args()
+    edition = args.edition
+    label = 'Trial' if edition == 'trial' else 'Licensed'
     args.output.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='grains-trial-pkg-') as tmp:
         work = Path(tmp)
@@ -25,9 +29,10 @@ def main():
         for suffix, folder in [('vst3', 'VST3'), ('component', 'Components')]:
             destination = root / 'Library/Audio/Plug-Ins' / folder
             destination.mkdir(parents=True)
-            run('ditto', '-x', '-k', args.source / f'GrainsDosage-trial.{suffix}.zip', destination)
+            run('ditto', '-x', '-k', args.source / f'GrainsDosage-{edition}.{suffix}.zip', destination)
             bundle = destination / f'GrainsDosage.{suffix}'
             run('codesign', '--verify', '--deep', '--strict', bundle)
+            run('python3', Path(__file__).with_name('check-au-deployment.py'), bundle)
             bundles.append(bundle)
         version = None
         for bundle in bundles:
@@ -36,7 +41,10 @@ def main():
             current = info['CFBundleShortVersionString']
             assert version is None or current == version, 'AU/VST3 version mismatch'
             version = current
-            assert (bundle / 'Contents/Resources' / ('plugin.vst3/Contents/Resources/' if bundle.suffix == '.component' else '') / 'GrainsDosageTrialHelper').is_file()
+            if edition == 'trial':
+                assert (bundle / 'Contents/Resources' / ('plugin.vst3/Contents/Resources/' if bundle.suffix == '.component' else '') / 'GrainsDosageTrialHelper').is_file()
+        run('python3', Path(__file__).with_name('check-public-only.py'),
+            *(['--automatic-trial'] if edition == 'trial' else []), *bundles)
         # pkgbuild must not relocate an update to a user's backup/old bundle.
         components = work / 'components.plist'
         run('pkgbuild', '--analyze', '--root', root, components)
@@ -47,31 +55,49 @@ def main():
             entry['BundleOverwriteAction'] = 'upgrade'
         components.write_bytes(plistlib.dumps(entries))
         payload = work / 'payload.pkg'
-        identifier = 'com.danielmelegari.grainsdosage.trial.installer'
+        identifier = 'com.danielmelegari.grainsdosage.' + edition + '.installer'
         run('pkgbuild', '--root', root, '--component-plist', components,
             '--identifier', identifier, '--version', version, '--install-location', '/', payload)
         resources = Path(__file__).resolve().parents[1] / 'installer/trial/resources'
+        if edition == 'licensed':
+            resources = work / 'licensed-resources'
+            resources.mkdir()
+            shutil.copyfile(Path(__file__).resolve().parents[1] / 'assets/approved-rack/logo.png',
+                            resources / 'grainsdosage-logo.png')
+            (resources / 'welcome.html').write_text(
+                '<!doctype html><html><head><meta charset="utf-8"><style>'
+                'body{font:12px Helvetica,sans-serif;color:#222;background:#fff;margin:0}'
+                '.art{background:#171b20;padding:12px;text-align:center}'
+                '.art img{width:400px;max-width:100%;height:auto}'
+                'h1{font-size:20px}h1,p{margin:12px}'
+                '</style></head><body><div class="art">'
+                '<img src="grainsdosage-logo.png" width="400" height="133" alt="GrainsDosage">'
+                '</div><h1>GrainsDosage Licensed</h1>'
+                '<p>Installs Audio Unit and VST3. Close your DAW before installing.</p>'
+                '<p>Intel: macOS Mojave 10.14 or later. Apple Silicon: macOS 11 or later.</p>'
+                '<p>Replaces the Trial edition. Open ACTIVATE in the plugin to enter your device activation.</p>'
+                '<p>Presets and saved sessions are preserved.</p></body></html>', encoding='utf-8')
         distribution = ET.Element('installer-gui-script', {'minSpecVersion': '2'})
         if (resources / 'background.png').is_file():
             ET.SubElement(distribution, 'background', {'file': 'background.png', 'alignment': 'left', 'scaling': 'proportional'})
         if (resources / 'background-dark.png').is_file():
             ET.SubElement(distribution, 'background-darkAqua', {'file': 'background-dark.png', 'alignment': 'left', 'scaling': 'proportional'})
-        ET.SubElement(distribution, 'title').text = 'GrainsDosage 14-Day Trial'
+        ET.SubElement(distribution, 'title').text = 'GrainsDosage 14-Day Trial' if edition == 'trial' else 'GrainsDosage Licensed'
         if (resources / 'welcome.html').is_file():
             ET.SubElement(distribution, 'welcome', {'file': 'welcome.html', 'mime-type': 'text/html'})
         ET.SubElement(distribution, 'options', {'customize': 'never', 'require-scripts': 'false', 'hostArchitectures': 'x86_64,arm64'})
         ET.SubElement(distribution, 'domains', {'enable_anywhere': 'false', 'enable_currentUserHome': 'false', 'enable_localSystem': 'true'})
         volumes = ET.SubElement(distribution, 'volume-check')
         ET.SubElement(ET.SubElement(volumes, 'allowed-os-versions'), 'os-version', {'min': '10.14'})
-        ET.SubElement(ET.SubElement(distribution, 'choices-outline'), 'line', {'choice': 'trial'})
-        choice = ET.SubElement(distribution, 'choice', {'id': 'trial', 'visible': 'false', 'title': 'VST3 and Audio Unit'})
+        ET.SubElement(ET.SubElement(distribution, 'choices-outline'), 'line', {'choice': edition})
+        choice = ET.SubElement(distribution, 'choice', {'id': edition, 'visible': 'false', 'title': 'VST3 and Audio Unit'})
         ET.SubElement(choice, 'pkg-ref', {'id': identifier})
         ET.SubElement(distribution, 'pkg-ref', {'id': identifier, 'version': version, 'onConclusion': 'none'}).text = 'payload.pkg'
         xml = work / 'Distribution.xml'
         ET.ElementTree(distribution).write(xml, encoding='utf-8', xml_declaration=True)
         resource_args = ['--resources', resources] if resources.is_dir() else []
         run('productbuild', '--distribution', xml, '--package-path', work, *resource_args,
-            args.output / f'GrainsDosage-Trial-{version}-macOS-Universal.pkg')
+            args.output / f'GrainsDosage-{label}-{version}-macOS-Universal.pkg')
 
 
 if __name__ == '__main__':

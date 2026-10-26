@@ -20,7 +20,9 @@ target_include_directories(GrainsDosageAU PRIVATE "${SMTG_AUDIOUNIT_SDK_PATH}/in
 target_link_libraries(GrainsDosageAU PRIVATE sdk_hosting "${_au_library}"
   "-framework AudioUnit" "-framework CoreMIDI" "-framework AudioToolbox"
   "-framework CoreFoundation" "-framework Carbon" "-framework Cocoa" "-framework CoreAudio")
-smtg_target_set_bundle(GrainsDosageAU INFOPLIST "${CMAKE_CURRENT_SOURCE_DIR}/src/au_info.plist.in" EXTENSION component)
+math(EXPR GRAINS_AU_VERSION "(${PROJECT_VERSION_MAJOR} << 16) | (${PROJECT_VERSION_MINOR} << 8) | ${PROJECT_VERSION_PATCH}")
+configure_file(src/au_info.plist.in "${CMAKE_CURRENT_BINARY_DIR}/GrainsDosage-AU-Info.plist" @ONLY)
+smtg_target_set_bundle(GrainsDosageAU INFOPLIST "${CMAKE_CURRENT_BINARY_DIR}/GrainsDosage-AU-Info.plist" EXTENSION component)
 set_target_properties(GrainsDosageAU PROPERTIES OUTPUT_NAME GrainsDosage
   LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/AU"
   XCODE_ATTRIBUTE_PRODUCT_NAME GrainsDosage

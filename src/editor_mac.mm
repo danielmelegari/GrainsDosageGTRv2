@@ -1,5 +1,7 @@
 #import <Cocoa/Cocoa.h>
 #include "editor.h"
+#include "editor_refresh.h"
+#include "host_edit_queue.h"
 #include "license.h"
 #include "value_entry.h"
 // Header order matters: every non-aztec dependency (qg DSP helpers in
@@ -20,6 +22,7 @@
 #include "module_preset.h"
 #include "preset_banks.h"
 #include "preset_catalog.h"
+#include "preset_browser.h"
 #include "public.sdk/source/common/pluginview.h"
 #include <algorithm>
 #include <array>
@@ -38,9 +41,11 @@ class Editor final:public CPluginView {
   EditController* controller_;
   std::shared_ptr<EditorState> editorState_;
   __strong GrainsSurface* surface_=nil;
+  HostEditQueue hostEdits_;
 public:
   explicit Editor(EditController* c,std::shared_ptr<EditorState> state);
   void rememberPresetName(NSString* name){editorState_->presetName=name.UTF8String?name.UTF8String:"";}
+  std::string& presetKey(){return editorState_->presetKey;}
   ~Editor() override;
   tresult PLUGIN_API isPlatformTypeSupported(FIDString type) override;
   tresult PLUGIN_API attached(void* parent,FIDString type) override;
@@ -52,7 +57,13 @@ public:
   ParameterInfo info(ParamID id) const {auto* p=controller_->getParameterObject(id);return p?p->getInfo():ParameterInfo{};}
   NSString* display(ParamID id,double value,bool units=true) const;
   void begin(ParamID id) {controller_->beginEdit(id);}
-  void end(ParamID id) {controller_->endEdit(id);}
+  void flushHostEdits(bool force=false){hostEdits_.flush(EditorRefresh::now(),[&](uint32_t id,double v){controller_->performEdit(id,v);},force);}
+  void end(ParamID id) {flushHostEdits(true);hostEdits_.clear();controller_->endEdit(id);}
+  void dragChange(ParamID id,double v){
+    v=std::clamp(v,0.,1.);int n=info(id).stepCount;if(n>0)v=std::round(v*n)/n;
+    if(value(id)==v)return;
+    controller_->setParamNormalized(id,v);hostEdits_.queue(id,v);flushHostEdits();
+  }
   void change(ParamID id,double v) {
     v=std::clamp(v,0.,1.);int n=info(id).stepCount;if(n>0)v=std::round(v*n)/n;
     // Momentary triggers (RANDOM ALL): pulse the value locally so the button
@@ -143,6 +154,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   NSString* licenseLabel;
   NSMutableDictionary<NSNumber*,NSImage*>* editableModuleSkins;
   NSImage* staticScene;
+  NSBitmapImageRep* sceneBitmap;
   aztec::mockup::RackState rackState;
   int scenePage;double sceneScroll;
   bool dragScroll;double scrollOrigin;NSPoint routePointer;
@@ -161,6 +173,8 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
                        // own PNGs there to reskin without recompiling.
   NSMutableDictionary<NSString*,NSImage*>* sprites;
   NSString* presetName;
+  aztec::PresetBrowser presetBrowser;
+  NSArray<NSURL*>* browserFiles;
   std::vector<aztec::Control> controls;
   std::array<double,aztec::kCount> cached;
   int selectedGate,selectedReslice;
@@ -174,6 +188,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   NSPoint origin;
   double starting;
   NSTimer* timer;
+  aztec::EditorRefresh refresh;
   uint32_t randomSeed;
 }
 - (BOOL)skinLoaded;
@@ -184,6 +199,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
 - (void)stepPreset:(int)direction;
 - (void)restorePresetName:(NSString*)name;
 - (NSURL*)presetFolder;
+- (void)rememberPresetURL:(NSURL*)url;
 - (BOOL)loadPresetURL:(NSURL*)url;
 - (void)presetMenu:(NSEvent*)event;
 - (void)skinMenu:(NSEvent*)event;
@@ -330,7 +346,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
       if(image)editableModuleSkins[@(stage)]=image;
     }
     self.toolTip=@"Drag knobs vertically; Double-click knobs/faders to reset; double-click a value readout to type; Shift-click restores its default. Scroll each page. Drag module headers vertically to change audio order. Option-scroll edits a knob.";
-    timer=[NSTimer timerWithTimeInterval:1./30. target:self selector:@selector(tick:) userInfo:nil repeats:YES];
+    timer=[NSTimer timerWithTimeInterval:1./60. target:self selector:@selector(tick:) userInfo:nil repeats:YES];
     timer.tolerance=.003;
     [[NSRunLoop mainRunLoop] addTimer:timer forMode:NSRunLoopCommonModes];
   }return self;
@@ -348,7 +364,11 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   dragID=dragSlot=dropSlot=-1;dragXY=false;[timer invalidate];timer=nil;
 }
 - (void)tick:(NSTimer*)tick {
-  (void)tick;if(!owner||self.hiddenOrHasHiddenAncestor||!self.window||!(self.window.occlusionState&NSWindowOcclusionStateVisible))return;
+  (void)tick;if(owner)owner->flushHostEdits();if(!owner||self.hiddenOrHasHiddenAncestor||!self.window||!(self.window.occlusionState&NSWindowOcclusionStateVisible))return;
+  const double now=aztec::EditorRefresh::now();
+  if(refresh.interactionDue(now))[self setNeedsDisplay:YES];
+  if(presetBrowser.open||dragID>=0||dragXY)return;
+  if(!refresh.backgroundDue(now,1./15.))return;
   bool changed=false;
   NSString* currentLicense=[NSString stringWithUTF8String:aztec::license::status().c_str()];
   if(![licenseLabel isEqual:currentLicense]){licenseLabel=currentLicense;changed=true;}
@@ -358,7 +378,8 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   if(animationFrames>0||dragSlot>=0){
     --animationFrames;
     if(rackState.page==0&&aztec::mockup::visible(aztec::mockup::waveRect([&](aztec::ParamID id){return owner->value(id);},rackState)))waveVisual.update([&](aztec::ParamID id){return cached[id];});
-    [self setNeedsDisplay:YES];
+    if(dragSlot>=0){refresh.request();if(refresh.interactionDue(now))[self setNeedsDisplay:YES];}
+    else [self setNeedsDisplay:YES];
   }
 }
 - (NSPoint)logical:(NSEvent*)event {
@@ -465,17 +486,19 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   painter.box=[](mockup::Rect r,skin::Rgb fill,skin::Rgb edge,double radius){box(NSMakeRect(r.x,r.y,r.w,r.h),C(fill),C(edge),radius);};
   painter.text=[&](const std::string& text,mockup::Rect r,double size,skin::Rgb color,bool center){
     NSString* str=[NSString stringWithUTF8String:text.c_str()];
-    NSFont* fitFont=[NSFont fontWithName:@"HelveticaNeue-Medium" size:size];if(!fitFont)fitFont=[NSFont boldSystemFontOfSize:size];
-    double measured=[str sizeWithAttributes:@{NSFontAttributeName:fitFont}].width;
-    if(measured>r.w&&measured>0)size*=r.w/measured;
-    NSString* key=[NSString stringWithFormat:@"%@|%.3f|%d,%d,%d|%d",str,size,color.r,color.g,color.b,center];
+    // Cache the fitted text by its inputs, so repeated paints do not remeasure it.
+    NSString* key=[NSString stringWithFormat:@"%@|%.3f|%.3f|%d,%d,%d|%d",str,size,r.w,color.r,color.g,color.b,center];
     NSAttributedString* cachedText=textCache[key];
     if(!cachedText){
+      NSFont* fitFont=[NSFont fontWithName:@"HelveticaNeue-Medium" size:size];if(!fitFont)fitFont=[NSFont boldSystemFontOfSize:size];
+      double measured=[str sizeWithAttributes:@{NSFontAttributeName:fitFont}].width;
+      if(measured>r.w&&measured>0)size*=r.w/measured;
       NSMutableParagraphStyle* style=[[NSMutableParagraphStyle alloc] init];style.alignment=center?NSTextAlignmentCenter:NSTextAlignmentLeft;style.lineBreakMode=NSLineBreakByTruncatingTail;
       NSFont* font=[NSFont fontWithName:@"HelveticaNeue-Medium" size:size];if(!font)font=[NSFont systemFontOfSize:size weight:NSFontWeightMedium];
       cachedText=[[NSAttributedString alloc] initWithString:str attributes:@{NSFontAttributeName:font,NSForegroundColorAttributeName:C(color),NSParagraphStyleAttributeName:style}];
       if(textCache.count>512)[textCache removeAllObjects];textCache[key]=cachedText;
     }
+    if(cachedText.length>0)size=[(NSFont*)[cachedText attribute:NSFontAttributeName atIndex:0 effectiveRange:nullptr] pointSize];
     [cachedText drawInRect:NSMakeRect(r.x,r.y+(r.h-size*1.2)/2,r.w,size*1.4)];
   };
   painter.line=[](double x,double y,double xx,double yy,skin::Rgb col,double width){NSBezierPath* path=[NSBezierPath bezierPath];[path moveToPoint:NSMakePoint(x,y)];[path lineToPoint:NSMakePoint(xx,yy)];[C(col) setStroke];path.lineWidth=width;[path stroke];};
@@ -491,6 +514,25 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   };
   painter.clip=[](mockup::Rect r){CGContextRef c=[NSGraphicsContext currentContext].CGContext;CGContextSaveGState(c);CGContextClipToRect(c,CGRectMake(r.x,r.y,r.w,r.h));};
   painter.unclip=[](){CGContextRestoreGState([NSGraphicsContext currentContext].CGContext);};
+  // Rasterize at the destination pixel density. lockFocus on a logical-size
+  // NSImage forced expensive full-frame resampling in Live on Mojave.
+  const double density=viewport.scale*std::max(1.,double(self.window.backingScaleFactor));
+  const NSInteger pixelWidth=std::max<NSInteger>(1,std::lround(canvasW*density));
+  const NSInteger pixelHeight=std::max<NSInteger>(1,std::lround(canvasH*density));
+  if(sceneBitmap.pixelsWide!=pixelWidth||sceneBitmap.pixelsHigh!=pixelHeight)staticScene=nil;
+  auto beginScene=[&]{
+    [NSGraphicsContext saveGraphicsState];
+    NSGraphicsContext* bitmapContext=[NSGraphicsContext graphicsContextWithBitmapImageRep:sceneBitmap];
+    [NSGraphicsContext setCurrentContext:[NSGraphicsContext graphicsContextWithCGContext:bitmapContext.CGContext flipped:YES]];
+    CGContextRef ctx=bitmapContext.CGContext;
+    CGContextSaveGState(ctx);
+    CGContextTranslateCTM(ctx,0,pixelHeight);
+    CGContextScaleCTM(ctx,double(pixelWidth)/canvasW,-double(pixelHeight)/canvasH);
+  };
+  auto endScene=[&]{
+    CGContextRestoreGState([NSGraphicsContext currentContext].CGContext);
+    [NSGraphicsContext restoreGraphicsState];
+  };
   bool rebuild=!staticScene||![scenePreset isEqualToString:presetName]||scenePage!=rackState.page||sceneScroll!=rackState.offset();scenePage=rackState.page;sceneScroll=rackState.offset();
   std::vector<ParamID> changedControls;
   std::array<int,5> selection{{[self tab],selectedLfo,selectedRepeat,selectedGate,selectedReslice}};
@@ -509,28 +551,41 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   auto render=[&](mockup::RenderPass pass){mockup::render(painter,[&](ParamID id){return owner->value(id);},[&](ParamID id,double v){return std::string([owner->display(id,v) UTF8String]);},std::string([presetName UTF8String]),[self tab],selectedLfo,selectedRepeat,selectedGate,selectedReslice,&waveVisual,dragSlot,dropSlot,&motion,pass,rackState);};
   if(fullRedrawForInspection||dragSlot>=0||motion.routing){staticScene=nil;render(mockup::RenderPass::All);}else{
   if(rebuild){
+    sceneBitmap=[[NSBitmapImageRep alloc] initWithBitmapDataPlanes:nullptr pixelsWide:pixelWidth pixelsHigh:pixelHeight bitsPerSample:8 samplesPerPixel:4 hasAlpha:YES isPlanar:NO colorSpaceName:NSDeviceRGBColorSpace bytesPerRow:0 bitsPerPixel:32];
     staticScene=[[NSImage alloc] initWithSize:NSMakeSize(canvasW,canvasH)];
-    [staticScene lockFocusFlipped:YES];render(mockup::RenderPass::Static);[staticScene unlockFocus];
+    [staticScene addRepresentation:sceneBitmap];
+    beginScene();render(mockup::RenderPass::Static);endScene();
     scenePreset=[presetName copy];++staticBuilds;
   }else if(!patches.empty()){
-    [staticScene lockFocusFlipped:YES];
+    beginScene();
     for(const auto& control:patches){
       CGContextRef context=[NSGraphicsContext currentContext].CGContext;CGContextSaveGState(context);
       CGContextClipToRect(context,CGRectMake(control.r.x,control.r.y,control.r.w,control.r.h));
-      if(control.id!=kInputDeclick&&control.id!=kDeclickSensitivity)CGContextClipToRect(context,CGRectMake(51,mockup::bodyTop,982,mockup::height-mockup::bodyTop));
+      if(control.id!=kInputDeclick&&control.id!=kDeclickSensitivity)CGContextClipToRect(context,CGRectMake(mockup::bodyClip.x,mockup::bodyClip.y,mockup::bodyClip.w,mockup::bodyClip.h));
       mockup::restoreControlBackground(painter,control,[&](ParamID id){return owner->value(id);},rackState);
       mockup::renderControl(painter,control,[&](ParamID id){return owner->value(id);},[&](ParamID id,double v){return std::string([owner->display(id,v) UTF8String]);},selectedLfo);
       CGContextRestoreGState(context);++controlPatches;
     }
-    [staticScene unlockFocus];
+    endScene();
   }
-  [staticScene drawInRect:NSMakeRect(0,0,canvasW,canvasH) fromRect:NSZeroRect operation:NSCompositingOperationCopy fraction:1. respectFlipped:YES hints:nil];
+  // Draw the bitmap directly, avoiding NSImage's representation/cache machinery.
+  CGContextRef sceneContext=[NSGraphicsContext currentContext].CGContext;
+  CGContextSaveGState(sceneContext);
+  CGContextTranslateCTM(sceneContext,0,canvasH);CGContextScaleCTM(sceneContext,1,-1);
+  CGContextSetInterpolationQuality(sceneContext,kCGInterpolationNone);
+  CGContextDrawImage(sceneContext,CGRectMake(0,0,canvasW,canvasH),sceneBitmap.CGImage);
+  CGContextRestoreGState(sceneContext);
   render(mockup::RenderPass::Dynamic);
   const auto licenseText=aztec::license::status();
   if(!licenseText.empty()){
     mockup::Rect licenseButton{450,88,220,25};mockup::pill(painter,licenseButton);
     painter.text(licenseText+(aztec::license::activationRequired?"  ·  ACTIVATE":""),licenseButton,11,{230,233,237},true);
   }
+  }
+  if(presetBrowser.open){
+    [[NSColor colorWithCalibratedWhite:0 alpha:.38] setFill];NSRectFillUsingOperation(NSMakeRect(0,0,mockup::width,mockup::height),NSCompositingOperationSourceOver);
+    [[NSColor colorWithCalibratedRed:.075 green:.10 blue:.12 alpha:.94] setFill];[[NSBezierPath bezierPathWithRoundedRect:NSMakeRect(120,235,843,650) xRadius:14 yRadius:14] fill];
+    presetBrowser.draw(painter,owner->presetKey());
   }
   [NSGraphicsContext restoreGraphicsState];
 }
@@ -563,18 +618,21 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   if(![[NSFileManager defaultManager] createDirectoryAtURL:folder withIntermediateDirectories:YES attributes:nil error:&error]){NSAlert* alert=[[NSAlert alloc] init];alert.messageText=@"Cannot create the preset folder";alert.informativeText=error.localizedDescription;[alert runModal];return nil;}
   return folder;
 }
+- (void)rememberPresetURL:(NSURL*)url {
+  NSURL* root=[self presetFolder];NSString* prefix=[root.path stringByAppendingString:@"/"];owner->presetKey()=root&&[url.path hasPrefix:prefix]?std::string([url.path substringFromIndex:prefix.length].UTF8String):std::string{};
+}
 - (BOOL)loadPresetURL:(NSURL*)url {
   NSNumber* size=nil;[url getResourceValue:&size forKey:NSURLFileSizeKey error:nil];if(!size||size.unsignedLongLongValue>65536)return NO;
   NSData* data=[NSData dataWithContentsOfURL:url];std::array<double,aztec::kCount> p{};
   if(!data||!data.length||!aztec::decodePreset(std::string((const char*)data.bytes,data.length),p))return NO;
   for(int id=0;id<aztec::kCount;++id)if(aztec::presetParameter(id))owner->edit(id,p[id]);
-  presetName=[[url lastPathComponent] stringByDeletingPathExtension];owner->rememberPresetName(presetName);[self setNeedsDisplay:YES];return YES;
+  [self rememberPresetURL:url];presetName=[[url lastPathComponent] stringByDeletingPathExtension];owner->rememberPresetName(presetName);[self setNeedsDisplay:YES];return YES;
 }
-- (void)defaultPreset {auto p=aztec::initialParameters();for(int id=0;id<aztec::kCount;++id)if(aztec::presetParameter(id))owner->edit(id,p[id]);presetName=@"Default";owner->rememberPresetName(presetName);[self setNeedsDisplay:YES];}
+- (void)defaultPreset {auto p=aztec::initialParameters();for(int id=0;id<aztec::kCount;++id)if(aztec::presetParameter(id))owner->edit(id,p[id]);presetName=@"Default";owner->presetKey()="default";owner->rememberPresetName(presetName);[self setNeedsDisplay:YES];}
 - (NSArray<NSURL*>*)savedPresetFiles:(NSURL*)folder {
-  NSArray<NSURL*>* files=[[NSFileManager defaultManager] contentsOfDirectoryAtURL:folder includingPropertiesForKeys:nil options:NSDirectoryEnumerationSkipsHiddenFiles error:nil];NSMutableArray<NSURL*>* saved=[NSMutableArray array];
+  aztec::presetFolders::Listing listing;aztec::presetFolders::scan(folder.path.UTF8String,listing);NSMutableArray<NSURL*>* files=[NSMutableArray array];for(const auto& relative:listing.files)[files addObject:[folder URLByAppendingPathComponent:[NSString stringWithUTF8String:relative.c_str()]]];NSMutableArray<NSURL*>* saved=[NSMutableArray array];
   for(NSURL* url in files){if(![url.pathExtension.lowercaseString isEqualToString:@"gdspreset"])continue;std::string stem(url.lastPathComponent.stringByDeletingPathExtension.UTF8String);BOOL hide=NO;
-    if(aztec::installedFactoryIndex(stem).first>=0){NSNumber* size=nil;[url getResourceValue:&size forKey:NSURLFileSizeKey error:nil];if(size&&size.unsignedLongLongValue<=65536){NSData* bytes=[NSData dataWithContentsOfURL:url];if(bytes)hide=aztec::untouchedFactoryPreset(stem,std::string((const char*)bytes.bytes,bytes.length));}}
+    if([url.URLByDeletingLastPathComponent.path isEqualToString:folder.path]&&aztec::installedFactoryIndex(stem).first>=0){NSNumber* size=nil;[url getResourceValue:&size forKey:NSURLFileSizeKey error:nil];if(size&&size.unsignedLongLongValue<=65536){NSData* bytes=[NSData dataWithContentsOfURL:url];if(bytes)hide=aztec::untouchedFactoryPreset(stem,std::string((const char*)bytes.bytes,bytes.length));}}
     if(!hide)[saved addObject:url];
   }
   return [saved sortedArrayUsingComparator:^NSComparisonResult(NSURL* a,NSURL* b){return [a.lastPathComponent localizedStandardCompare:b.lastPathComponent];}];
@@ -584,12 +642,46 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   if(![self loadPresetURL:url]){NSAlert* alert=[[NSAlert alloc] init];alert.messageText=@"Cannot load this preset";alert.informativeText=@"Invalid or incompatible preset. No settings changed.";[alert runModal];}
 }
 - (void)presetMenu:(NSEvent*)event {
-  NSURL* folder=[self presetFolder];if(!folder)return;NSMenu* menu=[[NSMenu alloc] initWithTitle:@"Presets"];
-  NSMenuItem* def=[[NSMenuItem alloc] initWithTitle:@"Default" action:@selector(choosePreset:) keyEquivalent:@""];def.target=self;def.tag=-2;[menu addItem:def];
-  NSMenu* saved=[[NSMenu alloc] initWithTitle:@"Saved Presets"];
-  for(NSURL* url in [self savedPresetFiles:folder]){NSString* name=url.lastPathComponent.stringByDeletingPathExtension;NSMenuItem* item=[[NSMenuItem alloc] initWithTitle:name action:@selector(choosePreset:) keyEquivalent:@""];item.target=self;item.representedObject=url;item.state=[name isEqualToString:presetName]?NSControlStateValueOn:NSControlStateValueOff;[saved addItem:item];}
-  if(saved.numberOfItems){NSMenuItem* group=[[NSMenuItem alloc] initWithTitle:@"Saved Presets" action:nullptr keyEquivalent:@""];group.submenu=saved;[menu addItem:group];}
-  [menu addItem:[NSMenuItem separatorItem]];NSMenuItem* open=[[NSMenuItem alloc] initWithTitle:@"Open Preset Folder…" action:@selector(choosePreset:) keyEquivalent:@""];open.target=self;open.tag=-1;open.representedObject=folder;[menu addItem:open];[NSMenu popUpContextMenu:menu withEvent:event forView:self];
+  (void)event;NSURL* folder=[self presetFolder];if(!folder)return;
+  browserFiles=[self savedPresetFiles:folder];
+  std::vector<aztec::PresetBrowser::Entry> entries{{"default","Default","Init"}};
+  for(NSURL* url in browserFiles){std::string name=url.lastPathComponent.stringByDeletingPathExtension.UTF8String;std::string key=[url.path substringFromIndex:folder.path.length+1].UTF8String;auto dir=aztec::presetFolders::parent(key);entries.push_back({key,name,dir.empty()?aztec::PresetBrowser::categoryFor(name):"Folder: "+dir});}
+  NSString* saved=[[[NSUserDefaults alloc] initWithSuiteName:@"com.danielmelegari.GrainsDosage"] stringForKey:@"com.danielmelegari.GrainsDosage.presetFavorites"];
+  aztec::presetFolders::Listing listing;aztec::presetFolders::scan(folder.path.UTF8String,listing);presetBrowser.readFavorites(saved?saved.UTF8String:"");presetBrowser.show(std::move(entries),std::move(listing.folders));[self setNeedsDisplay:YES];
+}
+- (void)saveBrowserFavorites {
+  auto text=presetBrowser.encodedFavorites();[[[NSUserDefaults alloc] initWithSuiteName:@"com.danielmelegari.GrainsDosage"] setObject:[NSString stringWithUTF8String:text.c_str()] forKey:@"com.danielmelegari.GrainsDosage.presetFavorites"];
+}
+- (void)browserFolderError {
+  NSAlert* alert=[[NSAlert alloc] init];alert.messageText=@"Could not organize this preset folder";alert.informativeText=@"Check the name, permissions, and whether the destination already exists. Existing presets are not overwritten.";[alert runModal];
+}
+- (void)moveBrowserPreset:(NSMenuItem*)item {
+  using namespace aztec;int index=presetBrowser.moveIndex;if(index<0||index>=int(presetBrowser.entries.size()))return;
+  NSURL* root=[self presetFolder];if(!root)return;
+  auto from=presetBrowser.entries[index].key;std::string destination=[(NSString*)item.representedObject UTF8String];auto to=presetFolders::join(destination,presetFolders::leaf(from));
+  if(from!=to){if(!presetFolders::move(root.path.UTF8String,from,to)){[self browserFolderError];return;}presetBrowser.moved(from,to);owner->presetKey()=presetFolders::remap(owner->presetKey(),from,to);[self saveBrowserFavorites];[self presetMenu:nil];presetBrowser.selectFolder(destination);}
+  [self setNeedsDisplay:YES];
+}
+- (void)browserClick:(NSPoint)p {
+  using namespace aztec;int action=presetBrowser.click(p.x,p.y);
+  if(action==-2)[self saveBrowserFavorites];
+  else if(action==-4||action==-5){
+    auto folder=presetBrowser.selectedFolder();NSAlert* dialog=[[NSAlert alloc] init];dialog.messageText=action==-5?@"Rename preset folder":@"New preset folder";
+    dialog.informativeText=folder.empty()?@"Create a folder in your preset library.":[NSString stringWithFormat:@"Selected folder: %s",folder.c_str()];
+    NSTextField* input=[[NSTextField alloc] initWithFrame:NSMakeRect(0,0,360,28)];input.stringValue=action==-5?[NSString stringWithUTF8String:presetFolders::leaf(folder).c_str()]:@"";dialog.accessoryView=input;[dialog addButtonWithTitle:@"Save"];[dialog addButtonWithTitle:@"Cancel"];[dialog.window setInitialFirstResponder:input];
+    if([dialog runModal]==NSAlertFirstButtonReturn){std::string name=input.stringValue.UTF8String;NSURL* root=[self presetFolder];
+      if(!root||!presetFolders::validName(name)){[self browserFolderError];return;}
+      auto destination=presetFolders::join(action==-5?presetFolders::parent(folder):folder,name);bool ok=action==-5?(destination==folder||presetFolders::move(root.path.UTF8String,folder,destination)):presetFolders::create(root.path.UTF8String,folder,name);
+      if(ok){if(action==-5){presetBrowser.moved(folder,destination);owner->presetKey()=presetFolders::remap(owner->presetKey(),folder,destination);[self saveBrowserFavorites];}[self presetMenu:nil];presetBrowser.selectFolder(destination);}else [self browserFolderError];
+    }
+  }else if(action==-6){
+    NSMenu* menu=[[NSMenu alloc] initWithTitle:@"Move preset to folder"];
+    auto add=[&](const std::string& path){NSMenuItem* item=[[NSMenuItem alloc] initWithTitle:path.empty()?@"Move to preset root":[NSString stringWithUTF8String:path.c_str()] action:@selector(moveBrowserPreset:) keyEquivalent:@""];item.target=self;item.representedObject=[NSString stringWithUTF8String:path.c_str()];[menu addItem:item];};add("");for(const auto& path:presetBrowser.folders)add(path);
+    mockup::Viewport viewport(self.bounds.size.width,self.bounds.size.height);[menu popUpMenuPositioningItem:nil atLocation:NSMakePoint(viewport.x+p.x*viewport.scale,viewport.y+p.y*viewport.scale) inView:self];
+  }else if(action==-3){NSURL* root=[self presetFolder];if(root){auto path=presetBrowser.selectedFolder();[[NSWorkspace sharedWorkspace] openURL:[root URLByAppendingPathComponent:[NSString stringWithUTF8String:path.c_str()]]];}}
+  else if(action==0)[self defaultPreset];
+  else if(action>0&&action<=int(browserFiles.count)&&![self loadPresetURL:browserFiles[action-1]]){NSAlert* alert=[[NSAlert alloc] init];alert.messageText=@"Cannot load this preset";alert.informativeText=@"Invalid or incompatible preset. No settings changed.";[alert runModal];}
+  [self setNeedsDisplay:YES];
 }
 - (NSURL*)modulePresetFolder:(int)module {
   NSURL* root=[self presetFolder];if(!root)return nil;
@@ -628,7 +720,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   if(!owner)return;NSURL* folder=module<0?[self presetFolder]:[self modulePresetFolder:module];if(!folder)return;NSError* error=nil;bool ok=false;
   if(save){NSSavePanel* panel=[NSSavePanel savePanel];panel.allowedFileTypes=module<0?@[@"gdspreset"]:@[@"gdmodule"];panel.nameFieldStringValue=module<0?@"GrainsDosage.gdspreset":[[NSString stringWithUTF8String:aztec::mockup::moduleNames[module]] stringByAppendingPathExtension:@"gdmodule"];panel.directoryURL=folder;
     if([panel runModal]!=NSModalResponseOK)return;
-    auto get=[&](int id){return owner->value(id);};auto text=module<0?aztec::encodePreset(get):aztec::encodeModulePreset(module,get);NSData* data=[NSData dataWithBytes:text.data() length:text.size()];ok=[data writeToURL:panel.URL options:NSDataWritingAtomic error:&error];if(ok&&module<0){presetName=[panel.URL.lastPathComponent stringByDeletingPathExtension];owner->rememberPresetName(presetName);}
+    auto get=[&](int id){return owner->value(id);};auto text=module<0?aztec::encodePreset(get):aztec::encodeModulePreset(module,get);NSData* data=[NSData dataWithBytes:text.data() length:text.size()];ok=[data writeToURL:panel.URL options:NSDataWritingAtomic error:&error];if(ok&&module<0){[self rememberPresetURL:panel.URL];presetName=[panel.URL.lastPathComponent stringByDeletingPathExtension];owner->rememberPresetName(presetName);}
   }else{NSOpenPanel* panel=[NSOpenPanel openPanel];panel.allowedFileTypes=module<0?@[@"gdspreset"]:@[@"gdmodule"];panel.allowsMultipleSelection=NO;panel.canChooseDirectories=NO;panel.directoryURL=folder;
     if([panel runModal]!=NSModalResponseOK)return;
     if(module<0)ok=[self loadPresetURL:panel.URL];else ok=[self loadModulePresetURL:panel.URL module:module];
@@ -639,13 +731,14 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
 // Cycle Default and user-saved files without modifying anything on disk.
 - (void)stepPreset:(int)direction {
   if(!owner)return;NSURL* folder=[self presetFolder];if(!folder)return;NSArray<NSURL*>* files=[self savedPresetFiles:folder];int current=-1;
-  for(NSUInteger i=0;i<files.count;++i)if([files[i].lastPathComponent.stringByDeletingPathExtension isEqualToString:presetName])current=int(i);
+  for(NSUInteger i=0;i<files.count;++i)if(std::string([files[i].path substringFromIndex:folder.path.length+1].UTF8String)==owner->presetKey())current=int(i);
   int next=aztec::adjacentPreset(current,direction,int(files.count));if(next<0)[self defaultPreset];else [self loadPresetURL:files[NSUInteger(next)]];
 }
 - (void)mouseDown:(NSEvent*)event {
   if(!owner)return;[self.window makeFirstResponder:self];NSPoint p=[self logical:event];[self layoutControls];
   using namespace aztec;
   auto hit=[&](mockup::Rect r){return r.contains(p.x,p.y);};
+  if(presetBrowser.open){[self browserClick:p];return;}
   if(license::activationRequired&&!license::status().empty()&&hit({450,88,220,25})){
     NSAlert* alert=[[NSAlert alloc] init];alert.messageText=@"GrainsDosage — Offline activation";
     alert.informativeText=@"Send this complete Device Code to the publisher for a signed 14-day trial or permanent activation. Permanent licenses support up to 3 computers. Paste the full GDS2 code from your TXT file. No internet connection is needed.";
@@ -684,7 +777,6 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   int st=-1,step=mockup::hitStep(p.x,p.y,value,rackState,st);if(step>=0){
     ParamID id=st==2?kRepeatStep0+step:st==3?kResliceStep0+step:kGaterState0+step;
     if(event.modifierFlags&NSEventModifierFlagShift){owner->edit(id,owner->info(id).defaultNormalizedValue);[self setNeedsDisplay:YES];return;}
-    if(event.clickCount>=2){[self editValue:id];return;}
     if(st==2){selectedRepeat=step;if(event.clickCount>=2)owner->edit(kRepeatStep0+step,value(kRepeatStep0+step)>.5?0.:1.);}
     if(st==3){selectedReslice=step;if(event.clickCount>=2)owner->edit(kResliceStep0+step,value(kResliceStep0+step)>.5?0.:1.);}
     if(st==4){selectedGate=step;if(event.modifierFlags&NSEventModifierFlagOption){double v=value(kGaterRelease0+step)>.5?0.:1.;owner->edit(kGaterRelease0+step,v);if(v>.5)owner->edit(kGaterState0+step,0.);}else{owner->edit(kGaterRelease0+step,0.);owner->edit(kGaterState0+step,value(kGaterState0+step)>.25?0.:1.);}}
@@ -695,7 +787,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   for(const auto& c:controls)if((p.y>=mockup::bodyTop||c.id==kInputDeclick||c.id==kDeclickSensitivity)&&NSPointInRect(p,c.rect)){
     auto readout=mockup::valueRect({c.rect.origin.x,c.rect.origin.y,c.rect.size.width,c.rect.size.height},mockup::Kind(c.kind),c.id,c.label);
     if(event.modifierFlags&NSEventModifierFlagShift){owner->edit(c.id,owner->info(c.id).defaultNormalizedValue);[self setNeedsDisplay:YES];return;}
-    if(event.clickCount>=2){if(!readout.contains(p.x,p.y)&&(c.kind==aztec::Knob||c.kind==aztec::Slider||c.kind==aztec::VSlider||c.kind==aztec::Pan)){owner->edit(c.id,owner->info(c.id).defaultNormalizedValue);[self setNeedsDisplay:YES];}else [self editValue:c.id];return;}
+    if(event.clickCount>=2){if(!readout.contains(p.x,p.y)&&(c.kind==aztec::Knob||c.kind==aztec::Slider||c.kind==aztec::VSlider||c.kind==aztec::Pan)){owner->edit(c.id,owner->info(c.id).defaultNormalizedValue);[self setNeedsDisplay:YES];}else if(readout.contains(p.x,p.y)) [self editValue:c.id];return;}
     if(readout.contains(p.x,p.y))return;
     if(c.kind==aztec::PanMode)owner->edit(c.id,std::clamp(int((p.x-c.rect.origin.x)/(c.rect.size.width/3.)),0,2)/2.);
     else if(c.kind==aztec::Pad||c.kind==aztec::Toggle)owner->edit(c.id,owner->value(c.id)>=.5?0.:1.);
@@ -722,19 +814,16 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
   alert.informativeText=@"Invalid value. Enter a value within the control's range, using its displayed units or option name.";
  }
 }
-- (void)rightMouseDown:(NSEvent*)event {
- if(!owner)return;[self layoutControls];auto p=[self logical:event];
- for(const auto& c:controls)if((p.y>=aztec::mockup::bodyTop||c.id==aztec::kInputDeclick||c.id==aztec::kDeclickSensitivity)&&NSPointInRect(p,c.rect)){[self editValue:c.id];return;}
-}
+- (void)rightMouseDown:(NSEvent*)event {(void)event;}
 - (void)mouseDragged:(NSEvent*)event {
   if(!owner)return;NSPoint p=[self logical:event];
   if(dragScroll){auto bar=aztec::mockup::scrollbar(),thumb=aztec::mockup::scrollThumb(rackState);[self setPageScroll:scrollOrigin+(p.y-origin.y)*aztec::mockup::maxScroll(rackState)/std::max(1.,bar.h-thumb.h)];return;}
-  if(dragSlot>=0){routePointer=p;if(std::hypot(p.x-origin.x,p.y-origin.y)>8)routeMoved=true;if(routeMoved)dropSlot=aztec::mockup::routeInsertion(p.x,p.y,[&](aztec::ParamID id){return owner->value(id);},rackState);[self setNeedsDisplay:YES];return;}
-  if(dragXY){auto xy=rackState.position(aztec::mockup::xy);auto v=aztec::mockup::xyValue(xy,p.x,p.y);owner->change(aztec::kXYX,v.first);owner->change(aztec::kXYY,v.second);[self setNeedsDisplay:YES];return;}
+  if(dragSlot>=0){routePointer=p;if(std::hypot(p.x-origin.x,p.y-origin.y)>8)routeMoved=true;if(routeMoved)dropSlot=aztec::mockup::routeInsertion(p.x,p.y,[&](aztec::ParamID id){return owner->value(id);},rackState);refresh.request();if(refresh.interactionDue(aztec::EditorRefresh::now()))[self setNeedsDisplay:YES];return;}
+  if(dragXY){auto xy=rackState.position(aztec::mockup::xy);auto v=aztec::mockup::xyValue(xy,p.x,p.y);owner->dragChange(aztec::kXYX,v.first);owner->dragChange(aztec::kXYY,v.second);refresh.request();if(refresh.interactionDue(aztec::EditorRefresh::now()))[self setNeedsDisplay:YES];return;}
   if(dragID<0)return;double delta=(dragKind==aztec::Slider||dragKind==aztec::Pan)?(p.x-origin.x)/dragRect.size.width:(origin.y-p.y)/(dragKind==aztec::VSlider?std::max(1.,dragRect.size.height-42):180.);
   if(event.modifierFlags&NSEventModifierFlagShift)delta*=.1;
   starting=std::clamp(starting+delta,0.,1.);origin=p;
-  owner->change(aztec::ParamID(dragID),starting);[self setNeedsDisplay:YES];
+  owner->dragChange(aztec::ParamID(dragID),starting);refresh.request();if(refresh.interactionDue(aztec::EditorRefresh::now()))[self setNeedsDisplay:YES];
 }
 - (void)mouseUp:(NSEvent*)event {
   (void)event;if(!owner)return;
@@ -744,6 +833,7 @@ static const char* tabNames[5]={"GRANULIZER","PRESLICER","BEAT REPEATER","RESLIC
 }
 - (void)scrollWheel:(NSEvent*)event {
   if(!owner||dragID>=0||dragXY)return;NSPoint p=[self logical:event];
+  if(presetBrowser.open){presetBrowser.scroll(event.scrollingDeltaY>0?-3:3,p.x<383);[self setNeedsDisplay:YES];return;}
   if(event.modifierFlags&NSEventModifierFlagOption){[self layoutControls];for(const auto& c:controls)if(p.y>=aztec::mockup::bodyTop&&NSPointInRect(p,c.rect)&&(c.kind==aztec::Knob||c.kind==aztec::Slider||c.kind==aztec::VSlider)){int n=owner->info(c.id).stepCount;double step=n?1./n:.01;if(event.modifierFlags&NSEventModifierFlagShift)step*=.1;owner->edit(c.id,owner->value(c.id)+(event.scrollingDeltaY>0?step:-step));[self setNeedsDisplay:YES];return;}}
   double delta=event.scrollingDeltaY*(event.hasPreciseScrollingDeltas?1.:18.);[self setPageScroll:rackState.offset()-delta];
 }

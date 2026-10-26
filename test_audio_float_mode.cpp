@@ -11,5 +11,14 @@ int main(){
   {qg::ScopedAudioFloatMode nested;}assert((_mm_getcsr()&0x8040u)==0x8040u);
  }
  assert(_mm_getcsr()==host);_mm_setcsr(original);
+#elif defined(__aarch64__) && (defined(__clang__) || defined(__GNUC__))
+ auto read=[](){unsigned long long v;asm volatile("mrs %0, fpcr" : "=r"(v));return v;};
+ auto write=[](unsigned long long v){asm volatile("msr fpcr, %0" :: "r"(v) : "memory");};
+ const auto original=read(),host=original & ~(1ULL<<24);write(host);
+ {qg::ScopedAudioFloatMode mode;assert(read()&(1ULL<<24));
+  volatile double tiny=1e-300,factor=1e-20;volatile double result=tiny*factor;assert(result==0.);
+  {qg::ScopedAudioFloatMode nested;}assert(read()&(1ULL<<24));
+ }
+ assert(read()==host);write(original);
 #endif
 }

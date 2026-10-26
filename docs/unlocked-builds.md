@@ -16,4 +16,9 @@ Close the DAW before replacing the plugin, then rescan if needed. The plugin IDs
 
 The manual also describes activation for the machine-bound editions; those steps do not apply to **Full Unlocked**. macOS bundles are ad-hoc signed, not notarized; Windows bundles are not Authenticode signed. Minimum targets are checked in CI, while actual Mojave DAW runtime remains a physical-machine check.
 
-To run manually, open Actions, select this workflow, click **Run workflow**, and choose `work/mockup-purple-skin`. Source/workflow changes on that branch also trigger the build. No public/private signing-key configuration is required. Separate artifact names distinguish these downloads from machine-bound Licensed builds.
+To run manually, open Actions, select this workflow, click **Run workflow**, and choose `fix/purple-rnd-host-performance` for the latest RND and compatibility candidate. This workflow runs manually. No public/private signing-key configuration is required. Separate artifact names distinguish these downloads from machine-bound Licensed builds.
+
+The macOS package is also extracted and checked on an Apple Silicon runner.
+The shipped VST3 runs through the Steinberg validator natively on ARM64 three
+times; this complements Intel validation and bundle/signature checks. It does
+not replace testing in the affected Ableton, Cubase or Bitwig versions.

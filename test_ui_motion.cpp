@@ -16,6 +16,33 @@ int main(){using namespace aztec;
  for(int i=0;i<waveformBins;++i){p[kUiWaveLow0+i]=0;p[kUiWaveHigh0+i]=1;}p[kUiGrainActive]=1;
  visual.update(value);assert(std::abs(visual.hi[0]-.06)<1e-12&&std::abs(visual.lo[0]+.06)<1e-12&&visual.active==.06);
  for(int i=0;i<100;++i)visual.update(value);double previous=visual.hi[0];p[kUiWaveHigh0]=.5;visual.update(value);assert(previous-visual.hi[0]<.121);
+ // Cached scope curves match the former preview and ignore marker movement.
+ {
+  auto params=initialParameters();auto get=[&](ParamID id){return params[id];};
+  params[kModWaveRate0]=params[kModWaveRnd0]=0.;params[lfoID(0,lDepth)]=.7;params[lfoID(0,lGlide)]=.35;
+  params[modParam(kRandomSteps0,0)]=.4;params[lfoID(0,lReset)]=1.;
+  params[kUiLfoCycle0]=2147483648./4294967295.;params[kUiLfoEpoch0]=2147483648./4294967295.;
+  mockup::ModulationScopeCache cache;mockup::Rect glass{100,200,400,180};
+  for(int wave=0;wave<=qg::maxWave;++wave){
+   params[kLfoWaveChoice0]=(wave+1.)/qg::waveChoiceCount;
+   auto& points=cache.get(get,0,glass);assert(points.size()==211);
+   qg::Lfo reference;reference.prepare(0x13579BDFULL);qg::LfoSettings shape;
+   shape.enabled=true;shape.beats=1;shape.wave=wave;shape.randomSteps=1+int(std::round(.4*63));shape.depth=.7;shape.phase=0;shape.glide=.01+.99*.35;
+   for(int i=0;i<=210;++i){double expected=glass.y+glass.h/2-std::clamp(reference.process(shape,i/210.,48000,false,0),-1.,1.)*(glass.h/2-5);assert(std::abs(points[i].second-expected)<1e-12);}
+   auto builds=cache.builds;auto* storage=points.data();
+   for(int frame=0;frame<120;++frame){params[kUiLfoPhase0]=frame/120.;assert(cache.get(get,0,glass).data()==storage);}
+   assert(cache.builds==builds);
+  }
+  params[kLfoWaveChoice0]=1./qg::waveChoiceCount;cache.get(get,0,glass);auto count=cache.builds;
+  params[kUiLfoCycle0]=2147483651./4294967295.;cache.get(get,0,glass);assert(cache.builds==count); // periodic curve unchanged
+  params[kLfoWaveChoice0]=129./qg::waveChoiceCount;cache.get(get,0,glass);count=cache.builds;
+  params[kUiLfoCycle0]=2147483652./4294967295.;cache.get(get,0,glass);assert(cache.builds==++count);
+  params[kUiLfoEpoch0]=2147483649./4294967295.;cache.get(get,0,glass);assert(cache.builds==++count);
+  params[lfoID(0,lDepth)]=.2;cache.get(get,0,glass);assert(cache.builds==++count);
+  params[modParam(kRandomSteps0,0)]=.8;cache.get(get,0,glass);assert(cache.builds==++count);
+  auto lastX=cache.points.back().first;glass.w+=10;cache.get(get,0,glass);assert(cache.builds==count&&cache.points.back().first==lastX+10);
+  mockup::ModulationScopeCache other;other.get(get,0,glass);assert(other.builds==1&&cache.builds==count);
+ }
  qg::Settings a;a.sampleRate=8000;a.feedback=0;a.bufferSeconds=1;a.pitch=-12;a.position=.02;
  auto b=a;b.pitch=24;b.position=.7;qg::Engine one,two;one.set(a);two.set(b);one.prepare(8000);two.prepare(8000);one.set(a);two.set(b);
  for(int n=0;n<12000;++n){float l,r,x=.2f*std::sin(n*.071);one.process(x,-x,n/4000.,l,r);two.process(x,-x,n/4000.,l,r);}
@@ -29,7 +56,7 @@ int main(){using namespace aztec;
  }
  assert(reverbRate(5./6.,0.,false)==1.5&&reverbRate(1.,0.,true)==.75);
  qg::Gater gate;qg::GaterSettings gs;gs.enabled=true;gate.prepare(8000);gate.set(gs);float l=.1f,r=.1f;gate.process(l,r,.125,120.,true);assert(gate.phase()==.5);gate.process(l,r,.125,120.,false);assert(gate.phase()==0);
- mockup::Motion motion;motion.update(value,-1,-1);double oldY=motion.y[4];motion.last-=std::chrono::milliseconds(16);motion.update(value,3,0);assert(motion.y[4]<oldY&&motion.y[4]>430);
+ mockup::Motion motion;motion.update(value,-1,-1);double oldY=motion.y[4];motion.last-=std::chrono::milliseconds(16);motion.update(value,3,0);assert(motion.y[4]<oldY&&motion.y[4]>mockup::chainTop);
 
  p[kReverbRateV2]=5./6.;std::array<double,kCount> restored{};assert(decodePreset(encodePreset(value),restored));assert(restored[kReverbRateV2]==5./6.);
  std::cout<<"PASS: 3600 insertion moves, bounded waveform transitions, display independent of grain pitch/location, outside-drop cancellation\n";
